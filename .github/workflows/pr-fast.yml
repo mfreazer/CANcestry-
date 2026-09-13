@@ -1,0 +1,40 @@
+# Fast-feedback PR pipeline for the portable CANcestry core.
+#
+# Covers the first two jobs of docs/qa/test-strategy.md section 8.1: host core
+# build and host unit tests. Schema validation, firmware cross-build and static
+# analysis are added as those areas land.
+
+name: pr-fast
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  host-unit-tests:
+    name: unit tests (${{ matrix.compiler }}, ${{ matrix.build_type }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        build_type: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        env:
+          ASAN: ${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }}
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_C_COMPILER=${{ matrix.compiler }} \
+            -DCANCESTRY_ENABLE_ASAN=${ASAN}
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure

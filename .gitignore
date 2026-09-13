@@ -1,0 +1,36 @@
+# Build directories
+build/
+build-*/
+out/
+cmake-build-*/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+compile_commands.json
+
+# Compiled artifacts
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.elf
+*.bin
+*.hex
+*.map
+
+# Local tooling
+.cache/
+.vscode/
+.idea/
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+*.canl.jsonl
