@@ -1,0 +1,407 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cancestry.dev/schemas/recipe-0.2.0.schema.json",
+  "title": "CANcestry Recipe File v0.2.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "recipes"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.2.0"
+    },
+    "recipes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/recipe"
+      }
+    }
+  },
+  "$defs": {
+    "recipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "trigger",
+        "actions"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "trigger": {
+          "$ref": "#/$defs/trigger"
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/condition"
+          }
+        },
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/recipe_action"
+          }
+        },
+        "on_error": {
+          "enum": [
+            "stop",
+            "continue"
+          ]
+        }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event"
+      ],
+      "properties": {
+        "event": {
+          "enum": [
+            "can_rx",
+            "signal_changed",
+            "timer_expired",
+            "timeout",
+            "fault_raised",
+            "power_mode_changed"
+          ]
+        },
+        "interface": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "signal": {
+          "type": "string"
+        },
+        "timer": {
+          "type": "string"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "event": {
+                "const": "timeout"
+              }
+            },
+            "required": [
+              "event"
+            ]
+          },
+          "then": {
+            "required": [
+              "timeout_ms"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "event": {
+                "const": "signal_changed"
+              }
+            },
+            "required": [
+              "event"
+            ]
+          },
+          "then": {
+            "required": [
+              "signal"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "event": {
+                "const": "timer_expired"
+              }
+            },
+            "required": [
+              "event"
+            ]
+          },
+          "then": {
+            "required": [
+              "timer"
+            ]
+          }
+        }
+      ]
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expression"
+      ],
+      "properties": {
+        "expression": {
+          "type": "string"
+        }
+      }
+    },
+    "expression_or_literal": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "recipe_action": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "send_message"
+          ],
+          "properties": {
+            "send_message": {
+              "$ref": "#/$defs/send_message"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "set_signal"
+          ],
+          "properties": {
+            "set_signal": {
+              "$ref": "#/$defs/set_signal"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "set_variable"
+          ],
+          "properties": {
+            "set_variable": {
+              "$ref": "#/$defs/set_variable"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "start_timer"
+          ],
+          "properties": {
+            "start_timer": {
+              "$ref": "#/$defs/start_timer"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stop_timer"
+          ],
+          "properties": {
+            "stop_timer": {
+              "$ref": "#/$defs/timer_name_action"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "reset_timer"
+          ],
+          "properties": {
+            "reset_timer": {
+              "$ref": "#/$defs/timer_name_action"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "log"
+          ],
+          "properties": {
+            "log": {
+              "$ref": "#/$defs/log_action"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "raise_fault"
+          ],
+          "properties": {
+            "raise_fault": {
+              "$ref": "#/$defs/raise_fault_action"
+            }
+          }
+        }
+      ]
+    },
+    "send_message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "interface",
+        "message",
+        "signals"
+      ],
+      "properties": {
+        "interface": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "signals": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/expression_or_literal"
+          }
+        }
+      }
+    },
+    "set_signal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "signal",
+        "value"
+      ],
+      "properties": {
+        "signal": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/expression_or_literal"
+        }
+      }
+    },
+    "set_variable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "variable",
+        "value"
+      ],
+      "properties": {
+        "variable": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/expression_or_literal"
+        }
+      }
+    },
+    "start_timer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timer"
+      ],
+      "properties": {
+        "timer": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "repeat": {
+          "type": "boolean"
+        }
+      }
+    },
+    "timer_name_action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timer"
+      ],
+      "properties": {
+        "timer": {
+          "type": "string"
+        }
+      }
+    },
+    "log_action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level",
+        "message"
+      ],
+      "properties": {
+        "level": {
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "raise_fault_action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "severity"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "warning",
+            "error",
+            "critical"
+          ]
+        }
+      }
+    }
+  }
+    }
