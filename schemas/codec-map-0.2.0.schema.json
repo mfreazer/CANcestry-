@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cancestry.dev/schemas/codec-map-0.2.0.schema.json",
+  "title": "CANcestry Codec Map v0.2.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "codec_map"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.2.0"
+    },
+    "codec_map": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "messages"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/message"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "can_id": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 536870911
+    },
+    "message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "dlc",
+        "signals"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/can_id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "dlc": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8
+        },
+        "period_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "description": {
+          "type": "string"
+        },
+        "signals": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/signal"
+          }
+        }
+      }
+    },
+    "signal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "start_bit",
+        "bit_length",
+        "type",
+        "endianness"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "start_bit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bit_length": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "type": {
+          "enum": [
+            "uint",
+            "int",
+            "boolean",
+            "enum"
+          ]
+        },
+        "endianness": {
+          "enum": [
+            "little",
+            "big"
+          ]
+        },
+        "scale": {
+          "type": "number"
+        },
+        "offset": {
+          "type": "number"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "values": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[0-9]+$"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "strict": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "boolean"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "bit_length": {
+                "const": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "enum"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "values"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
