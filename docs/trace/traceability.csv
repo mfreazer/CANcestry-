@@ -36,3 +36,7 @@ QA-v0.2-R07,SYRS-MODES,inspection,SYRS-MODE-UPDATE-001,planned
 QA-v0.2-R08,SYS-SEC-003-v0.2.1,demonstration,LOG-PRIVACY-001,planned
 QA-v0.2-R09,RECIPE-TRIGGER-EVENT,test,RECIPE-SCHEMA-EVENT-001,planned
 QA-v0.2-R10,RECIPE-ACTION-RESTRICTION,test,RECIPE-NO-TRANSITION-001,planned
+SYS-FR-018,tools/dbc2codec,test,DBC-IMPORT-001,planned
+SYS-NF-008,tests/integration/opendbc-parity,test,PARITY-DECODE-001,planned
+QA-H02,tests/integration/opendbc-parity,test,PARITY-BITPACK-001,planned
+QA-v0.2-R01,docs/safety/ai-agent-policy.md,inspection,CI-GATES-001,planned
