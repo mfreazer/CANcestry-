@@ -1,0 +1,70 @@
+# CANcestry Codec Map Specification
+
+Version: 0.2.1
+
+## 1. Purpose
+
+A codec map defines how CAN frames map to named signals.
+
+## 2. Canonical Signal Names
+
+The canonical signal name is:
+
+    <codec_map_name>.<signal_name>
+
+Short names are allowed only when unambiguous.
+
+If two codec maps define the same short signal name, the short name becomes ambiguous and shall be rejected unless fully qualified.
+
+## 3. Byte and Bit Numbering
+
+The canonical bit array is linear LSB0:
+
+    data[0] bit 0 = global bit 0
+    data[0] bit 7 = global bit 7
+    data[1] bit 0 = global bit 8
+    data[1] bit 7 = global bit 15
+
+## 4. Little-Endian Signals
+
+For endianness little:
+
+- start_bit is the position of the signal LSB.
+- Signal bit i maps to payload bit start_bit + i.
+
+## 5. Big-Endian Signals
+
+For endianness big:
+
+- start_bit is the position of the signal MSB.
+- Signal bit i, where i = 0 is LSB, maps to payload bit:
+
+      start_bit - (bit_length - 1) + i
+
+## 6. Signed Signals
+
+Signed integer signals use two's complement.
+
+For bit_length N, if bit N-1 is set, the raw integer is sign-extended to 64 bits.
+
+## 7. Scaling
+
+Physical value:
+
+    physical = raw * scale + offset
+
+Encoding:
+
+    raw = round((physical - offset) / scale)
+
+Rounding is round-to-nearest, ties away from zero.
+
+## 8. Invalid Frames
+
+If a received frame is too short for a declared signal:
+
+- the message is dropped,
+- a codec warning is raised,
+- no signal is updated.
+
+Extra bytes are ignored unless future flexible-DLC rules are enabled.
