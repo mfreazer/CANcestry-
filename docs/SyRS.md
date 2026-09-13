@@ -23,6 +23,10 @@ CANcestry shall allow third parties to develop:
 
 using declarative packages executed by a deterministic runtime.
 
+
+
+
+
 ## 2. Scope
 
 The system includes:
@@ -33,14 +37,16 @@ The system includes:
 - package specification,
 - logging and replay,
 - configuration and diagnostics interface.
-
+- tooling for ingestion of industry-standard DBC files (e.g., via comma.ai `opendbc`).
+- 
 v0.2.1 targets classic CAN.
 
 CAN FD, full automotive functional safety certification, and production road-legal certification are out of scope.
 
 ## 3. Definitions
 
-- Codec Map: declarative mapping between CAN frames and named signals.
+- Codec Map: declarat
+- ive mapping between CAN frames and named signals.
 - Recipe: stateless or lightly stateful transformation, filter, or injection rule.
 - Emulation Profile: stateful behavior package that emulates a CAN node.
 - Package: versioned bundle containing manifest, maps, recipes, FSMs, tests, and metadata.
@@ -135,6 +141,8 @@ GATEWAY and EMULATION are ACTIVE sub-profiles, not independent system modes.
 - The user has legal authority to test, modify, or emulate the target system.
 - The system is not certified for safety-critical road use by default.
 - Third-party packages must be validated by the deployer.
+- Third-party DBC data (e.g., from `opendbc`) is used as a starting point for codec maps but remains strictly subject to CANcestry's schema validation, capability enforcement, and safety governor.
+
 
 ## 11. Out of Scope
 
