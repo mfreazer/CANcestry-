@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cancestry.dev/schemas/package-manifest-0.2.0.schema.json",
+  "title": "CANcestry Package Manifest v0.2.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "package",
+    "runtime",
+    "capabilities"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.2.0"
+    },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "type"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{2,63}$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "type": {
+          "enum": [
+            "codec",
+            "recipe",
+            "emulation",
+            "gateway",
+            "test"
+          ]
+        },
+        "license": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "min_cancestry_version"
+      ],
+      "properties": {
+        "min_cancestry_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        }
+      }
+    },
+    "bindings": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z0-9_]{1,32}$"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "codec_maps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dependency"
+          }
+        },
+        "packages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dependency"
+          }
+        }
+      }
+    },
+    "capabilities": {
+      "$ref": "#/$defs/capabilities"
+    },
+    "limits": {
+      "$ref": "#/$defs/limits"
+    }
+  },
+  "$defs": {
+    "can_id": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 536870911
+    },
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "interfaces"
+      ],
+      "properties": {
+        "interfaces": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/interface_capability"
+          }
+        },
+        "signals": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "read": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
+            },
+            "write": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
+            }
+          }
+        }
+      }
+    },
+    "interface_capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rx",
+        "tx"
+      ],
+      "properties": {
+        "rx": {
+          "type": "boolean"
+        },
+        "tx": {
+          "type": "boolean"
+        },
+        "rx_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/can_id"
+          },
+          "uniqueItems": true
+        },
+        "tx_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/can_id"
+          },
+          "uniqueItems": true
+        },
+        "max_tx_per_second": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "max_tx_burst": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "tx_id_limits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "max_per_second",
+              "burst"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/can_id"
+              },
+              "max_per_second": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              "burst": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              }
+            }
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "tx": {
+            "const": true
+          }
+        },
+        "required": [
+          "tx"
+        ]
+      },
+      "then": {
+        "required": [
+          "tx_ids"
+        ],
+        "properties": {
+          "tx_ids": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_fsm_instances": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16
+        },
+        "max_timers": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 64
+        },
+        "max_variables": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 512
+        },
+        "max_event_queue_depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 512
+        }
+      }
+    }
+  }
+}
