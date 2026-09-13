@@ -1,0 +1,538 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "CANcestry System Architecture",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/mfreazer/CANcestry-",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "f28f4197561b3523556dea55b206bb16942a170a"
+    },
+    "views": [
+      {
+        "id": "governed-tx-loop",
+        "label": "Governed TX loop",
+        "focus": [
+          "bench",
+          "can",
+          "codec",
+          "bus",
+          "recipe",
+          "gov"
+        ],
+        "note": "A bus frame is decoded, dispatched, acted on, approved by the governor, and transmitted back out."
+      },
+      {
+        "id": "package-loading",
+        "label": "Package loading",
+        "focus": [
+          "pkg",
+          "codec",
+          "recipe",
+          "fsm"
+        ],
+        "note": "Declarative packages are validated, then distributed to the codec, recipe, and FSM engines."
+      },
+      {
+        "id": "host-simulation",
+        "label": "Host simulation",
+        "focus": [
+          "host",
+          "can",
+          "logger"
+        ],
+        "note": "The same portable core runs on the host with virtual CAN, replay input, and test assertions."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "pkg",
+      "type": "backend",
+      "label": "Package Manager",
+      "sublabel": "manifests \u00b7 schema \u00b7 caps",
+      "pos": [
+        260,
+        60
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "docs/system/SyAD.md",
+          "line": 82,
+          "label": "SyAD \u00a75"
+        },
+        {
+          "path": "docs/software/SwAD.md",
+          "line": 23,
+          "label": "core/pkg"
+        }
+      ]
+    },
+    {
+      "id": "bench",
+      "type": "external",
+      "label": "Vehicle / Test Bench",
+      "sublabel": "production CAN",
+      "pos": [
+        40,
+        230
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "docs/system/SyAD.md",
+          "line": 48,
+          "label": "SyAD \u00a73 context"
+        }
+      ]
+    },
+    {
+      "id": "equip",
+      "type": "external",
+      "label": "Replacement Equipment",
+      "sublabel": "aftermarket module",
+      "pos": [
+        40,
+        450
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "docs/system/SyAD.md",
+          "line": 48,
+          "label": "SyAD \u00a73 context"
+        }
+      ]
+    },
+    {
+      "id": "host",
+      "type": "frontend",
+      "label": "Host Tools",
+      "sublabel": "CLI \u00b7 simulator \u00b7 replay",
+      "pos": [
+        40,
+        560
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "docs/system/SyAD.md",
+          "line": 59,
+          "label": "SyAD \u00a73 context"
+        }
+      ]
+    },
+    {
+      "id": "can",
+      "type": "backend",
+      "label": "CAN Core",
+      "sublabel": "frame queue \u00b7 timestamps",
+      "pos": [
+        260,
+        330
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "docs/software/SwAD.md",
+          "line": 25,
+          "label": "platform/can"
+        },
+        {
+          "path": "docs/system/SyAD.md",
+          "line": 132,
+          "label": "SyAD \u00a76 flow"
+        }
+      ]
+    },
+    {
+      "id": "codec",
+      "type": "backend",
+      "label": "Codec Engine",
+      "sublabel": "decode/encode \u00b7 signals",
+      "pos": [
+        500,
+        330
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "docs/system/SyAD.md",
+          "line": 90,
+          "label": "SyAD \u00a75"
+        },
+        {
+          "path": "docs/software/SwAD.md",
+          "line": 19,
+          "label": "core/codec"
+        }
+      ]
+    },
+    {
+      "id": "bus",
+      "type": "messagebus",
+      "label": "Event Bus",
+      "sublabel": "bounded \u00b7 deterministic",
+      "pos": [
+        740,
+        330
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "docs/system/SyAD.md",
+          "line": 112,
+          "label": "SyAD \u00a75"
+        },
+        {
+          "path": "docs/software/SwAD.md",
+          "line": 18,
+          "label": "core/event"
+        }
+      ]
+    },
+    {
+      "id": "recipe",
+      "type": "backend",
+      "label": "Recipe Engine",
+      "sublabel": "triggers \u00b7 conditions",
+      "pos": [
+        950,
+        330
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "docs/system/SyAD.md",
+          "line": 97,
+          "label": "SyAD \u00a75"
+        },
+        {
+          "path": "docs/software/SwAD.md",
+          "line": 20,
+          "label": "core/recipe"
+        }
+      ]
+    },
+    {
+      "id": "logger",
+      "type": "backend",
+      "label": "Logger / Trace",
+      "sublabel": "frames \u00b7 transitions \u00b7 faults",
+      "pos": [
+        500,
+        560
+      ],
+      "size": [
+        180,
+        64
+      ],
+      "sources": [
+        {
+          "path": "docs/system/SyAD.md",
+          "line": 125,
+          "label": "SyAD \u00a75"
+        },
+        {
+          "path": "docs/software/SwAD.md",
+          "line": 24,
+          "label": "core/log"
+        }
+      ]
+    },
+    {
+      "id": "fsm",
+      "type": "backend",
+      "label": "FSM Runtime",
+      "sublabel": "states \u00b7 guards \u00b7 timers",
+      "pos": [
+        740,
+        560
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "docs/system/SyAD.md",
+          "line": 104,
+          "label": "SyAD \u00a75"
+        },
+        {
+          "path": "docs/software/SwAD.md",
+          "line": 21,
+          "label": "core/fsm"
+        }
+      ]
+    },
+    {
+      "id": "gov",
+      "type": "security",
+      "label": "Safety Governor",
+      "sublabel": "TX perms \u00b7 rate limits",
+      "pos": [
+        1130,
+        560
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "docs/system/SyAD.md",
+          "line": 118,
+          "label": "SyAD \u00a75"
+        },
+        {
+          "path": "docs/software/SwAD.md",
+          "line": 22,
+          "label": "core/gov"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "CANcestry device \u2014 firmware runtime",
+      "wraps": [
+        "can",
+        "codec",
+        "bus",
+        "recipe",
+        "gov",
+        "pkg",
+        "fsm",
+        "logger"
+      ],
+      "pad": 40
+    }
+  ],
+  "connections": [
+    {
+      "id": "bench-bus",
+      "from": "bench",
+      "to": "can",
+      "label": "CAN RX \u00b7 governed TX",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left",
+      "via": [
+        [
+          205,
+          262
+        ],
+        [
+          205,
+          362
+        ]
+      ],
+      "labelAt": [
+        205,
+        308
+      ]
+    },
+    {
+      "id": "equip-bus",
+      "from": "equip",
+      "to": "can",
+      "label": "governed CAN",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "labelAt": [
+        240,
+        430
+      ]
+    },
+    {
+      "id": "can-queue",
+      "from": "can",
+      "to": "codec",
+      "label": "frame queue",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelDy": -20
+    },
+    {
+      "id": "codec-encoded",
+      "from": "codec",
+      "to": "can",
+      "label": "encoded frames",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelDy": -36
+    },
+    {
+      "id": "codec-signals",
+      "from": "codec",
+      "to": "bus",
+      "label": "signal events",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "bus-recipe",
+      "from": "bus",
+      "to": "recipe",
+      "label": "dispatch",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "bus-fsm",
+      "from": "bus",
+      "to": "fsm",
+      "label": "dispatch",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelAt": [
+        815,
+        440
+      ]
+    },
+    {
+      "id": "recipe-gov",
+      "from": "recipe",
+      "to": "gov",
+      "label": "action request",
+      "variant": "emphasis",
+      "labelAt": [
+        1115,
+        480
+      ]
+    },
+    {
+      "id": "fsm-gov",
+      "from": "fsm",
+      "to": "gov",
+      "label": "action request",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "gov-tx",
+      "from": "gov",
+      "to": "can",
+      "label": "approved for TX",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          1205,
+          648
+        ],
+        [
+          335,
+          648
+        ]
+      ]
+    },
+    {
+      "id": "host-sim",
+      "from": "host",
+      "to": "can",
+      "label": "virtual CAN \u00b7 replay",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "labelAt": [
+        240,
+        540
+      ]
+    },
+    {
+      "id": "pkg-codec",
+      "from": "pkg",
+      "to": "codec",
+      "label": "codec maps",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "top",
+      "via": [
+        [
+          470,
+          92
+        ],
+        [
+          470,
+          227
+        ],
+        [
+          575,
+          227
+        ]
+      ]
+    },
+    {
+      "id": "can-trace",
+      "from": "can",
+      "to": "logger",
+      "label": "frame trace",
+      "variant": "dashed",
+      "labelAt": [
+        463,
+        520
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Deterministic runtime",
+      "items": [
+        "Bounded queues and bounded memory; deterministic event processing",
+        "Monotonic \u00b5s clock; priority-ordered events (FAULT < MODE < TIMER < CAN_RX < HOST)",
+        "Same portable core in firmware and in host simulation"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Declarative packages",
+      "items": [
+        "Codec maps, recipes, and FSM definitions ship as declarative packages",
+        "Package Manager validates schemas, resolves dependencies, enforces capabilities",
+        "Storage holds packages, configuration, and trace logs"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Safety governor authority",
+      "items": [
+        "No action executes a side effect before governor approval",
+        "TX permissions, rate limits, and signal-write blocks enforced on every request",
+        "Approved frames leave via the CAN Core; a critical fault drops the system into SAFE with TX disabled"
+      ]
+    }
+  ]
+}

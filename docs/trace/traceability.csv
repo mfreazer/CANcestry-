@@ -46,3 +46,7 @@ SYS-NF-001,EVENT-ORDERING,test,EVENT-ORDERING-002,passing
 SYS-NF-002,EVENT-NO-ALLOC,test,EVENT-NO-ALLOC-001,passing
 SYS-IR-005,EVENT-CLOCK,test,EVENT-CLOCK-002,passing
 QA-v0.2-R04,EVENT-QUEUE-OVERFLOW,test,EVENT-OVERFLOW-002,passing
+SYS-FR-018,tools/dbc2codec,test,DBC-IMPORT-001,planned
+SYS-NF-008,tests/integration/opendbc-parity,test,PARITY-DECODE-001,planned
+QA-H02,tests/integration/opendbc-parity,test,PARITY-BITPACK-001,planned
+QA-v0.2-R01,docs/safety/ai-agent-policy.md,inspection,CI-GATES-001,planned

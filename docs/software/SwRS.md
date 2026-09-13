@@ -60,6 +60,7 @@ The software includes:
 | SW-FR-EVENT-004 | The software shall maintain bounded event queues. | High |
 | SW-FR-EVENT-005 | The software shall expose event drop counters. | High |
 | SW-FR-EVENT-006 | The software shall process events according to the normative event-ordering specification. | High |
+| SW-FR-EVENT-006 | The software shall process events according to the normative event-ordering specification, including fault admission and saturation behavior. | High | Test |
 
 ## 5. Recipe Requirements
 
