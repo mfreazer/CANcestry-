@@ -1,0 +1,6 @@
+cancestry_add_unit_test(cancestry_test_event_types test_event_types.c)
+cancestry_add_unit_test(cancestry_test_event_queue test_event_queue.c)
+cancestry_add_unit_test(cancestry_test_event_ordering test_event_ordering.c)
+cancestry_add_unit_test(cancestry_test_event_overflow test_event_overflow.c)
+cancestry_add_unit_test(cancestry_test_event_clock test_event_clock.c)
+cancestry_add_unit_test(cancestry_test_event_no_alloc test_event_no_alloc.c)
