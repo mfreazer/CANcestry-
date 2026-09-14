@@ -93,6 +93,15 @@ typedef enum cancestry_codec_endianness {
     CANCESTRY_CODEC_ENDIANNESS_BIG = 1
 } cancestry_codec_endianness_t;
 
+/** Signal bit layout; mirrors the codec map schema "layout" field. */
+typedef enum cancestry_codec_layout {
+    /** Contiguous linear LSB0 run (codec-map-spec.md sections 4-5). */
+    CANCESTRY_CODEC_LAYOUT_CONTIGUOUS = 0,
+    /** Sawtooth Motorola layout for multi-byte big-endian signals (spec section 5.1). */
+    CANCESTRY_CODEC_LAYOUT_SAWTOOTH = 1,
+    CANCESTRY_CODEC_LAYOUT_COUNT
+} cancestry_codec_layout_t;
+
 /** One raw-value to label mapping (codec map "values" object entry). */
 typedef struct cancestry_codec_value_mapping {
     /** Raw value the label is attached to. */
@@ -147,6 +156,8 @@ typedef struct cancestry_codec_signal {
     uint32_t last_bit;
     /** Derived: id of the message this signal belongs to. */
     uint32_t message_id;
+    /** Bit layout. Defaults to contiguous. Sawtooth is the Motorola sawtooth layout. */
+    cancestry_codec_layout_t layout;
 } cancestry_codec_signal_t;
 
 /** A CAN message definition inside a codec map. */
@@ -233,6 +244,9 @@ const char *cancestry_codec_signal_type_name(cancestry_codec_signal_type_t type)
 
 /** @return Stable, statically allocated name for @p endianness. Never NULL. */
 const char *cancestry_codec_endianness_name(cancestry_codec_endianness_t endianness);
+
+/** @return Stable, statically allocated name for @p layout. Never NULL. */
+const char *cancestry_codec_layout_name(cancestry_codec_layout_t layout);
 
 /**
  * Locate the message with the given CAN id.

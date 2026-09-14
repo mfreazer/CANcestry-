@@ -1,7 +1,8 @@
 """Unit tests for the `dbc2codec` compiler itself.
 
 Covers provenance header, schema validation, deterministic output, and the
-documented skip rules (multiplexed signals and multi-byte Motorola signals).
+documented skip rules (multiplexed signals) plus the v0.3.0 sawtooth support
+for multi-byte Motorola signals.
 
 Requirements traced: SYS-FR-018, QA-v0.2-R01 (and QA-H02 via test_parity.py).
 """
@@ -73,11 +74,20 @@ def test_multiplexed_signals_skipped(tmp_path: Path):
 
 
 def test_multi_byte_motorola_skipped(tmp_path: Path):
+    # v0.3.0: multi-byte Motorola is now representable with layout sawtooth
     doc = load_doc(SAMPLE_DBC)
     names = [s["name"] for m in doc["codec_map"]["messages"] for s in m["signals"]]
-    assert "MultiMotorola" not in names
-    # single-byte Motorola IS representable
+    assert "MultiMotorola" in names
+    # single-byte Motorola remains representable (contiguous and sawtooth are identical there)
     assert "MotorolaByte" in names
+    sigs = {s["name"]: s for m in doc["codec_map"]["messages"] for s in m["signals"]}
+    multi = sigs["MultiMotorola"]
+    assert multi["endianness"] == "big"
+    assert multi["bit_length"] == 12
+    assert multi["start_bit"] == 31
+    assert multi.get("layout") == "sawtooth"
+    # Contiguous single-byte should not need explicit layout (defaults to contiguous)
+    assert sigs["MotorolaByte"].get("layout", "contiguous") == "contiguous"
 
 
 def test_endianness_and_signed_mapping(tmp_path: Path):

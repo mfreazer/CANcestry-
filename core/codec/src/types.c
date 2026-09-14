@@ -76,3 +76,15 @@ const char *cancestry_codec_endianness_name(cancestry_codec_endianness_t endiann
         return "invalid";
     }
 }
+
+const char *cancestry_codec_layout_name(cancestry_codec_layout_t layout)
+{
+    switch (layout) {
+    case CANCESTRY_CODEC_LAYOUT_CONTIGUOUS:
+        return "contiguous";
+    case CANCESTRY_CODEC_LAYOUT_SAWTOOTH:
+        return "sawtooth";
+    default:
+        return "invalid";
+    }
+}

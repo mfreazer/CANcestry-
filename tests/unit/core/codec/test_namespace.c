@@ -21,18 +21,18 @@
 /* map_a: signals Speed, Gear in message 0x100. */
 static cancestry_codec_signal_t a_signals[2] = {
     {"Speed", 0u, 8u, CANCESTRY_CODEC_SIGNAL_TYPE_UINT, CANCESTRY_CODEC_ENDIANNESS_LITTLE,
-     1.0, 0.0, NULL, NULL, 0u, false, false, 0.0, 0.0, true, 0u, 7u, 0x100u},
+     1.0, 0.0, NULL, NULL, 0u, false, false, 0.0, 0.0, true, 0u, 7u, 0x100u, CANCESTRY_CODEC_LAYOUT_CONTIGUOUS},
     {"Gear", 8u, 3u, CANCESTRY_CODEC_SIGNAL_TYPE_ENUM, CANCESTRY_CODEC_ENDIANNESS_LITTLE,
-     1.0, 0.0, NULL, NULL, 0u, false, false, 0.0, 0.0, true, 8u, 10u, 0x100u}};
+     1.0, 0.0, NULL, NULL, 0u, false, false, 0.0, 0.0, true, 8u, 10u, 0x100u, CANCESTRY_CODEC_LAYOUT_CONTIGUOUS}};
 static cancestry_codec_message_t a_message = {0x100u, "MessageA", 2u, 0u, NULL, a_signals, 2u};
 static cancestry_codec_map_t map_a = {"map_a", "1.0.0", NULL, &a_message, 1u};
 
 /* map_b: signals Speed (collides with map_a's), Temp in message 0x200. */
 static cancestry_codec_signal_t b_signals[2] = {
     {"Speed", 0u, 8u, CANCESTRY_CODEC_SIGNAL_TYPE_UINT, CANCESTRY_CODEC_ENDIANNESS_LITTLE,
-     1.0, 0.0, NULL, NULL, 0u, false, false, 0.0, 0.0, true, 0u, 7u, 0x200u},
+     1.0, 0.0, NULL, NULL, 0u, false, false, 0.0, 0.0, true, 0u, 7u, 0x200u, CANCESTRY_CODEC_LAYOUT_CONTIGUOUS},
     {"Temp", 8u, 8u, CANCESTRY_CODEC_SIGNAL_TYPE_INT, CANCESTRY_CODEC_ENDIANNESS_BIG,
-     1.0, 0.0, NULL, NULL, 0u, false, false, 0.0, 0.0, true, 8u, 15u, 0x200u}};
+     1.0, 0.0, NULL, NULL, 0u, false, false, 0.0, 0.0, true, 8u, 15u, 0x200u, CANCESTRY_CODEC_LAYOUT_CONTIGUOUS}};
 static cancestry_codec_message_t b_message = {0x200u, "MessageB", 2u, 0u, NULL, b_signals, 2u};
 static cancestry_codec_map_t map_b = {"map_b", "1.0.0", NULL, &b_message, 1u};
 
@@ -40,11 +40,11 @@ static cancestry_codec_map_t map_b = {"map_b", "1.0.0", NULL, &b_message, 1u};
 static cancestry_codec_signal_t dup_x1 = {"X", 0u, 1u, CANCESTRY_CODEC_SIGNAL_TYPE_UINT,
                                           CANCESTRY_CODEC_ENDIANNESS_LITTLE, 1.0, 0.0,
                                           NULL, NULL, 0u, false, false, 0.0, 0.0, true,
-                                          0u, 0u, 0x300u};
+                                          0u, 0u, 0x300u, CANCESTRY_CODEC_LAYOUT_CONTIGUOUS};
 static cancestry_codec_signal_t dup_x2 = {"X", 1u, 1u, CANCESTRY_CODEC_SIGNAL_TYPE_UINT,
                                           CANCESTRY_CODEC_ENDIANNESS_LITTLE, 1.0, 0.0,
                                           NULL, NULL, 0u, false, false, 0.0, 0.0, true,
-                                          1u, 1u, 0x301u};
+                                          1u, 1u, 0x301u, CANCESTRY_CODEC_LAYOUT_CONTIGUOUS};
 static cancestry_codec_message_t dup_messages[2] = {
     {0x300u, "DupA", 1u, 0u, NULL, &dup_x1, 1u},
     {0x301u, "DupB", 1u, 0u, NULL, &dup_x2, 1u}};
@@ -54,7 +54,7 @@ static cancestry_codec_map_t map_dup = {"map_dup", "1.0.0", NULL, dup_messages, 
 static cancestry_codec_signal_t same_signal = {"S", 0u, 1u, CANCESTRY_CODEC_SIGNAL_TYPE_UINT,
                                                CANCESTRY_CODEC_ENDIANNESS_LITTLE, 1.0, 0.0,
                                                NULL, NULL, 0u, false, false, 0.0, 0.0, true,
-                                               0u, 0u, 0x400u};
+                                               0u, 0u, 0x400u, CANCESTRY_CODEC_LAYOUT_CONTIGUOUS};
 static cancestry_codec_message_t same_message = {0x400u, "Same", 1u, 0u, NULL, &same_signal, 1u};
 static cancestry_codec_map_t map_same_name = {"map_a", "1.0.0", NULL, &same_message, 1u};
 
@@ -62,7 +62,7 @@ static cancestry_codec_map_t map_same_name = {"map_a", "1.0.0", NULL, &same_mess
 static cancestry_codec_signal_t dotted_signal = {"a.b", 0u, 8u, CANCESTRY_CODEC_SIGNAL_TYPE_UINT,
                                                  CANCESTRY_CODEC_ENDIANNESS_LITTLE, 1.0, 0.0,
                                                  NULL, NULL, 0u, false, false, 0.0, 0.0, true,
-                                                 0u, 7u, 0x500u};
+                                                 0u, 7u, 0x500u, CANCESTRY_CODEC_LAYOUT_CONTIGUOUS};
 static cancestry_codec_message_t dotted_message = {0x500u, "Dotted", 1u, 0u, NULL,
                                                    &dotted_signal, 1u};
 static cancestry_codec_map_t map_dotted = {"map_dotted", "1.0.0", NULL, &dotted_message, 1u};
