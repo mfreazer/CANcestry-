@@ -1,0 +1,3 @@
+cancestry_add_unit_test(cancestry_test_recipe_loader test_loader.c)
+cancestry_add_unit_test(cancestry_test_recipe_engine test_engine.c)
+cancestry_add_unit_test(cancestry_test_recipe_governor test_governor.c)
