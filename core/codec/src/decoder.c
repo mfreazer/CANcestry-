@@ -2,12 +2,15 @@
  * CANcestry - signal decoder implementation.
  *
  * Implementation notes:
- *   - Bit extraction follows the canonical LSB0 model. For both endiannesses
- *     the signal occupies a contiguous run of payload bits: [first_bit,
- *     last_bit]. Little-endian: first_bit = start_bit. Big-endian:
- *     first_bit = start_bit - (bit_length - 1) (codec-map-spec.md sections
- *     4-5). Loading the run least-significant-bit-first yields the raw value
- *     in both cases.
+ *   - Bit extraction follows the canonical LSB0 model (codec-map-spec.md
+ *     sections 3-5). Contiguous signals (layout=contiguous, the default)
+ *     occupy a contiguous run [first_bit, last_bit]: little-endian
+ *     first_bit = start_bit, big-endian first_bit = start_bit-(n-1). Sawtooth
+ *     signals (layout=sawtooth, spec section 5.1) use the DBC Motorola
+ *     sawtooth ordering: payload bits are BE_BITS[be_idx(start_bit) ..
+ *     be_idx(start_bit)+n-1] with the first element carrying the most
+ *     significant raw bit, mirroring opendbc's get_raw_value. Both layouts
+ *     share the same scaling/sign/value-mapping path.
  *   - Signed signals are two's complement, sign-extended to 64 bits
  *     (codec-map-spec.md section 6).
  *   - No allocation, no global state, no recursion. Decoding the same frame
@@ -137,11 +140,17 @@ cancestry_codec_status_t cancestry_codec_decode_signal(const cancestry_codec_sig
     if (frame_length == 0u || frame_length > CANCESTRY_CAN_FRAME_MAX_LENGTH) {
         return CANCESTRY_CODEC_ERR_ARGUMENT;
     }
-    if (signal->last_bit >= frame_length * 8u) {
-        return CANCESTRY_CODEC_ERR_FRAME_TOO_SHORT;
+    if (signal->layout == CANCESTRY_CODEC_LAYOUT_SAWTOOTH) {
+        if (!codec_bits_saw_fits(frame_length, signal->start_bit, signal->bit_length)) {
+            return CANCESTRY_CODEC_ERR_FRAME_TOO_SHORT;
+        }
+        raw = codec_bits_load_saw(frame, frame_length, signal->start_bit, signal->bit_length);
+    } else {
+        if (signal->last_bit >= frame_length * 8u) {
+            return CANCESTRY_CODEC_ERR_FRAME_TOO_SHORT;
+        }
+        raw = codec_bits_load(frame, frame_length, signal->first_bit, signal->bit_length);
     }
-
-    raw = codec_bits_load(frame, frame_length, signal->first_bit, signal->bit_length);
     status = decode_raw_into(signal, raw, out);
     return status;
 }
@@ -187,7 +196,13 @@ cancestry_codec_status_t cancestry_codec_decode_frame(const cancestry_codec_map_
      */
     for (i = 0u; i < message->signal_count; ++i) {
         const cancestry_codec_signal_t *signal = &message->signals[i];
-        if (signal->last_bit >= frame_length * 8u) {
+        bool too_short = false;
+        if (signal->layout == CANCESTRY_CODEC_LAYOUT_SAWTOOTH) {
+            too_short = !codec_bits_saw_fits(frame_length, signal->start_bit, signal->bit_length);
+        } else {
+            too_short = signal->last_bit >= frame_length * 8u;
+        }
+        if (too_short) {
             if (warnings != NULL) {
                 warnings->frame_too_short++;
             }
@@ -197,7 +212,12 @@ cancestry_codec_status_t cancestry_codec_decode_frame(const cancestry_codec_map_
 
     for (i = 0u; i < message->signal_count; ++i) {
         const cancestry_codec_signal_t *signal = &message->signals[i];
-        uint64_t raw = codec_bits_load(frame, frame_length, signal->first_bit, signal->bit_length);
+        uint64_t raw;
+        if (signal->layout == CANCESTRY_CODEC_LAYOUT_SAWTOOTH) {
+            raw = codec_bits_load_saw(frame, frame_length, signal->start_bit, signal->bit_length);
+        } else {
+            raw = codec_bits_load(frame, frame_length, signal->first_bit, signal->bit_length);
+        }
 
         (void)decode_raw_into(signal, raw, &signals[i]);
         if (signal->type == CANCESTRY_CODEC_SIGNAL_TYPE_ENUM && signals[i].label == NULL &&

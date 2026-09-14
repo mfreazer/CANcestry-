@@ -19,26 +19,35 @@ Normative references:
 Bit-numbering contract
 ----------------------
 CANcestry uses a *linear LSB0* bit model (codec-map-spec.md sec. 3): payload
-bit g lives in byte g//8 at bit position g%8 (bit 0 = least significant). A
-signal occupies a contiguous run of payload bits:
+bit g lives in byte g//8 at bit position g%8 (bit 0 = least significant).
+
+Two layouts are supported (codec-map-spec.md secs. 4-5.1):
 
     little-endian  start_bit = LSB position;  value bit i -> start_bit + i
-    big-endian     start_bit = MSB position;  value bit i -> start_bit - (n-1) + i
+                   (layout contiguous, the only valid layout for little)
+    big-endian contiguous  start_bit = MSB position;
+                           value bit i -> start_bit - (n-1) + i
+    big-endian sawtooth    start_bit = MSB position in Motorola sawtooth
+                           numbering; payload bits are BE_BITS[be_idx(start)..
+                           be_idx(start)+n-1] with the first element carrying
+                           the MSB of the raw value, mirroring opendbc's
+                           get_raw_value (spec sec. 5.1).
 
 DBC uses two conventions that map onto this model as follows:
 
-    Intel   (@1, little endian)   start_bit = LSB position. Always
-                                  representable; mapped 1:1.
-    Motorola (@0, big endian)     start_bit = MSB position in a "sawtooth"
-                                  numbering. A Motorola signal is representable
-                                  in the linear model only when it fits inside a
-                                  single byte; multi-byte Motorola signals use a
-                                  sawtooth layout that a contiguous linear run
-                                  cannot express, so they are skipped with a
-                                  warning.
+    Intel   (@1, little endian)   start_bit = LSB position; always
+                                  representable; mapped 1:1 with layout
+                                  contiguous.
+    Motorola (@0, big endian)     start_bit = MSB position in sawtooth
+                                  numbering. Single-byte Motorola signals are
+                                  representable with layout contiguous (the
+                                  sawtooth set equals the contiguous run), but
+                                  multi-byte Motorola signals require layout
+                                  sawtooth and are now emitted with
+                                  layout: sawtooth instead of being skipped.
 
 Multiplexed signals (SGM_ multiplexer or multiplexed entries) are out of scope
-for v0.2.0 (see the parent issue) and are skipped with a warning.
+for v0.2.0/v0.3.0 (see the parent issue) and are skipped with a warning.
 
 The DBC parsing and the Motorola lsb/msb computation below deliberately mirror
 comma.ai `opendbc`'s `opendbc/can/dbc.py` so that the generated bit positions
@@ -63,7 +72,7 @@ try:
 except ImportError as exc:  # pragma: no cover
     sys.exit("dbc2codec requires jsonschema (`pip install jsonschema`): %s" % exc)
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # --------------------------------------------------------------------------
 # DBC grammar (mirrors opendbc/can/dbc.py so bit positions are bit-exact)
@@ -92,6 +101,10 @@ BE_BITS = [j + i * 8 for i in range(64) for j in range(7, -1, -1)]
 
 # CANcestry codec-map limits (core/codec/README.md): names <= 64 bytes.
 _NAME_MAX = 64
+_UNIT_MAX = 32
+_LABEL_MAX = 64
+_PAYLOAD_MAX_BITS = 64
+_DLC_MAX = 8
 
 # Maximum CAN id accepted by schemas/codec-map-0.2.0.schema.json (29-bit).
 _CAN_ID_MAX = 536870911
@@ -202,27 +215,93 @@ def _is_default_scale(factor: float, offset: float) -> bool:
 
 def map_signal(msg: DbcMessage, sig: DbcSignal, values: dict[int, str] | None):
     """Return a codec-map signal dict, or None if the signal is not
-    representable in the v0.2.0 model (see module docstring)."""
-    values = values or {}
+    representable (see module docstring).
 
-    # Multi-byte Motorola signals use a sawtooth layout a contiguous linear
-    # run cannot express -> skip (documented limitation).
-    if not sig.is_little_endian and (sig.msb // 8) != (sig.lsb // 8):
-        return None
+    Motorola multi-byte signals are now representable with layout sawtooth
+    (codec-map-spec.md sec. 5.1); only the multiplexed and overlong-name cases
+    remain unrepresentable. Signals that would be rejected by the CANcestry
+    loader (sawtooth exceeding the 64-bit payload, unit/label length, etc.)
+    are also treated as unrepresentable so the generated artifact always
+    loads.
+    """
+    values = values or {}
 
     if len(sig.name) > _NAME_MAX:
         return None
 
+    # Pre-validate loader limits that are not expressed in the JSON Schema.
+    # Sawtooth exceeding the 64-bit global payload is a load error.
+    # Compute the would-be layout to decide.
+    is_saw = not sig.is_little_endian and (sig.msb // 8) != (sig.lsb // 8)
+    # DLC-based fit: signal bits must fit within the message's payload size.
+    # This prevents the decoder from reporting FRAME_TOO_SHORT and the CLI
+    # from skipping the entire frame (see tests/integration/opendbc-parity/codec_cli.c).
+    dlc_bits = msg.size * 8
+    if is_saw:
+        be_idx = (sig.msb >> 3) * 8 + (7 - (sig.msb & 7))
+        if be_idx + sig.size > _PAYLOAD_MAX_BITS:
+            return None
+        # Check that all sawtooth payload bits are within DLC
+        # (equivalent to max_p < dlc_bits)
+        # Compute max_p via range logic; faster to check via be mapping
+        max_p = 0
+        min_p = 64
+        for k in range(sig.size):
+            p = BE_BITS[be_idx + k]
+            if p < min_p:
+                min_p = p
+            if p > max_p:
+                max_p = p
+        if max_p >= dlc_bits:
+            return None
+    elif sig.is_little_endian:
+        if sig.lsb + sig.size > _PAYLOAD_MAX_BITS:
+            return None
+        if sig.lsb + sig.size > dlc_bits:
+            return None
+    else:
+        if sig.msb < sig.size - 1:
+            return None
+        # Contiguous big: bits are [msb - size +1, msb]
+        first = sig.msb - sig.size + 1
+        if sig.msb >= dlc_bits or first >= dlc_bits:
+            # If msb itself is outside DLC, signal exceeds
+            return None
+
+    # Unit/label length limits are loader errors (max 32 / 64).
+    if sig.unit and len(sig.unit) > _UNIT_MAX:
+        # Drop the unit rather than the whole signal; the physical value is
+        # still representable.
+        sig_unit = None
+    else:
+        sig_unit = sig.unit if sig.unit else None
+
+    if values:
+        for label in values.values():
+            if len(label) > _LABEL_MAX:
+                return None
+        # Also check that enum keys fit in bit_length (loader checks)
+        if sig.size < 64:
+            limit = 1 << sig.size
+            for k in values.keys():
+                if k >= limit:
+                    return None
+
     out: dict[str, Any] = {"name": sig.name}
+
+    sawtooth = is_saw
 
     if sig.is_little_endian:
         out["start_bit"] = sig.lsb
         out["endianness"] = "little"
     else:
-        # Motorola single-byte: CANcestry big-endian start_bit is the LSB0 MSB
-        # position, which is the raw DBC start bit (opendbc msb).
+        # Motorola: CANcestry big-endian start_bit is the LSB0 MSB position,
+        # which is the raw DBC start bit (opendbc msb). The layout field
+        # distinguishes the contiguous vs sawtooth interpretation.
         out["start_bit"] = sig.msb
         out["endianness"] = "big"
+        if sawtooth:
+            out["layout"] = "sawtooth"
 
     out["bit_length"] = sig.size
 
@@ -245,8 +324,8 @@ def map_signal(msg: DbcMessage, sig: DbcSignal, values: dict[int, str] | None):
             out["scale"] = sig.factor
             out["offset"] = sig.offset
 
-    if sig.unit:
-        out["unit"] = sig.unit
+    if sig_unit:
+        out["unit"] = sig_unit
 
     return out
 
@@ -274,6 +353,15 @@ def build_codec_map(db: DbcDatabase, name: str, version: str,
             warnings.append(f"message {msg.name!r}: frame id {frame_id} exceeds "
                             f"29 bits; skipped")
             continue
+        if msg.size < 0 or msg.size > _DLC_MAX:
+            warnings.append(f"message {msg.name!r}: DLC {msg.size} out of range (0..{_DLC_MAX}); skipped")
+            continue
+        # VECTOR__INDEPENDENT_SIG_MSG is a DBC placeholder for unassigned
+        # signals (size 0, signals all sharing start bit 0). It has no CAN
+        # payload and is not representable as a codec-map message.
+        if msg.size == 0:
+            warnings.append(f"message {msg.name!r}: DLC 0 (placeholder); skipped")
+            continue
         signals: list[dict[str, Any]] = []
         for sig in sorted(msg.signals, key=lambda s: (s.start_bit, s.name)):
             if sig.name in used_names:
@@ -283,17 +371,39 @@ def build_codec_map(db: DbcDatabase, name: str, version: str,
                                 f"duplicate signal name")
                 continue
             values = db.values.get((frame_id, sig.name))
+            # Preserve unit truncation info for warning
+            pre_unit = sig.unit
             mapped = map_signal(msg, sig, values)
             if mapped is None:
-                if not sig.is_little_endian and (sig.msb // 8) != (sig.lsb // 8):
-                    reason = "multi-byte big-endian (Motorola) layout is not " \
-                             "representable in the v0.2.0 codec model"
-                elif len(sig.name) > _NAME_MAX:
+                if len(sig.name) > _NAME_MAX:
                     reason = "signal name longer than 64 bytes"
-                else:
+                elif sig.unit and len(sig.unit) > _UNIT_MAX:
+                    # map_signal drops the unit but still returns a signal;
+                    # this branch is for other unrepresentable cases
                     reason = "unknown"
+                elif values and any(len(v) > _LABEL_MAX for v in values.values()):
+                    reason = "value label longer than 64 bytes"
+                elif not sig.is_little_endian and (sig.msb // 8) != (sig.lsb // 8):
+                    be_idx = (sig.msb >> 3) * 8 + (7 - (sig.msb & 7))
+                    if be_idx + sig.size > _PAYLOAD_MAX_BITS:
+                        reason = "sawtooth exceeds 64-bit payload"
+                    else:
+                        reason = "unknown"
+                elif sig.is_little_endian:
+                    if sig.lsb + sig.size > _PAYLOAD_MAX_BITS:
+                        reason = "little-endian exceeds 64-bit payload"
+                    else:
+                        reason = "unknown"
+                else:
+                    if sig.msb < sig.size - 1:
+                        reason = "big-endian extends below payload bit 0"
+                    else:
+                        reason = "unknown"
                 warnings.append(f"message {msg.name!r}: signal {sig.name!r} skipped: {reason}")
                 continue
+            # Emit a warning when the unit was dropped due to length
+            if pre_unit and len(pre_unit) > _UNIT_MAX and "unit" not in mapped:
+                warnings.append(f"message {msg.name!r}: signal {sig.name!r}: unit truncated (dropped) as it exceeds {_UNIT_MAX} bytes")
             signals.append(mapped)
             used_names.add(sig.name)
         if not signals:

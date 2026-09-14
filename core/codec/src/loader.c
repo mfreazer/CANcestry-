@@ -1669,6 +1669,7 @@ typedef struct codec_signal_spec {
     uint32_t bit_length;
     cancestry_codec_signal_type_t type;
     cancestry_codec_endianness_t endianness;
+    cancestry_codec_layout_t layout;
     double scale;
     double offset;
     bool has_min;
@@ -1709,9 +1710,10 @@ static const char *const CODEC_MAP_KEYS[] = {"name", "version", "description", "
 static const char *const CODEC_MESSAGE_KEYS[] = {"id", "name", "dlc", "period_ms",
                                                  "description", "signals"};
 static const char *const CODEC_SIGNAL_KEYS[] = {"name",       "start_bit", "bit_length",
-                                                "type",       "endianness", "scale",
-                                                "offset",     "unit",      "values",
-                                                "min",        "max",       "strict"};
+                                                "type",       "endianness", "layout",
+                                                "bit_layout", "scale",     "offset",
+                                                "unit",       "values",    "min",
+                                                "max",        "strict"};
 
 static bool codec_parse_signal(const codec_ast_node_t *node,
                                codec_arena_t *arena,
@@ -1817,6 +1819,60 @@ static bool codec_parse_signal(const codec_ast_node_t *node,
         return codec_load_fail(error, CANCESTRY_CODEC_ERR_PARSE, node->pairs[index].line,
                                node->pairs[index].column,
                                "signal 'endianness' must be 'little' or 'big'");
+    }
+
+    /* Layout: optional, defaults to contiguous. Accept "layout" and alias "bit_layout". */
+    spec->layout = CANCESTRY_CODEC_LAYOUT_CONTIGUOUS;
+    {
+        size_t layout_index;
+        bool has_layout = false;
+        char *layout_text = NULL;
+        size_t layout_length = 0u;
+        if (codec_ast_find_pair(node, "layout", &layout_index)) {
+            has_layout = true;
+            if (!codec_field_string(node->pairs[layout_index].value, arena, &layout_text,
+                                    &layout_length)) {
+                return codec_load_fail(error, CANCESTRY_CODEC_ERR_PARSE,
+                                       node->pairs[layout_index].line,
+                                       node->pairs[layout_index].column,
+                                       "signal 'layout' must be a string");
+            }
+        }
+        if (codec_ast_find_pair(node, "bit_layout", &layout_index)) {
+            if (has_layout) {
+                return codec_load_fail(error, CANCESTRY_CODEC_ERR_PARSE,
+                                       node->pairs[layout_index].line,
+                                       node->pairs[layout_index].column,
+                                       "signal must not specify both 'layout' and 'bit_layout'");
+            }
+            if (!codec_field_string(node->pairs[layout_index].value, arena, &layout_text,
+                                    &layout_length)) {
+                return codec_load_fail(error, CANCESTRY_CODEC_ERR_PARSE,
+                                       node->pairs[layout_index].line,
+                                       node->pairs[layout_index].column,
+                                       "signal 'layout' must be a string");
+            }
+            has_layout = true;
+        }
+        if (has_layout) {
+            if (layout_length == 10u && memcmp(layout_text, "contiguous", 10u) == 0) {
+                spec->layout = CANCESTRY_CODEC_LAYOUT_CONTIGUOUS;
+            } else if (layout_length == 8u && memcmp(layout_text, "sawtooth", 8u) == 0) {
+                spec->layout = CANCESTRY_CODEC_LAYOUT_SAWTOOTH;
+            } else {
+                return codec_load_fail(error, CANCESTRY_CODEC_ERR_PARSE,
+                                       node->pairs[layout_index].line,
+                                       node->pairs[layout_index].column,
+                                       "signal 'layout' must be 'contiguous' or 'sawtooth'");
+            }
+            if (spec->layout == CANCESTRY_CODEC_LAYOUT_SAWTOOTH &&
+                spec->endianness != CANCESTRY_CODEC_ENDIANNESS_BIG) {
+                return codec_load_fail(error, CANCESTRY_CODEC_ERR_PARSE, node->line,
+                                       node->column,
+                                       "sawtooth layout is only valid for big-endian signals (signal '%s')",
+                                       spec->name);
+            }
+        }
     }
 
     if (codec_ast_find_pair(node, "scale", &index)) {
@@ -1934,8 +1990,16 @@ static bool codec_parse_signal(const codec_ast_node_t *node,
                                "enum signal '%s' requires a 'values' mapping", spec->name);
     }
 
-    /* Bit-model sanity (codec-map-spec.md sections 4-5). */
-    if (spec->endianness == CANCESTRY_CODEC_ENDIANNESS_LITTLE) {
+    /* Bit-model sanity (codec-map-spec.md sections 4-5, 5.1). */
+    if (spec->layout == CANCESTRY_CODEC_LAYOUT_SAWTOOTH) {
+        /* Sawtooth: validate that the sawtooth bit set fits in 64 bits. */
+        uint32_t idx = (spec->start_bit >> 3u) * 8u + (7u - (spec->start_bit & 7u));
+        if (idx + spec->bit_length > CANCESTRY_CODEC_PAYLOAD_MAX_BITS) {
+            return codec_load_fail(error, CANCESTRY_CODEC_ERR_PARSE, node->line, node->column,
+                                   "sawtooth signal '%s' exceeds the 64-bit payload",
+                                   spec->name);
+        }
+    } else if (spec->endianness == CANCESTRY_CODEC_ENDIANNESS_LITTLE) {
         if ((uint64_t)spec->start_bit + (uint64_t)spec->bit_length >
             CANCESTRY_CODEC_PAYLOAD_MAX_BITS) {
             return codec_load_fail(error, CANCESTRY_CODEC_ERR_PARSE, node->line, node->column,
@@ -2080,10 +2144,15 @@ static bool codec_validate_map(const codec_ast_node_t *root,
     }
     {
         const codec_ast_node_t *version = root->pairs[index].value;
-        if (version->kind != CODEC_AST_SCALAR || version->text_length != 5u ||
-            memcmp(version->text, "0.2.0", 5u) != 0) {
+        bool ok = false;
+        if (version->kind == CODEC_AST_SCALAR && version->text_length == 5u) {
+            if (memcmp(version->text, "0.2.0", 5u) == 0 || memcmp(version->text, "0.3.0", 5u) == 0) {
+                ok = true;
+            }
+        }
+        if (!ok) {
             return codec_load_fail(error, CANCESTRY_CODEC_ERR_PARSE, version->line,
-                                   version->column, "'schema_version' must be \"0.2.0\"");
+                                   version->column, "'schema_version' must be \"0.2.0\" or \"0.3.0\"");
         }
     }
     if (!codec_ast_find_pair(root, "codec_map", &index)) {
@@ -2352,6 +2421,7 @@ static cancestry_codec_map_t *codec_build_map(const codec_map_spec_t *spec,
                 signal->bit_length = ss->bit_length;
                 signal->type = ss->type;
                 signal->endianness = ss->endianness;
+                signal->layout = ss->layout;
                 signal->scale = ss->scale;
                 signal->offset = ss->offset;
                 signal->unit =
@@ -2374,7 +2444,24 @@ static cancestry_codec_map_t *codec_build_map(const codec_map_spec_t *spec,
                 signal->min = ss->min;
                 signal->max = ss->max;
                 signal->strict = ss->strict;
-                if (ss->endianness == CANCESTRY_CODEC_ENDIANNESS_LITTLE) {
+                if (ss->layout == CANCESTRY_CODEC_LAYOUT_SAWTOOTH) {
+                    /* Compute min/max of the sawtooth set for frame-size checks. */
+                    uint32_t idx = (ss->start_bit >> 3u) * 8u + (7u - (ss->start_bit & 7u));
+                    uint32_t min_p = UINT32_MAX;
+                    uint32_t max_p = 0u;
+                    uint32_t k;
+                    for (k = 0u; k < ss->bit_length; ++k) {
+                        uint32_t p = ((idx + k) >> 3u) * 8u + (7u - ((idx + k) & 7u));
+                        if (p < min_p) {
+                            min_p = p;
+                        }
+                        if (p > max_p) {
+                            max_p = p;
+                        }
+                    }
+                    signal->first_bit = min_p;
+                    signal->last_bit = max_p;
+                } else if (ss->endianness == CANCESTRY_CODEC_ENDIANNESS_LITTLE) {
                     signal->first_bit = ss->start_bit;
                     signal->last_bit = ss->start_bit + ss->bit_length - 1u;
                 } else {

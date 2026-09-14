@@ -2,9 +2,11 @@
  * CANcestry - signal encoder implementation.
  *
  * Implementation notes:
- *   - Bit insertion mirrors extraction: the raw value's bit i is written to
- *     payload bit first_bit + i (codec-map-spec.md sections 4-5), so encode
- *     is the exact inverse of decode for any endianness and width.
+ *   - Bit insertion mirrors extraction (codec-map-spec.md sections 4-5.1).
+ *     Contiguous signals write raw bit i to payload bit first_bit + i.
+ *     Sawtooth signals write via the Motorola sawtooth ordering: raw MSB
+ *     goes to the first sawtooth payload position, raw LSB to the last,
+ *     which is the exact inverse of decode for any endianness and width.
  *   - Encoding converts physical to raw with raw = round((physical -
  *     offset) / scale), rounding to nearest with ties away from zero
  *     (codec-map-spec.md section 7). The rounding helper uses truncation
@@ -349,8 +351,14 @@ cancestry_codec_status_t cancestry_codec_encode_signal(const cancestry_codec_sig
     if (frame_length == 0u || frame_length > CANCESTRY_CAN_FRAME_MAX_LENGTH) {
         return CANCESTRY_CODEC_ERR_ARGUMENT;
     }
-    if (signal->last_bit >= frame_length * 8u) {
-        return CANCESTRY_CODEC_ERR_FRAME_TOO_SHORT;
+    if (signal->layout == CANCESTRY_CODEC_LAYOUT_SAWTOOTH) {
+        if (!codec_bits_saw_fits(frame_length, signal->start_bit, signal->bit_length)) {
+            return CANCESTRY_CODEC_ERR_FRAME_TOO_SHORT;
+        }
+    } else {
+        if (signal->last_bit >= frame_length * 8u) {
+            return CANCESTRY_CODEC_ERR_FRAME_TOO_SHORT;
+        }
     }
 
     switch (signal->type) {
@@ -373,7 +381,11 @@ cancestry_codec_status_t cancestry_codec_encode_signal(const cancestry_codec_sig
         return status;
     }
 
-    codec_bits_store(frame, frame_length, signal->first_bit, signal->bit_length, raw);
+    if (signal->layout == CANCESTRY_CODEC_LAYOUT_SAWTOOTH) {
+        codec_bits_store_saw(frame, frame_length, signal->start_bit, signal->bit_length, raw);
+    } else {
+        codec_bits_store(frame, frame_length, signal->first_bit, signal->bit_length, raw);
+    }
     if (status == CANCESTRY_CODEC_WARN_VALUE_CLAMPED && warnings != NULL) {
         warnings->value_clamped++;
     }

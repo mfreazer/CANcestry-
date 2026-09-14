@@ -1,7 +1,7 @@
 # CANcestry codec engine
 
-Portable decode/encode engine for the v0.2.0 codec map schema, implementing
-`docs/packages/codec-map-spec.md` (v0.2.1) bit semantics exactly.
+Portable decode/encode engine for the v0.2.0/v0.3.0 codec map schemas,
+implementing `docs/packages/codec-map-spec.md` (v0.3.0) bit semantics exactly.
 
 ## Libraries
 
@@ -20,14 +20,27 @@ borrowed pointers into that block, which is why it can be allocation-free
 Canonical LSB0 linear bit numbering: `data[0] bit 0` is global bit 0,
 `data[1] bit 0` is global bit 8, and so on (spec section 3).
 
-- **little-endian**: `start_bit` is the LSB position; signal bit `i` maps to
-  payload bit `start_bit + i`.
-- **big-endian**: `start_bit` is the MSB position; signal bit `i` maps to
-  payload bit `start_bit - (bit_length - 1) + i`.
+- **little-endian, layout contiguous (default)**: `start_bit` is the LSB
+  position; signal bit `i` maps to payload bit `start_bit + i` (spec 4).
 
-Both endiannesses therefore occupy a contiguous payload bit run
-`[first_bit, last_bit]`, and extraction is identical for both. Signed signals
-are two's complement and sign-extend to 64 bits (spec section 6). Scaling is
+- **big-endian, layout contiguous (default)**: `start_bit` is the MSB
+  position; signal bit `i` maps to payload bit `start_bit - (bit_length - 1) + i`
+  (spec 5). Both contiguous layouts occupy a contiguous run
+  `[first_bit, last_bit]`; extraction is identical.
+
+- **big-endian, layout sawtooth** (spec 5.1, DBC Motorola): `start_bit` is the
+  Motorola MSB; payload bits are the sawtooth ordering
+  `BE_BITS[be_idx(start_bit) .. be_idx(start_bit)+n-1]` where
+  `be_idx(p)=(p>>3)*8+(7-(p&7))` and `be_bit(k)=(k>>3)*8+(7-(k&7))`.
+  The first sawtooth element carries the most significant raw bit.
+  This is bit-exact with `opendbc`'s `get_raw_value`. Single-byte sawtooth
+  and contiguous are identical; multi-byte sawtooth spans bytes with the
+  sawtooth pattern (e.g. start 7 len 16 -> bits
+  `[7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8]`, raw = `data[0]<<8|data[1]`).
+
+`layout` defaults to `contiguous` when omitted, so every v0.2.0 map remains
+valid. `bit_layout` is accepted as an alias for `layout`. Signed signals are
+two's complement and sign-extend to 64 bits (spec 6). Scaling is
 `physical = raw * scale + offset`; encoding rounds to nearest, ties away from
 zero, and is the exact inverse of decoding.
 
@@ -41,7 +54,8 @@ zero, and is the exact inverse of decoding.
 | enum | `INT` (raw), with label from `values` when mapped | n/a (scale/offset ignored) |
 
 `cancestry_decoded_signal_t::raw` always holds the zero-extended bit pattern,
-so decode → encode round-trips every bit exactly.
+so decode → encode round-trips every bit exactly, for both contiguous and
+sawtooth layouts.
 
 ## Encode value kinds
 
@@ -55,8 +69,8 @@ range round-trips (double cannot represent integers above 2^53).
 
 ## Interpretations and decisions
 
-The v0.2.0 schema and spec leave some corners undefined; the choices made
-here are normative for this implementation:
+The v0.2.0/v0.3.0 schemas and spec leave some corners undefined; the choices
+made here are normative for this implementation:
 
 - **`strict`** defaults to `true`. On encode, a physical value outside the
   declared `min`/`max` fails with `CANCESTRY_CODEC_ERR_RANGE`; with
@@ -80,7 +94,8 @@ here are normative for this implementation:
 - **Signals may exceed the message `dlc`**: the loader accepts them, and
   decoding a frame too short for any declared signal drops the whole message
   with a `frame_too_short` warning and no signal updates (spec section 8).
-  Extra bytes beyond a signal's span are ignored.
+  Extra bytes beyond a signal's span are ignored. For sawtooth signals, the
+  needed bytes are the sawtooth set, not the contiguous envelope.
 - **Signal ids** are assigned by the namespace in registration order (1-based)
   and are stable for a fixed registration order (SYS-NF-001). The namespace
   is a bounded registry over caller-owned storage and never allocates.
@@ -96,6 +111,13 @@ here are normative for this implementation:
 - **Bounds**: codec map/message/signal names ≤ 64 bytes, units ≤ 32, value
   labels ≤ 64, descriptions ≤ 512, version strings ≤ 32; messages/signals per
   map ≤ 65535. These bound the load-time allocation.
+- **`layout` defaults to `contiguous`**. `sawtooth` is only valid for
+  big-endian signals; little-endian sawtooth is rejected. `bit_layout` is an
+  alias for `layout`. The loader accepts both `schema_version` `"0.2.0"` and
+  `"0.3.0"` ; both schemas allow the optional
+  layout fields. A sawtooth signal's `first_bit`/`last_bit` are the min/max of
+  its sawtooth set, used only for frame-size checks; the bit operations use
+  the sawtooth ordering.
 
 ### Documented discrepancy
 
@@ -121,9 +143,10 @@ line/column error rather than being guessed at:
 - duplicate mapping keys are rejected; tabs are not allowed in indentation.
 
 Validation then enforces every constraint of
-`schemas/codec-map-0.2.0.schema.json` (required fields, types, ranges,
-`additionalProperties: false`, the boolean/`bit_length: 1` and enum/`values`
-conditionals) in C, so no external JSON Schema validator runs at load time.
+`schemas/codec-map-0.2.0.schema.json` and `schemas/codec-map-0.3.0.schema.json`
+(required fields, types, ranges, `additionalProperties: false`, the
+`boolean`/`bit_length: 1` and `enum`/`values` conditionals, and the new
+`layout` enum) in C, so no external JSON Schema validator runs at load time.
 
 ## Example
 
@@ -135,7 +158,7 @@ codec_map:
   messages:
     - id: 0x1A0
       name: EngineData
-      dlc: 4
+      dlc: 8
       period_ms: 10
       signals:
         - name: EngineSpeed
@@ -155,4 +178,12 @@ codec_map:
           values:
             "0": RELEASED
             "1": PRESSED
+        - name: WheelSpeedFR   # multi-byte Motorola example
+          start_bit: 7
+          bit_length: 16
+          type: uint
+          endianness: big
+          layout: sawtooth
+          scale: 0.0062
+          unit: kph
 ```
