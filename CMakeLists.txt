@@ -76,6 +76,7 @@ if(CANCESTRY_ENABLE_ASAN AND NOT CMAKE_CROSSCOMPILING)
 endif()
 
 add_subdirectory(core/event)
+add_subdirectory(core/codec)
 
 if(CANCESTRY_BUILD_TESTS)
     enable_testing()
