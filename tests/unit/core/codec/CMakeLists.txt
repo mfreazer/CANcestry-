@@ -1,0 +1,5 @@
+cancestry_add_unit_test(cancestry_test_codec_decoder test_decoder.c)
+cancestry_add_unit_test(cancestry_test_codec_encoder test_encoder.c)
+cancestry_add_unit_test(cancestry_test_codec_namespace test_namespace.c)
+cancestry_add_unit_test(cancestry_test_codec_invalid test_invalid.c)
+cancestry_add_unit_test(cancestry_test_codec_loader test_loader.c)
