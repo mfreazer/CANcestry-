@@ -1,0 +1,7 @@
+# Integration-test dependencies. The opendbc checkout is pinned to the
+# known-good commit the parity assertions were validated against (QA-H02).
+opendbc @ git+https://github.com/commaai/opendbc.git@057aee25b5eee7530f0b95b5b508c8c3247b0cd7
+
+PyYAML>=6.0
+jsonschema>=4.0
+pytest>=7.0

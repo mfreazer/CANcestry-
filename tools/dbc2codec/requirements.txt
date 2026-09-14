@@ -1,0 +1,3 @@
+# dbc2codec runtime dependencies (host-side tooling only).
+PyYAML>=6.0
+jsonschema>=4.0
