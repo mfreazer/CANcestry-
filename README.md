@@ -30,6 +30,8 @@ local build is a clean CI build.
 | `docs/` | System, software and package specifications, plus traceability. |
 | `schemas/` | JSON Schemas for package manifests, codec maps, recipes and FSMs. |
 | `core/event/` | Portable event model: types, clock and bounded queue. See [`core/event/README.md`](core/event/README.md). |
+| `core/codec/` | Codec engine: decode/encode against codec-map schemas. See [`core/codec/README.md`](core/codec/README.md). |
+| `core/recipe/` | Recipe engine: event-triggered transformations, routing and filtering between the event bus and the codec engine. See [`core/recipe/README.md`](core/recipe/README.md). |
 | `tests/unit/` | Host unit tests, one executable per area. |
 | `ci/` | Repository checks that run as CTest tests. |
 

@@ -77,6 +77,7 @@ endif()
 
 add_subdirectory(core/event)
 add_subdirectory(core/codec)
+add_subdirectory(core/recipe)
 
 if(CANCESTRY_BUILD_TESTS)
     enable_testing()
