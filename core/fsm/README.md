@@ -7,6 +7,15 @@ the 0.2.0 schema is structurally identical and still accepted), plus the
 mandatory Phase 4 conformance suite. Built for
 [issue #11](https://github.com/mfreazer/CANcestry-/issues/11).
 
+Status at v0.3.0-rc.1: **complete for the release candidate** — all 55
+`SW-FR-FSM-*` requirements are traced to passing verification artifacts
+(`docs/trace/traceability.csv`), and the runtime also executes inside the
+Phase 5 gateway loop
+([`examples/gateway/README.md`](../../examples/gateway/README.md),
+[smoke test record](../../docs/qa/smoke-test-v0.3.0-rc.1.md)). Sections
+"Requirement index" and "Open questions" below state what is verified and what
+is still a recorded decision rather than a settled specification question.
+
 ## Libraries
 
 | Target | Contents | Allocates? |
@@ -34,6 +43,44 @@ Instance creation does not allocate either — the caller provides
 `cancestry_fsm_instance_storage_t` per instance. If a table is too small for the
 machine that uses it, `cancestry_fsm_engine_init()` fails and leaves the engine
 zeroed (safely unusable) rather than growing anything.
+
+## Where it fits
+
+The FSM runtime is one of four portable cores and has no way to reach the world
+by itself:
+
+| Neighbour | Interface |
+|---|---|
+| [`core/event`](../event/README.md) | events arrive through `cancestry_event_t`; the per-instance incoming queue *is* `cancestry_event_queue_t`, so one selection order and one overflow policy exist runtime-wide |
+| [`core/codec`](../codec/README.md) | `send_message` resolves the message's CAN id and encoded frame through the codec namespace and encoder; `set_signal` values are codec values |
+| [`core/recipe`](../recipe/README.md) | the peer consumer of the same event bus; its dispatcher (the gateway loop) feeds this engine after the recipe engine, in a documented order |
+| [`examples/gateway`](../../examples/gateway/README.md) | the only place today where all four cores run together: ingress → decode → event queue → recipe + FSM → encode → egress, with fail-closed and determinism asserted |
+
+Side effects never leave the engine directly: `send_message`, `set_signal`,
+`raise_fault` and the log actions are handed to the caller's sink after the
+capability check and the governor callback. That is the whole reason the core
+can be built for firmware and for host CI from the same sources (SW-FR-FSM-025,
+SW-FR-FSM-051).
+
+## Public API
+
+The headers are the contract; this is the map. Everything is caller-owned: the
+engine never takes ownership of a definition set, a queue, a timer table or an
+event.
+
+| Area | Entry points |
+|---|---|
+| Load / release a definition set | `cancestry_fsm_set_load`, `cancestry_fsm_set_free` |
+| Engine | `cancestry_fsm_engine_init`, `cancestry_fsm_engine_is_valid`, `cancestry_fsm_engine_instance_count` |
+| Events and time | `cancestry_fsm_engine_process_event`, `cancestry_fsm_engine_inject_event`, `cancestry_fsm_engine_tick`, `cancestry_fsm_engine_advance`, `cancestry_fsm_engine_now_us` |
+| Instance lifecycle | `cancestry_fsm_instance_enable`, `…_start`, `…_suspend`, `…_resume`, `…_fault`, `…_reset`, `…_disable`, `cancestry_fsm_engine_instance_at`, `cancestry_fsm_engine_instance_by_id`, `cancestry_fsm_instance_lifecycle`, `cancestry_fsm_instance_state_name` |
+| Inspection (test hooks, SW-FR-FSM-052) | `cancestry_fsm_instance_get_variable`, `cancestry_fsm_instance_get_timer`, `cancestry_fsm_instance_counters`, `cancestry_fsm_engine_counters`, `cancestry_fsm_engine_totals` |
+| Trace | `cancestry_fsm_engine_trace_render`, `cancestry_fsm_engine_trace_record`, `cancestry_fsm_engine_trace_count`, `cancestry_fsm_engine_trace_dropped`, `cancestry_fsm_engine_trace_clear` |
+| Shared vocabulary | `cancestry_fsm_status_name`, `cancestry_fsm_status_is_ok`, `cancestry_fsm_lifecycle_name`, `cancestry_fsm_lifecycle_is_active`, `cancestry_fsm_event_type_name`, `cancestry_fsm_action_kind_name`, `cancestry_fsm_log_level_name`, `cancestry_fsm_trace_kind_name`, `cancestry_fsm_variable_type_from_name`, `cancestry_fsm_fault_code_hash` |
+
+The expression evaluator is deliberately **not** part of the API (see "Files and
+layout"): guards and operands are evaluated by the engine, so conformance tests
+exercise the shipping path instead of a parallel one.
 
 ## Files and layout
 
@@ -345,9 +392,35 @@ engine, and asserts on recorded effects, counters and traces.
 Loader/schema behaviour is additionally pinned by `tests/unit/core/fsm/test_loader.c`
 (`FSM-LOAD-001..006`).
 
+## Requirement index (SW-FR-FSM-001..055)
+
+All 55 FSM requirements are traced to passing artifacts in
+`docs/trace/traceability.csv`; `ci/check_traceability.py` fails if a `passing`
+row names a test id that no artifact mentions. This index is the module-level
+view of that mapping (requirement ranges → subject → the cases that verify them).
+
+| Requirements | Subject | Verified by |
+|---|---|---|
+| 001..003 | load declarative definitions, compile, reject invalid ones | `test_loader.c` (`FSM-LOAD-001/003`), `cancestry_schemas_valid` |
+| 004..009 | named instances, single initial state, state names, entry/exit actions, flat states | `test_instance_lifecycle.c` (`FSM-LIFECYCLE-001/002`), `test_loader.c` (`FSM-LOAD-003/004`) |
+| 010..016 | event-driven transitions, guards, declaration order, action order, self-transitions, chain depth | `test_transition_precedence.c` (`FSM-PRECEDENCE-001/002/004/006`), `EXPR-NAMESPACE-001` |
+| 017..018 | the seven event types and their payload fields | `test_loader.c` (`FSM-LOAD-003`), `test_event_order.c` (`FSM-EVENT-ORDER-005`) |
+| 019..021 | bounded incoming queue, overflow policy, recursion bounds | `test_queue_overflow.c` (`FSM-QUEUE-001/002/003`) |
+| 022..025 | the action set, capability validation, failure recording, no hardware access | `test_loader.c` (`FSM-LOAD-001`), `test_capability_enforcement.c` (`FSM-CAPABILITY-002/007/009`), `GATEWAY-FAILCLOSED-001` |
+| 026..030 | one-shot and periodic timers, timer events, timer control, 1 ms tick | `test_timer_semantics.c` (`FSM-TIMER-001/002/004`) |
+| 031..034 | variables: names, types, defaults, instance scope | `test_loader.c` (`FSM-LOAD-004/006`), `test_instance_lifecycle.c` (`FSM-LIFECYCLE-001/002`) |
+| 035..038 | expression evaluator, operators and functions, no code execution, evaluation faults | `test_expression_evaluation.c` (`EXPR-GRAMMAR-001`, `EXPR-FUNCTIONS-001`, `EXPR-NO-CODE-001`, `EXPR-FAULTS-001`) |
+| 039..042 | capability enforcement and the governor checkpoint | `test_capability_enforcement.c` (`FSM-CAPABILITY-001/003/005`) |
+| 043..047 | per-instance sequential processing, tick, execution budget, determinism, fault isolation | `test_event_order.c` (`FSM-EVENT-ORDER-004/006`), `test_timer_semantics.c` (`FSM-TIMER-001`), `test_transition_precedence.c` (`FSM-PRECEDENCE-007`), `GATEWAY-DETERMINISM-001` |
+| 048..055 | trace, counters, host runtime, test hooks, golden output, deferred transitions, first-wins | `test_transition_precedence.c` (`FSM-PRECEDENCE-002/003/005`), `test_event_order.c` (`FSM-EVENT-ORDER-001/006`), `test_queue_overflow.c` (`FSM-QUEUE-002`), `test_instance_lifecycle.c` (`FSM-LIFECYCLE-008`), `GATEWAY-TRACE-001` |
+
 ## Open questions for the maintainer
 
-Documented here rather than silently resolved, per `agents.md` and the issue:
+Documented here rather than silently resolved, per `agents.md` and the issue.
+Status at v0.3.0-rc.1: **item 1 is resolved**; items 2-6 are still recorded
+decisions of this implementation (each is pinned by a test), not settled
+specification questions — a maintainer ruling on any of them is a spec edit plus
+a test update, not a refactor.
 
 1. **`fsm-0.3.0.schema.json` — RESOLVED (issue #13).** Phase 4 confirmed the
    runtime needs no new file-level fields — chain depth, deferred transitions,
@@ -355,8 +428,10 @@ Documented here rather than silently resolved, per `agents.md` and the issue:
    declaration syntax. Issue #13 therefore finalized the 0.3.0 schema as the
    0.2.0 structure unchanged (no `layout`, no `priority`; both remain rejected
    by the `additionalProperties: false` checks), and the loader now targets
-   0.3.0 while still accepting the structurally identical 0.2.0. If a future
-   FSM file ever needs a field, the schema and this loader grow together.
+   0.3.0 while still accepting the structurally identical 0.2.0. The file is
+   machine-checked like every other schema (`cancestry_schemas_valid`,
+   `ci/check_schemas_valid.py`). If a future FSM file ever needs a field, the
+   schema and this loader grow together.
 2. **Fault-on-fault queue saturation** — see the queue section above; the event
    core and `event-ordering.md` section 11.2 disagree, and this module follows the
    shipped core.
@@ -367,9 +442,11 @@ Documented here rather than silently resolved, per `agents.md` and the issue:
    policy; the engine isolates that decision in the two fault sites.
 4. **`state_entered` / `state_exited` delivery.** The schema declares these
    selectors but no fields to scope them, so they are delivered to the owning
-   instance's queue and rely on the chain and budget limits for termination. If
-   v0.3 wants a "no internal events" notion, an `internal` transition flag in the
-   schema is the clean fix (a statechart phase already plans for it).
+   instance's queue and rely on the chain and budget limits for termination. If a
+   later version wants a "no internal events" notion, an `internal` transition
+   flag in the schema is the clean fix (a statechart phase already plans for it).
+   v0.3.0-rc.1 keeps the current behaviour, which is what the gateway harness
+   depends on for its dispatch counts.
 5. **`evt.` field vocabulary.** The spec fixes the namespace, not the field list.
    This runtime exposes the seven payload shapes of `core/event` read-only, and
    rejects unknown fields at load time. Extending the list is a spec edit, not an
