@@ -22,6 +22,8 @@ endfunction()
 add_subdirectory(unit/core/event)
 add_subdirectory(unit/core/codec)
 add_subdirectory(unit/core/recipe)
+add_subdirectory(unit/core/fsm)
+add_subdirectory(conformance/fsm)
 
 # The runtime cores must not allocate. This is verified on the built archives,
 # which is a stronger and more portable check than intercepting malloc at
@@ -39,4 +41,9 @@ if(CANCESTRY_PYTHON AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME cancestry_recipe_no_malloc_symbols
         COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_no_alloc.py"
                 $<TARGET_FILE:cancestry_recipe>)
+    # The FSM runtime path must not allocate either (issue #11 constraint:
+    # cancestry_fsm_engine_process_event and cancestry_fsm_engine_tick may not).
+    add_test(NAME cancestry_fsm_no_malloc_symbols
+        COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_no_alloc.py"
+                $<TARGET_FILE:cancestry_fsm>)
 endif()
