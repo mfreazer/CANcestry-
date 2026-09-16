@@ -9,6 +9,7 @@ Keep a Changelog style; requirement IDs refer to `docs/software/SwRS.md` and
 
 Phase 5 release candidate: the four portable core modules now run together in
 one deterministic, zero-heap gateway loop, and the v0.3.0 schemas are final.
+Release notes and announcement: [`docs/releases/v0.3.0-rc.1.md`](docs/releases/v0.3.0-rc.1.md).
 
 ### Added
 
@@ -44,6 +45,29 @@ one deterministic, zero-heap gateway loop, and the v0.3.0 schemas are final.
 - `CANCESTRY_BUILD_EXAMPLES` CMake option (default `ON`, host builds only).
 - `docs/trace/traceability.md`: the v0.3.0 scope definition and coverage
   summary backing the traceability CSV (Test strategy section 10).
+- **Traceability completeness gate** (`ci/check_traceability.py`, registered as
+  CTest test `cancestry_traceability_consistent`): validates the CSV header and
+  vocabularies, rejects ids that the SwRS/SyRS do not define, requires every
+  `passing` row's test id to appear in the artifact that verifies it, requires
+  every test source to cite a requirement, and requires every requirement that
+  is not verified to be named in the deferred ledger (Test strategy section 10:
+  "Traceability completeness shall be checked in CI").
+- **Smoke test record** (`docs/qa/smoke-test-v0.3.0-rc.1.md`): the executed
+  evidence for the release candidate - 31/31 tests in Debug+ASan/UBSan and in
+  Release, the allocator tripwire reporting zero allocation calls in the
+  processing loop, byte-identical golden output across five runs and across
+  build configurations - plus the step-by-step procedure and pass/fail criteria
+  for a target-hardware run.
+- **Release notes draft** (`docs/releases/v0.3.0-rc.1.md`): the community
+  announcement highlighting the deterministic event model, opendbc parity, the
+  recipe engine and the FSM runtime, with scope, upgrade notes and the open
+  questions the maintainer is asked to rule on.
+- Test-id labels in the artifacts that realize `passing` traceability rows
+  (event unit tests, opendbc parity harness, FSM capability conformance, the
+  gateway harness, the archive-scan registrations), so every `passing` row
+  resolves to a file a reviewer can open.
+- `core/fsm/README.md`: a requirement index for `SW-FR-FSM-001..055`, a public
+  API map and an integration section tying the runtime to the gateway harness.
 
 ### Changed
 
