@@ -16,6 +16,10 @@
  *     (highest timestamp, then priority, then sequence) is evicted;
  *   - fault event with only faults queued: the new fault is dropped, because
  *     there is no non-fault victim.
+ *
+ * Test ids (docs/trace/traceability.csv):
+ *   EVENT-OVERFLOW-001  SW-FR-EVENT-005
+ *   EVENT-OVERFLOW-002  QA-v0.2-R04
  */
 
 #include "cancestry/event/queue.h"

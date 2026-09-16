@@ -6,6 +6,8 @@
 # project-wide warning set already covers the first four flags; -Wconversion
 # is added here on top for this target only.
 
+# Realizes GATEWAY-HOST-001 (SYS-NF-006/SYS-NF-007): the harness is a host
+# target, so the whole loop is built and run without hardware.
 add_executable(cancestry_gateway main.c)
 
 target_link_libraries(cancestry_gateway PRIVATE

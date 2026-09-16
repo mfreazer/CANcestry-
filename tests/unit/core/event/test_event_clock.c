@@ -8,6 +8,10 @@
  *   SYS-NF-001       Simulation uses a deterministic virtual monotonic clock.
  *
  * Normative source: docs/system/event-ordering.md section 2.
+ *
+ * Test ids (docs/trace/traceability.csv):
+ *   EVENT-CLOCK-001  SW-FR-EVENT-002
+ *   EVENT-CLOCK-002  SYS-IR-005
  */
 
 #include "cancestry/event/clock.h"

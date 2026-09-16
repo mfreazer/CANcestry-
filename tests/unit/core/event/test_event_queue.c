@@ -9,6 +9,9 @@
  *   SYS-IR-005       Monotonic time source for event timestamps.
  *
  * Overflow-specific behavior is covered by test_event_overflow.c.
+ *
+ * Test ids (docs/trace/traceability.csv):
+ *   EVENT-QUEUE-001  SW-FR-EVENT-004
  */
 
 #include "cancestry/event/queue.h"

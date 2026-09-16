@@ -20,7 +20,11 @@
  *   - rate limiting (a governor policy) is visible to the runtime only as a
  *     denial, which is exactly how the stub behaves here.
  *
- * Test ids: FSM-CAPABILITY-001 .. FSM-CAPABILITY-009.
+ * Test ids: FSM-CAPABILITY-001, FSM-CAPABILITY-002, FSM-CAPABILITY-003,
+ * FSM-CAPABILITY-004, FSM-CAPABILITY-005, FSM-CAPABILITY-006,
+ * FSM-CAPABILITY-007, FSM-CAPABILITY-008, FSM-CAPABILITY-009 and
+ * FSM-CAPABILITY-010. The subset named by docs/trace/traceability.csv is
+ * 001, 002, 003, 005, 007 and 009; 004, 006, 008 and 010 are additional cases.
  */
 
 #include "cancestry_fsm_conformance.h"
@@ -153,7 +157,8 @@ static void case_no_governor_denies(void)
     fsm_test_destroy(&fx);
 }
 
-/* FSM-CAPABILITY-002..005: the capability gate runs before the governor. */
+/* FSM-CAPABILITY-002, FSM-CAPABILITY-003, FSM-CAPABILITY-004 and
+ * FSM-CAPABILITY-005: the capability gate runs before the governor. */
 static void case_capability_gate(void)
 {
     static fsm_test_fixture_t fx;
@@ -183,7 +188,7 @@ static void case_capability_gate(void)
         CANCESSTRY_TEST_CHECK(strstr(trace, "capability") != NULL);
     }
 
-    /* -003: AlertMsg (0x300) is not in can0's declared TX id list. */
+    /* FSM-CAPABILITY-003: AlertMsg (0x300) is not in can0's declared TX id list. */
     before = fsm_test_counters(&fx, "lab.one")->capability_denials;
     fx.governor_calls = 0u;
     fsm_test_reset(&fx);
@@ -194,7 +199,8 @@ static void case_capability_gate(void)
     CANCESSTRY_TEST_CHECK_U64(fsm_test_counters(&fx, "lab.one")->capability_denials - before,
                               1u);
 
-    /* -004: an interface the package never declared does not resolve at all. */
+    /* FSM-CAPABILITY-004: an interface the package never declared does not
+     * resolve at all. */
     fx.governor_calls = 0u;
     cancestry_event_init(&event);
     signal_event(&event, "SendUnknownIface", 1000u);
@@ -203,7 +209,7 @@ static void case_capability_gate(void)
     CANCESSTRY_TEST_CHECK_U64(fsm_test_counters(&fx, "lab.one")->capability_denials - before,
                               2u);
 
-    /* -005: VehicleSpeed is readable but not writable. */
+    /* FSM-CAPABILITY-005: VehicleSpeed is readable but not writable. */
     before = fsm_test_counters(&fx, "lab.one")->capability_denials;
     cancestry_event_init(&event);
     signal_event(&event, "WriteReadonly", 1000u);

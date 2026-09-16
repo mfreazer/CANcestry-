@@ -6,6 +6,9 @@
  *   issue #1      "No dynamic memory allocation is used in the queue
  *                 implementation."
  *
+ * Test ids (docs/trace/traceability.csv):
+ *   EVENT-NO-ALLOC-001  SYS-NF-002
+ *
  * The test installs a tripwire over the C allocator for the duration of a
  * queue exercise. The tripwire is only available on glibc and is disabled
  * under AddressSanitizer, where overriding malloc would fight the sanitizer
