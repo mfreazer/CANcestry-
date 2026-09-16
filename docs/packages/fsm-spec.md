@@ -1,6 +1,6 @@
 # CANcestry FSM Specification
 
-Version: 0.2.1
+Version: 0.3.0
 
 ## 1. Purpose
 
@@ -116,3 +116,16 @@ Overflow policy:
 
 - drop-newest for non-fault events,
 - never drop fault events.
+
+## 12. Schema versioning
+
+The FSM declaration structure is defined by `schemas/fsm-0.3.0.schema.json`,
+finalized for the v0.3.0 release candidate (issue #13). The v0.3.0 schema
+carries the identical declaration structure as v0.2.0: the Phase 4 runtime
+introduced no new file-level fields (chain depth, deferred transitions,
+missed-tick handling and the queue policy are runtime behavior, not
+declaration syntax).
+
+The loader accepts `schema_version` `"0.2.0"` and `"0.3.0"` and rejects every
+other value (SW-FR-FSM-003). Fields outside the FSM schema, including
+`layout` and `priority`, are rejected at load time.

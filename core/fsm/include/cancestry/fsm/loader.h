@@ -2,16 +2,22 @@
  * CANcestry - FSM file loader.
  *
  * Normative references:
- *   docs/packages/fsm-spec.md          (v0.2.1)
- *   schemas/fsm-0.2.0.schema.json      FSM file v0.2.0 schema (the schema is law)
+ *   docs/packages/fsm-spec.md          (v0.3.0)
+ *   schemas/fsm-0.3.0.schema.json      FSM file v0.3.0 schema (the schema is law;
+ *                                      finalizes the v0.2.0 structure unchanged,
+ *                                      issue #13)
+ *   schemas/fsm-0.2.0.schema.json      FSM file v0.2.0 schema (still accepted)
  *   docs/software/SwRS.md              SW-FR-FSM-001 (load), -002 (compile),
  *                                      -003 (reject invalid)
  *   docs/software/SwAD.md              section 10 (definition errors reject the file)
  *
  * The loader parses the YAML subset documented in core/fsm/README.md (the same
  * subset the codec and recipe loaders accept) and validates every constraint of
- * the fsm-0.2.0 JSON Schema in C, so no external JSON Schema validator runs at
- * load time (SW-FR-FSM-003).
+ * the fsm-0.3.0 JSON Schema in C, so no external JSON Schema validator runs at
+ * load time (SW-FR-FSM-003). The fsm-0.2.0 and fsm-0.3.0 schemas define the
+ * identical declaration structure, so documents carrying either schema_version
+ * are accepted; unknown fields (`layout` and `priority` included) are rejected
+ * at load time (issue #11 Flag 1).
  *
  * Compiling (SW-FR-FSM-002) happens in the same pass: every machine reference,
  * initial state, transition target, timer name, signal name and variable name is
@@ -59,7 +65,8 @@ typedef struct cancestry_fsm_load_error {
 /**
  * Parse, validate and compile one FSM file.
  *
- * The document must conform to the YAML subset and the fsm-0.2.0 schema.
+ * The document must conform to the YAML subset and the fsm-0.3.0 schema
+ * (the fsm-0.2.0 schema is structurally identical and also accepted).
  * Validation failures return CANCESTRY_FSM_ERR_PARSE, including:
  *   - a wrong or missing schema_version,
  *   - unknown keys anywhere (the schema forbids additionalProperties),

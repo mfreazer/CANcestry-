@@ -7,11 +7,16 @@
  *     collections, anchors, aliases, tags, directives or multi-line scalars.
  *     Anything outside the subset is rejected with a line/column error instead
  *     of being guessed at.
- *   - Validation implements every constraint of schemas/fsm-0.2.0.schema.json in
+ *   - Validation implements every constraint of schemas/fsm-0.3.0.schema.json in
  *     C (required fields, field types, ranges, enums, additionalProperties, the
  *     oneOf action shape, the conditional transition fields), so no external JSON
  *     Schema validator runs at load time (SW-FR-FSM-003, agents.md "Schema is
- *     law"). On top of that it performs the reference checks
+ *     law"). The 0.3.0 schema finalizes the 0.2.0 declaration structure
+ *     unchanged (issue #13), so the loader accepts schema_version "0.2.0" and
+ *     "0.3.0" alike - the codec loader's precedent for the 0.2.0/0.3.0 codec
+ *     map schemas - and rejects every other value. Fields outside the schema,
+ *     including `layout` and `priority`, are refused at load time by the
+ *     additionalProperties checks (issue #11 Flag 1). On top of that it performs the reference checks
  *     docs/software/SwAD.md section 10 lists as definition errors: unknown
  *     initial state, unknown transition target, unknown machine, timer, or
  *     variable name, and an expression whose grammar is invalid. Those extra
@@ -2485,10 +2490,11 @@ static const fsm_node_t *fsm_root_node(fsm_ctx_t *ctx, const fsm_node_t *root)
     }
     version = fsm_map_value(root, "schema_version");
     if (version == NULL || version->kind != FSM_NODE_SCALAR ||
-        version->text_length != 5u || memcmp(version->text, "0.2.0", 5u) != 0) {
+        version->text_length != 5u ||
+        (memcmp(version->text, "0.2.0", 5u) != 0 && memcmp(version->text, "0.3.0", 5u) != 0)) {
         (void)fsm_fail_at(ctx->parse, (version != NULL) ? version->line : 1u, 1u,
-                          "schema_version must be the string \"0.2.0\" "
-                          "(schemas/fsm-0.2.0.schema.json)");
+                          "schema_version must be the string \"0.2.0\" or \"0.3.0\" "
+                          "(schemas/fsm-0.3.0.schema.json)");
         return NULL;
     }
     if (fsm_map_value(root, "state_machines") == NULL ||

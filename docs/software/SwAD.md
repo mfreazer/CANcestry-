@@ -36,6 +36,7 @@ Major modules:
       host/
       packages/
       schemas/
+      examples/
       tests/
       hardware/
       ci/
@@ -252,6 +253,11 @@ Required test levels:
 - schema validation tests,
 - FSM conformance tests,
 - hardware-in-the-loop tests.
+
+The top-level integration harness lives in `examples/gateway/` (issue #13): it
+runs the full ingress -> decode -> event queue -> recipe/FSM -> encode ->
+egress cycle deterministically with zero heap allocation and a golden output,
+and is registered as a CTest test.
 
 FSM conformance suite directories:
 

@@ -32,6 +32,11 @@ add_subdirectory(conformance/fsm)
 # must not.
 find_program(CANCESTRY_PYTHON NAMES python3 python)
 if(CANCESTRY_PYTHON AND NOT CMAKE_CROSSCOMPILING)
+    # Every committed JSON Schema must parse and be self-consistent
+    # (issue #13: schemas/fsm-0.3.0.schema.json created and valid).
+    add_test(NAME cancestry_schemas_valid
+        COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_schemas_valid.py"
+                "${CMAKE_CURRENT_SOURCE_DIR}/../schemas")
     add_test(NAME cancestry_event_no_malloc_symbols
         COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_no_alloc.py"
                 $<TARGET_FILE:cancestry_event>)

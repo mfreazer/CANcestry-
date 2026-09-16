@@ -1,8 +1,10 @@
 # CANcestry FSM runtime
 
 Portable, allocation-free, deterministic FSM runtime implementing
-`docs/packages/fsm-spec.md` (v0.2.1) against `schemas/fsm-0.2.0.schema.json`,
-plus the mandatory Phase 4 conformance suite. Built for
+`docs/packages/fsm-spec.md` (v0.3.0) against `schemas/fsm-0.3.0.schema.json`
+(finalized in [issue #13](https://github.com/mfreazer/CANcestry-/issues/13);
+the 0.2.0 schema is structurally identical and still accepted), plus the
+mandatory Phase 4 conformance suite. Built for
 [issue #11](https://github.com/mfreazer/CANcestry-/issues/11).
 
 ## Libraries
@@ -285,10 +287,13 @@ two-space indentation, and nothing else. Flow collections, anchors, aliases, tag
 block scalars, tabs in indentation and duplicate keys are rejected with a
 line/column diagnostic — the loader never guesses at input.
 
-`schemas/fsm-0.2.0.schema.json` is enforced field by field in C: required fields,
+`schemas/fsm-0.3.0.schema.json` is enforced field by field in C: required fields,
 types, enums, the numeric minima, `additionalProperties: false` at every level,
 the `fsm_action` oneOf (exactly one action key), and the conditional transition
-fields (`signal_changed` → `signal`, `timer_expired` → `timer`).
+fields (`signal_changed` → `signal`, `timer_expired` → `timer`). The loader
+accepts `schema_version` `"0.2.0"` and `"0.3.0"` alike — the two schemas define
+the identical declaration structure — and rejects every other value. Fields
+outside the schema, including `layout` and `priority`, are refused at load time.
 
 Then it compiles (SW-FR-FSM-002): state and machine references become indices,
 `initial` is resolved, `set_variable` / timer names are checked against the
@@ -344,12 +349,14 @@ Loader/schema behaviour is additionally pinned by `tests/unit/core/fsm/test_load
 
 Documented here rather than silently resolved, per `agents.md` and the issue:
 
-1. **`fsm-0.3.0.schema.json` does not exist.** The issue allows "0.2.0 with `layout`
-   extensions if unified". The Phase 4 runtime needs no new file-level fields —
-   chain depth, deferred transitions, missed-tick handling and the queue policy are
-   runtime behaviour, not declaration syntax — so the loader enforces the shipped
-   0.2.0 schema and rejects `schema_version: "0.3.0"` and any `layout` key. If
-   v0.3.0 files need fields, the schema and this loader grow together.
+1. **`fsm-0.3.0.schema.json` — RESOLVED (issue #13).** Phase 4 confirmed the
+   runtime needs no new file-level fields — chain depth, deferred transitions,
+   missed-tick handling and the queue policy are runtime behaviour, not
+   declaration syntax. Issue #13 therefore finalized the 0.3.0 schema as the
+   0.2.0 structure unchanged (no `layout`, no `priority`; both remain rejected
+   by the `additionalProperties: false` checks), and the loader now targets
+   0.3.0 while still accepting the structurally identical 0.2.0. If a future
+   FSM file ever needs a field, the schema and this loader grow together.
 2. **Fault-on-fault queue saturation** — see the queue section above; the event
    core and `event-ordering.md` section 11.2 disagree, and this module follows the
    shipped core.

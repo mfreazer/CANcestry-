@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(cancestry
-    VERSION 0.2.0
+    VERSION 0.3.0
     DESCRIPTION "CAN codec, recipe and emulation runtime"
     LANGUAGES C)
 
@@ -14,6 +14,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 option(CANCESTRY_BUILD_TESTS "Build the CANcestry host unit tests" ON)
+option(CANCESTRY_BUILD_EXAMPLES "Build the CANcestry host examples" ON)
 option(CANCESTRY_STRICT_WARNINGS "Treat warnings as errors with a strict warning set" ON)
 
 # Sanitizers are a host-only diagnostic aid: they are never enabled when cross
@@ -82,5 +83,14 @@ add_subdirectory(core/fsm)
 
 if(CANCESTRY_BUILD_TESTS)
     enable_testing()
+endif()
+
+if(CANCESTRY_BUILD_EXAMPLES AND NOT CMAKE_CROSSCOMPILING)
+    # The gateway example registers its own CTest tests (issue #13), so it is
+    # added after enable_testing().
+    add_subdirectory(examples)
+endif()
+
+if(CANCESTRY_BUILD_TESTS)
     add_subdirectory(tests)
 endif()

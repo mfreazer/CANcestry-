@@ -14,7 +14,11 @@
  *   SW-FR-FSM-031..034 variable declarations.
  *   SW-FR-FSM-035, SW-FR-FSM-037 expressions are grammar-checked at load time.
  *   SYS-NF-002     loading allocates, and owns everything it returns.
- *   schemas/fsm-0.2.0.schema.json, enforced field by field in C.
+ *   schemas/fsm-0.2.0.schema.json and schemas/fsm-0.3.0.schema.json, enforced
+ *   field by field in C. The 0.3.0 schema finalizes the 0.2.0 declaration
+ *   structure unchanged (issue #13); the loader accepts both versions and
+ *   rejects every other schema_version, plus the non-FSM fields `layout` and
+ *   `priority` (issue #11 Flag 1).
  *
  * Test ids: FSM-LOAD-001 .. FSM-LOAD-006.
  */
@@ -349,16 +353,48 @@ static void case_schema_rules(void)
 {
     CANCESSTRY_TEST_CASE("FSM-LOAD-003 schema structure is enforced");
 
-    /* schema_version is required and pinned to 0.2.0. */
+    /* schema_version is required and pinned to the accepted schemas:
+     * fsm-0.2.0 and fsm-0.3.0 define the identical declaration structure
+     * (schemas/fsm-0.3.0.schema.json finalizes 0.2.0 unchanged, issue #13),
+     * so the loader accepts both and refuses every other value. */
     load_rejected("state_machines:\n  - name: m\n    initial: A\n    states:\n      - name: A\n"
                   "instances:\n  - id: i\n    machine: m\n    enabled: true\n",
                   CANCESTRY_FSM_ERR_PARSE, "a missing schema_version");
-    load_rejected("schema_version: \"0.3.0\"\nstate_machines:\n  - name: m\n    initial: A\n"
+    load_rejected("schema_version: \"0.4.0\"\nstate_machines:\n  - name: m\n    initial: A\n"
                   "    states:\n      - name: A\ninstances:\n  - id: i\n    machine: m\n"
                   "    enabled: true\n",
-                  CANCESTRY_FSM_ERR_PARSE, "a 0.3.0 schema_version");
-    /* An unquoted 0.2.0 is still a YAML string, so the schema's const is satisfied:
-     * the loader accepts it, and only a value that is not "0.2.0" is refused. */
+                  CANCESTRY_FSM_ERR_PARSE, "a 0.4.0 schema_version");
+    load_rejected("schema_version: \"0.2.1\"\nstate_machines:\n  - name: m\n    initial: A\n"
+                  "    states:\n      - name: A\ninstances:\n  - id: i\n    machine: m\n"
+                  "    enabled: true\n",
+                  CANCESTRY_FSM_ERR_PARSE, "a 0.2.1 schema_version");
+    /* The v0.3.0 schema is the loader's target (issue #13): a 0.3.0 document
+     * with the 0.2.0 declaration structure loads. */
+    {
+        cancestry_fsm_set_t *set =
+            load_ok("schema_version: \"0.3.0\"\nstate_machines:\n  - name: m\n    initial: A\n"
+                    "    states:\n      - name: A\ninstances:\n  - id: i\n    machine: m\n"
+                    "    enabled: true\n");
+
+        CANCESSTRY_TEST_CHECK(set != NULL);
+        if (set != NULL) {
+            cancestry_fsm_set_free(set);
+        }
+    }
+    /* An unquoted 0.3.0 is still a YAML string, so the schema's const is
+     * satisfied; the loader accepts it, and only other values are refused. */
+    {
+        cancestry_fsm_set_t *set =
+            load_ok("schema_version: 0.3.0\nstate_machines:\n  - name: m\n    initial: A\n"
+                    "    states:\n      - name: A\ninstances:\n  - id: i\n    machine: m\n"
+                    "    enabled: true\n");
+
+        CANCESSTRY_TEST_CHECK(set != NULL);
+        if (set != NULL) {
+            cancestry_fsm_set_free(set);
+        }
+    }
+    /* 0.2.0 remains accepted: the two schemas are structurally identical. */
     {
         cancestry_fsm_set_t *set =
             load_ok("schema_version: 0.2.0\nstate_machines:\n  - name: m\n    initial: A\n"
@@ -370,7 +406,22 @@ static void case_schema_rules(void)
             cancestry_fsm_set_free(set);
         }
     }
-    /* additionalProperties: false at every level. */
+    /* additionalProperties: false at every level. `layout` (a codec-map
+     * signal field) and `priority` (a runtime event class) are deliberately
+     * not part of the FSM schema and are rejected at load time
+     * (issue #13 deliverable 1, issue #11 Flag 1). */
+    load_rejected("schema_version: \"0.3.0\"\nlayout:\n  x: 1\nstate_machines:\n  - name: m\n"
+                  "    initial: A\n    states:\n      - name: A\ninstances:\n  - id: i\n"
+                  "    machine: m\n    enabled: true\n",
+                  CANCESTRY_FSM_ERR_PARSE, "a top-level layout field");
+    load_rejected("schema_version: \"0.3.0\"\npriority: high\nstate_machines:\n  - name: m\n"
+                  "    initial: A\n    states:\n      - name: A\ninstances:\n  - id: i\n"
+                  "    machine: m\n    enabled: true\n",
+                  CANCESTRY_FSM_ERR_PARSE, "a top-level priority field");
+    load_rejected("schema_version: \"0.3.0\"\nstate_machines:\n  - name: m\n"
+                  "    initial: A\n    priority: 2\n    states:\n      - name: A\n"
+                  "instances:\n  - id: i\n    machine: m\n    enabled: true\n",
+                  CANCESTRY_FSM_ERR_PARSE, "a machine-level priority field");
     load_rejected("schema_version: \"0.2.0\"\nlayout:\n  x: 1\nstate_machines:\n  - name: m\n"
                   "    initial: A\n    states:\n      - name: A\ninstances:\n  - id: i\n"
                   "    machine: m\n    enabled: true\n",

@@ -28,10 +28,12 @@ local build is a clean CI build.
 | Path | Contents |
 |---|---|
 | `docs/` | System, software and package specifications, plus traceability. |
-| `schemas/` | JSON Schemas for package manifests, codec maps, recipes and FSMs. |
+| `schemas/` | JSON Schemas for package manifests, codec maps, recipes and FSMs (FSM finalized at v0.3.0). |
 | `core/event/` | Portable event model: types, clock and bounded queue. See [`core/event/README.md`](core/event/README.md). |
 | `core/codec/` | Codec engine: decode/encode against codec-map schemas. See [`core/codec/README.md`](core/codec/README.md). |
 | `core/recipe/` | Recipe engine: event-triggered transformations, routing and filtering between the event bus and the codec engine. See [`core/recipe/README.md`](core/recipe/README.md). |
+| `core/fsm/` | FSM runtime: deterministic, allocation-free state machines with guards, timers and capability enforcement. See [`core/fsm/README.md`](core/fsm/README.md). |
+| `examples/gateway/` | Top-level integration harness: the full decode → event → recipe/FSM → encode gateway loop. See [`examples/gateway/README.md`](examples/gateway/README.md). |
 | `tests/unit/` | Host unit tests, one executable per area. |
 | `ci/` | Repository checks that run as CTest tests. |
 
