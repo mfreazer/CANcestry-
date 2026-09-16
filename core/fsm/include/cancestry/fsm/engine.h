@@ -2,7 +2,7 @@
  * CANcestry - portable FSM runtime: engine API.
  *
  * Normative references:
- *   docs/packages/fsm-spec.md      (v0.2.1) sections 2-11
+ *   docs/packages/fsm-spec.md      (v0.3.0) sections 2-12
  *   docs/system/event-ordering.md  sections 4, 7, 8, 9, 11
  *   docs/system/governor.md        (v0.2.1 stub level) approval flow
  *   docs/system/expression-language.md  guard and operand evaluation

@@ -2,8 +2,9 @@
  * CANcestry - portable FSM runtime: shared types.
  *
  * Normative references:
- *   docs/packages/fsm-spec.md          (v0.2.1) sections 2-11
- *   schemas/fsm-0.2.0.schema.json      FSM file v0.2.0 schema (the schema is law)
+ *   docs/packages/fsm-spec.md          (v0.3.0) sections 2-12
+ *   schemas/fsm-0.3.0.schema.json      FSM file v0.3.0 schema (the schema is law;
+ *                                      finalizes the v0.2.0 structure unchanged)
  *   docs/software/SwRS.md              SW-FR-FSM-001 .. SW-FR-FSM-055
  *   docs/software/SwAD.md              sections 4, 5, 7 (FSM runtime, data model, transitions)
  *   docs/system/SyRS.md                SYS-NF-001 (determinism), SYS-NF-002 (bounded resources)
@@ -157,7 +158,7 @@ typedef enum cancestry_fsm_instance_lifecycle {
 /* Actions and transitions                                                   */
 /* ------------------------------------------------------------------------- */
 
-/** Action kinds; mirrors the fsm-0.2.0 schema "fsm_action" oneOf keys. */
+/** Action kinds; mirrors the fsm-0.3.0 schema "fsm_action" oneOf keys. */
 typedef enum cancestry_fsm_action_kind {
     CANCESTRY_FSM_ACTION_SEND_MESSAGE = 0,
     CANCESTRY_FSM_ACTION_SET_SIGNAL = 1,
