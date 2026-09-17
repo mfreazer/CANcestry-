@@ -77,7 +77,7 @@ static inline void cancestry_test_check_u64(uint64_t actual,
 {
     cancestry_test_checks++;
     if (actual != expected) {
-        char message[192];
+        char message[384];
         (void)snprintf(message,
                        sizeof(message),
                        "%s (expected %" PRIu64 ", got %" PRIu64 ")",
@@ -96,7 +96,7 @@ static inline void cancestry_test_check_i64(int64_t actual,
 {
     cancestry_test_checks++;
     if (actual != expected) {
-        char message[192];
+        char message[384];
         (void)snprintf(message,
                        sizeof(message),
                        "%s (expected %" PRId64 ", got %" PRId64 ")",
@@ -116,7 +116,7 @@ static inline void cancestry_test_check_double(double actual,
 {
     cancestry_test_checks++;
     if (!((actual >= expected - tolerance) && (actual <= expected + tolerance))) {
-        char message[192];
+        char message[384];
         (void)snprintf(message, sizeof(message), "%s (expected %f, got %f)", expr, expected, actual);
         cancestry_test_report_failure(file, line, message);
     }

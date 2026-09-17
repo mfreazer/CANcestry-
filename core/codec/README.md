@@ -148,6 +148,36 @@ Validation then enforces every constraint of
 `boolean`/`bit_length: 1` and `enum`/`values` conditionals, and the new
 `layout` enum) in C, so no external JSON Schema validator runs at load time.
 
+## CAN FD payloads (Phase 7, issue #20)
+
+`cancestry_codec_decode_frame()`, `cancestry_codec_decode_signal()` and
+`cancestry_codec_encode_signal()` accept a payload of up to
+`CANCESTRY_CODEC_FRAME_MAX_LENGTH` (64) bytes. Accepted lengths are exactly
+the ones a CAN bus can carry - 1..8 for classic CAN and 12/16/20/24/32/48/64
+for CAN FD - so 9..11 bytes stay an argument error and nothing silently
+accepts a frame no controller can produce (SW-FR-CANFD-001/002).
+
+A codec map opts into the wider payload with the `codec_map` flag
+`can_fd: true` (spec section 8.1). The flag switches `dlc` to the CAN FD
+vocabulary and `start_bit` to 0..511; a map without the flag is validated
+exactly as before.
+
+Loading is capability-gated (SW-FR-CANFD-004):
+
+```c
+cancestry_codec_platform_caps_t caps = { .can_fd = cancestry_hal_iface_can_fd(&hal, 1) };
+map = cancestry_codec_map_load_checked(yaml, len, &caps, &error);
+/* can_fd: true on a classic platform -> NULL + CANCESTRY_CODEC_ERR_UNSUPPORTED */
+```
+
+`cancestry_codec_map_load()` is the classic-only entry point: it refuses a
+`can_fd: true` map, as does a `NULL` caps argument ("capabilities unknown").
+The check is a load-time failure, never a runtime surprise.
+
+The declarative egress path (`core/recipe`, `core/fsm` `send_message`) builds
+classic 8-byte frames and refuses a message whose `dlc` is larger, rather than
+truncating it (SW-FR-CANFD-006); CAN FD transmit goes through the HAL.
+
 ## Example
 
 ```yaml

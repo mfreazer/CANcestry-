@@ -92,12 +92,13 @@ static cancestry_recipe_governor_decision_t approve_all(
  * Build a full environment around one inline recipe file. The governor
  * approves everything (see test_governor.c for denials).
  */
-static void env_init(engine_env_t *env, const char *recipe_yaml)
+/** Same as env_init() over an already-loaded codec map (issue #20). */
+static void env_init_map(engine_env_t *env, const char *recipe_yaml, cancestry_codec_map_t *map)
 {
     cancestry_recipe_engine_config_t config;
 
     memset(env, 0, sizeof(*env));
-    env->map = cancestry_test_load_map(cancestry_test_recipe_demo_codec_yaml);
+    env->map = map;
     CANCESSTRY_TEST_CHECK(cancestry_codec_namespace_init(&env->ns, env->ns_slots, 4u));
     CANCESSTRY_TEST_CHECK(cancestry_codec_namespace_register(&env->ns, env->map) ==
                           CANCESTRY_CODEC_OK);
@@ -132,6 +133,12 @@ static void env_init(engine_env_t *env, const char *recipe_yaml)
     config.variable_storage = env->variables;
     config.variable_capacity = 8u;
     CANCESSTRY_TEST_CHECK(cancestry_recipe_engine_init(&env->engine, &config));
+}
+
+static void env_init(engine_env_t *env, const char *recipe_yaml)
+{
+    env_init_map(env, recipe_yaml,
+                 cancestry_test_load_map(cancestry_test_recipe_demo_codec_yaml));
 }
 
 static void env_free(engine_env_t *env)
@@ -894,6 +901,70 @@ static void test_send_message_failures(void)
     env_free(&env);
 }
 
+/* SW-FR-CANFD-006: the declarative egress path builds classic 8-byte frames, so
+ * a message from a CAN FD codec map is refused instead of being truncated.
+ * Test id: RECIPE-CANFD-EGRESS-001. */
+static void test_send_message_refuses_can_fd_message(void)
+{
+    engine_env_t env;
+    cancestry_event_t event;
+
+    CANCESSTRY_TEST_CASE("RECIPE-CANFD-EGRESS-001: send_message refuses a CAN FD message");
+    env_init_map(&env, "schema_version: \"0.2.0\"\n"
+                       "recipes:\n"
+                       "  - name: fd_mirror\n"
+                       "    trigger:\n"
+                       "      event: can_rx\n"
+                       "    actions:\n"
+                       "      - send_message:\n"
+                       "          interface: can1\n"
+                       "          message: FdMsg\n"
+                       "          signals:\n"
+                       "            FdTail: 5\n"
+                       "      - log:\n"
+                       "          level: info\n"
+                       "          message: after send\n",
+                 cancestry_test_load_fd_map());
+    if (env.set == NULL) {
+        return;
+    }
+    event = cancestry_test_can_rx_event(TEST_MSG_STATUS, TEST_IFACE_CAN0, 100u, 1u);
+    CANCESSTRY_TEST_CHECK(cancestry_recipe_engine_process_event(&env.engine, &event) ==
+                          CANCESTRY_RECIPE_OK);
+    /* No frame reached the sink and the failure is counted. The default
+     * on_error policy halts the recipe, so the log action behind the refused
+     * send does not run either (same semantics as the other fail-closed
+     * send_message cases above). */
+    CANCESSTRY_TEST_CHECK_U64(env.trace.count, 0u);
+    CANCESSTRY_TEST_CHECK_U64(env.engine.counters.messages_sent, 0u);
+    CANCESSTRY_TEST_CHECK_U64(env.engine.counters.action_errors, 1u);
+    CANCESSTRY_TEST_CHECK_U64(env.engine.counters.recipes_halted, 1u);
+    env_free(&env);
+
+    /* The classic message in the same CAN FD map is unaffected. */
+    env_init_map(&env, "schema_version: \"0.2.0\"\n"
+                       "recipes:\n"
+                       "  - name: classic_mirror\n"
+                       "    trigger:\n"
+                       "      event: can_rx\n"
+                       "    actions:\n"
+                       "      - send_message:\n"
+                       "          interface: can1\n"
+                       "          message: StatusMsg\n"
+                       "          signals:\n"
+                       "            VehicleSpeed: 42\n",
+                 cancestry_test_load_fd_map());
+    if (env.set == NULL) {
+        return;
+    }
+    event = cancestry_test_can_rx_event(TEST_MSG_STATUS, TEST_IFACE_CAN0, 200u, 1u);
+    CANCESSTRY_TEST_CHECK(cancestry_recipe_engine_process_event(&env.engine, &event) ==
+                          CANCESTRY_RECIPE_OK);
+    CANCESSTRY_TEST_CHECK_U64(env.engine.counters.messages_sent, 1u);
+    CANCESSTRY_TEST_CHECK_U64(env.engine.counters.action_errors, 0u);
+    env_free(&env);
+}
+
 static void test_set_signal_action(void)
 {
     engine_env_t env;
@@ -1412,6 +1483,7 @@ int main(void)
     test_send_message_action();
     test_send_message_expression_and_coercion();
     test_send_message_failures();
+    test_send_message_refuses_can_fd_message();
     test_set_signal_action();
     test_log_and_fault_actions();
     test_timer_actions();

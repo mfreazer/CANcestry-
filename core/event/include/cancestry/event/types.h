@@ -23,6 +23,7 @@
 #include "cancestry/event/clock.h"
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -52,8 +53,24 @@ typedef uint16_t cancestry_interface_id_t;
 /** sequence value meaning "no causing event". */
 #define CANCESTRY_SEQUENCE_NONE ((cancestry_sequence_t)0u)
 
-/** Classic CAN payload limit. CAN FD is out of scope for v0.2. */
+/**
+ * Classic CAN payload limit in bytes.
+ *
+ * This is the width the declarative egress path (core/recipe, core/fsm)
+ * still builds its frames with; see SW-FR-CANFD-006.
+ */
 #define CANCESTRY_CAN_FRAME_MAX_LENGTH ((uint8_t)8u)
+
+/**
+ * CAN FD payload limit in bytes (Phase 7, issue #20).
+ *
+ * A CAN FD frame carries at most 64 payload bytes, and only the lengths
+ * 0..8, 12, 16, 20, 24, 32, 48 and 64 are representable on the wire
+ * (ISO 11898-1 DLC codes 0..15). cancestry_can_payload_length_is_valid()
+ * is the single normative test for both frame kinds; the codec loader,
+ * the HAL and the SocketCAN backend all use it.
+ */
+#define CANCESTRY_CAN_FD_FRAME_MAX_LENGTH ((uint8_t)64u)
 
 /* ------------------------------------------------------------------------- */
 /* Enumerations                                                              */
@@ -143,13 +160,30 @@ typedef struct cancestry_value {
     } value;
 } cancestry_value_t;
 
-/** Received classic CAN frame. */
+/**
+ * Received CAN frame (classic or CAN FD).
+ *
+ * The payload buffer is statically sized for the widest frame CANcestry
+ * accepts (CAN FD, 64 bytes) so an FD frame is never silently truncated on
+ * its way into the event bus. Classic traffic copies only its declared
+ * @c length bytes (the HAL copies @c length bytes, not the whole buffer), so
+ * the wider buffer costs storage but no per-frame work for classic CAN
+ * (SW-FR-CANFD-005).
+ *
+ * Only the first @c length bytes of @c data are meaningful. @c length is a
+ * payload length in bytes, not a raw DLC code: for CAN FD the DLC codes
+ * 9..15 are already translated to 12/16/20/24/32/48/64 by the platform
+ * backend, and cancestry_can_payload_length_is_valid() holds for every
+ * frame the HAL delivers.
+ */
 typedef struct cancestry_can_rx_payload {
     cancestry_interface_id_t interface_id;
     uint32_t can_id;
     uint8_t is_extended;
+    /** Non-zero when the frame is a CAN FD frame (payload may exceed 8 bytes). */
+    uint8_t is_fd;
     uint8_t length;
-    uint8_t data[CANCESTRY_CAN_FRAME_MAX_LENGTH];
+    uint8_t data[CANCESTRY_CAN_FD_FRAME_MAX_LENGTH];
 } cancestry_can_rx_payload_t;
 
 /** Decoded signal change. */
@@ -248,6 +282,18 @@ typedef struct cancestry_event {
 /* ------------------------------------------------------------------------- */
 /* Helpers                                                                   */
 /* ------------------------------------------------------------------------- */
+
+/**
+ * @return true when @p length is a payload length representable on the wire
+ *         for the given frame kind: 0..8 bytes for classic CAN, and
+ *         0..8/12/16/20/24/32/48/64 for CAN FD (SW-FR-CANFD-002).
+ *
+ * This is the single normative definition of a valid CAN payload length;
+ * core/codec (codec map `dlc`), core/hal (ingress/egress frame validation)
+ * and platform/linux (wire translation) all call it, so the three layers
+ * can never disagree about what a valid frame is.
+ */
+bool cancestry_can_payload_length_is_valid(bool is_fd, size_t length);
 
 /**
  * Zero an event and put it into a known, invalid state

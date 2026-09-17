@@ -26,7 +26,7 @@ extern "C" {
 #endif
 
 /**
- * Decode a classic CAN frame against a codec map.
+ * Decode a received CAN frame (classic or CAN FD) against a codec map.
  *
  * The frame is matched to a message by CAN id. When the frame is too short
  * for any declared signal, the whole message is dropped: nothing is written
@@ -39,7 +39,10 @@ extern "C" {
  * @param map          Loaded codec map.
  * @param can_id       CAN id of the received frame.
  * @param frame        Payload bytes.
- * @param frame_length Number of bytes in @p frame, in [1, 8].
+ * @param frame_length Number of bytes in @p frame: 1..8 for classic CAN, or
+ *                     a CAN FD payload length 12/16/20/24/32/48/64
+ *                     (SW-FR-CANFD-001). 9..11 bytes are not representable
+ *                     on any CAN bus and are rejected.
  * @param signals      Caller-owned output buffer of @p capacity entries.
  * @param capacity     Number of entries in @p signals; must be at least the
  *                     matched message's signal_count (query it with
@@ -73,9 +76,10 @@ cancestry_codec_status_t cancestry_codec_decode_frame(const cancestry_codec_map_
  *                     the signal's bit span.
  * @param out          Receives raw, physical value and label.
  * @return CANCESTRY_CODEC_OK, CANCESTRY_CODEC_ERR_NULL for a NULL argument,
- *         CANCESTRY_CODEC_ERR_ARGUMENT when frame_length is 0 or above 8,
- *         or CANCESTRY_CODEC_ERR_FRAME_TOO_SHORT when the frame does not
- *         cover the signal's bit span.
+ *         CANCESTRY_CODEC_ERR_ARGUMENT when frame_length is not a
+ *         representable CAN or CAN FD payload length, or
+ *         CANCESTRY_CODEC_ERR_FRAME_TOO_SHORT when the frame does not cover
+ *         the signal's bit span.
  */
 cancestry_codec_status_t cancestry_codec_decode_signal(const cancestry_codec_signal_t *signal,
                                                        const uint8_t *frame,

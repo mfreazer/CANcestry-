@@ -5,6 +5,103 @@ Keep a Changelog style; requirement IDs refer to `docs/software/SwRS.md` and
 `docs/SyRS.md`, and the requirement-to-artifact mapping lives in
 `docs/trace/traceability.csv`.
 
+## [Unreleased] - Phase 7: CAN FD & Extended Frame Support ([issue #20](https://github.com/mfreazer/CANcestry-/issues/20))
+
+CAN FD is now a first-class citizen of the runtime path: 64-byte payloads flow
+through the codec engine, the HAL and the Linux SocketCAN backend, and a
+classic-only interface rejects an FD frame deterministically instead of
+truncating it. New requirements: `SW-FR-CANFD-001..006`
+(`docs/software/SwRS.md` section 12), all traced in
+`docs/trace/traceability.csv`.
+
+### Added
+
+- **Codec engine, 64-byte payloads** (`core/codec`, SW-FR-CANFD-001/002):
+  decode and encode accept up to `CANCESTRY_CODEC_FRAME_MAX_LENGTH` (64) bytes.
+  The accepted lengths are exactly the ones a CAN bus can carry - 1..8 for
+  classic CAN, 12/16/20/24/32/48/64 for CAN FD - so 9..11 bytes remain an
+  argument error. A codec map opts in with `codec_map.can_fd: true`, which
+  switches `dlc` to the CAN FD vocabulary and `start_bit` to 0..511; a map
+  without the flag is validated exactly as before.
+- **Load-time capability gate** (`core/codec/src/loader.c`, SW-FR-CANFD-004):
+  new `cancestry_codec_map_load_checked(text, length, caps, error)` refuses a
+  `can_fd: true` map with `CANCESTRY_CODEC_ERR_UNSUPPORTED` when the declared
+  platform capabilities do not include CAN FD. `cancestry_codec_map_load()`
+  and a `NULL` caps argument both mean "classic only", so the check always
+  fails closed - the mismatch is a load-time error, never a runtime surprise.
+- **HAL CAN FD contract** (`core/hal`, SW-FR-CANFD-002/003): the frame carries
+  `is_fd` and a statically sized 64-byte payload; interfaces negotiate CAN FD
+  once at open (new optional `caps` entry in the backend vtable, queried
+  through `cancestry_hal_iface_can_fd()`). An FD frame on a classic-only
+  interface is dropped, counted in the new `rx_protocol_rejected` status field,
+  and reported with the new `CANCESTRY_HAL_FAULT_PROTOCOL_UNSUPPORTED` fault
+  (ERROR severity) through the same deterministic path and priority class as
+  every other HAL fault; FD egress on such an interface returns
+  `CANCESTRY_HAL_ERR_UNSUPPORTED` and queues nothing. Truncation is prohibited
+  in both directions.
+- **SocketCAN CAN FD** (`platform/linux/socketcan.c`, SW-FR-CANFD-004):
+  negotiates `CAN_RAW_FD_FRAMES` when `can_fd` is configured and falls back to
+  a classic socket without failing the open when the interface refuses;
+  classifies received messages by size (`CAN_MTU` vs `CANFD_MTU`), validates
+  the payload length, and transmits FD frames with `CANFD_MTU` (requesting
+  `CANFD_BRS` when a data bitrate is declared). A compile-time check pins the
+  `CAN_MTU`/`CANFD_MTU` assumptions. The 64-byte path adds no allocation: the
+  wire buffer is a fixed-size stack union and `setsockopt` takes a
+  caller-owned int (`ci/check_no_alloc.py` scans the archive).
+- **Mock HAL FD capability** (`platform/mock`): interfaces are classic-only by
+  default and opt in with `cancestry_mock_hal_set_fd_support()`, which is what
+  makes the fallback contract testable on the same code path the real backend
+  uses.
+- **Conformance suites**:
+  - `tests/conformance/hal/test_can_fd_fallback.c` (`HAL-CANFD-FALLBACK-001`)
+    pins the fallback contract: fault code and severity, drop-not-truncate,
+    counters, fault-before-data ordering, egress refusal, and a 64-byte
+    delivery on an FD-capable interface.
+  - `tests/conformance/codec/test_can_fd_payload_bounds.c`
+    (`CODEC-CANFD-BOUNDS-001`) proves 64-byte pack/unpack is bit-exact and that
+    an 8-byte classic buffer is never overrun - both buffers are exact-size
+    heap allocations, so ASan turns any one-byte overrun into a failure.
+  - `tests/conformance/codec/test_can_fd_schema.c`
+    (`CODEC-CANFD-SCHEMA-001`) proves the load-time rules: capability gate,
+    FD vs classic `dlc` vocabulary, 512-bit payload limit, field validation.
+  - `FSM-CANFD-EGRESS-001` and `RECIPE-CANFD-EGRESS-001` cover the
+    classic-only declarative egress path.
+- **`examples/gateway_real`**: a CAN FD demonstration
+  (`HAL-REAL-CANFD-001`) that shows the load-time gate, reports the negotiated
+  capability, and round-trips a 64-byte frame through HAL -> `core/event` ->
+  codec, then transmits it with `CANFD_MTU`; it prints a SKIP with the enabling
+  `ip link` command and exits 0 when the interface has no CAN FD.
+
+### Changed
+
+- **`schemas/codec-map-0.3.0.schema.json`**: optional `codec_map.can_fd`
+  selects between `classic_message`/`classic_signal` (dlc 0..8, `start_bit`
+  0..63) and `fd_message`/`fd_signal` (CAN FD dlc vocabulary, `start_bit`
+  0..511). Documents without the flag validate exactly as before.
+- **`schemas/hal-0.1.0.schema.json`**: optional per-interface `can_fd` and
+  `data_bitrate` fields document the new `cancestry_hal_if_config_t` members.
+- **`cancestry_can_rx_payload_t`** (`core/event`) now carries `is_fd` and a
+  64-byte payload buffer, so an FD frame reaches the event bus intact instead
+  of being truncated. Classic frames copy only their declared length, so
+  classic traffic does no extra per-frame work (SW-FR-CANFD-005); the event
+  struct is correspondingly larger.
+- **`cancestry_hal_poll_rx()`'s `out_fault_count`** now counts every fault
+  event the call enqueued, including the ones raised inline during frame
+  delivery (timestamp monotonicity, protocol support), matching its documented
+  meaning. `test_timestamp_monotonicity.c` now asserts the exact count.
+- **Recipe/FSM `send_message`** refuses a message whose `dlc` exceeds the
+  classic 8-byte payload with `ERR_UNSUPPORTED` instead of building a frame
+  that would not fit, recorded as an action error (SW-FR-CANFD-006, fail
+  closed).
+
+### Documentation
+
+- `docs/software/SwRS.md` section 12 (`SW-FR-CANFD-001..006`),
+  `docs/trace/traceability.csv` + record (13 new rows, coverage numbers
+  refreshed), `docs/packages/codec-map-spec.md` section 8.1,
+  `core/codec/README.md`, `core/hal/README.md`, `examples/gateway_real/README.md`,
+  and the CAN FD scope statements in `docs/SyRS.md`.
+
 ## [0.3.0-rc.1] - 2026-09-16
 
 Phase 5 release candidate: the four portable core modules now run together in

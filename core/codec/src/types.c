@@ -44,6 +44,8 @@ const char *cancestry_codec_status_name(cancestry_codec_status_t status)
         return "ERR_NO_MEMORY";
     case CANCESTRY_CODEC_ERR_CAPACITY:
         return "ERR_CAPACITY";
+    case CANCESTRY_CODEC_ERR_UNSUPPORTED:
+        return "ERR_UNSUPPORTED";
     default:
         return "UNKNOWN";
     }

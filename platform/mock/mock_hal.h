@@ -9,7 +9,9 @@
  * It is strictly non-blocking and zero-alloc, like the real backend.
  *
  * Implements: SW-FR-HAL-008 (mock backend for CI),
- *             SW-FR-HAL-009 (deterministic error injection)
+ *             SW-FR-HAL-009 (deterministic error injection),
+ *             SW-FR-CANFD-003 (classic-only vs FD-capable interface, used by
+ *             the CAN FD fallback conformance test)
  */
 
 #ifndef CANCESTRY_PLATFORM_MOCK_HAL_H
@@ -35,8 +37,18 @@ extern "C" {
 #define CANCESTRY_MOCK_HAL_TX_CAPTURE_CAPACITY ((uint16_t)256u)
 
 /** Per-interface mock state. */
+/**
+ * Per-interface mock state.
+ *
+ * @c fd_support defaults to false, i.e. every mock interface is a classic
+ * CAN interface until a test explicitly opts it into CAN FD with
+ * cancestry_mock_hal_set_fd_support(). That default is what makes the
+ * "CAN FD frame on a classic-only interface" fallback path testable
+ * (SW-FR-CANFD-003).
+ */
 typedef struct cancestry_mock_iface {
     bool opened;
+    bool fd_support; /**< negotiated CAN FD capability reported to the HAL */
     bool force_poll_fault;
     bool force_drain_fault;
     cancestry_hal_fault_code_t next_poll_fault;
@@ -55,6 +67,8 @@ typedef struct cancestry_mock_iface {
     cancestry_hal_frame_t tx_capture[CANCESTRY_MOCK_HAL_TX_CAPTURE_CAPACITY];
     uint16_t tx_capture_count;
     uint32_t tx_total_captured;
+    /** Number of injected RX frames that were CAN FD frames. */
+    uint32_t fd_frames_injected;
 } cancestry_mock_iface_t;
 
 /**
@@ -108,6 +122,24 @@ void cancestry_mock_hal_set_next_poll_fault(cancestry_mock_hal_t *mock,
 void cancestry_mock_hal_set_next_drain_fault(cancestry_mock_hal_t *mock,
                                                uint8_t iface_index,
                                                cancestry_hal_fault_code_t fault);
+
+/**
+ * Declare whether @p iface_index speaks CAN FD.
+ *
+ * Call before cancestry_hal_init(): the HAL reads the capability once at open
+ * time. With @p can_fd false (the default) the interface is classic-only and
+ * the HAL rejects any injected CAN FD frame with a PROTOCOL_UNSUPPORTED
+ * fault; with @p can_fd true the same frame is delivered with its full
+ * payload (SW-FR-CANFD-003).
+ */
+void cancestry_mock_hal_set_fd_support(cancestry_mock_hal_t *mock,
+                                        uint8_t iface_index,
+                                        bool can_fd);
+
+/**
+ * @return true when @p iface_index is configured as a CAN FD interface.
+ */
+bool cancestry_mock_hal_fd_support(const cancestry_mock_hal_t *mock, uint8_t iface_index);
 
 /**
  * Configure automatic timestamping of injected RX frames. When enabled,

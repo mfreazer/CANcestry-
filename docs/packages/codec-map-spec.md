@@ -109,8 +109,55 @@ If a received frame is too short for a declared signal:
 
 For contiguous signals the needed payload bits are `[first_bit, last_bit]`;
 for sawtooth signals the needed bits are the sawtooth set described in
-section 5.1. Extra bytes are ignored unless future flexible-DLC rules are
-enabled.
+section 5.1. Extra bytes are ignored.
+
+## 8.1 CAN FD Payloads (Phase 7, issue #20)
+
+A codec map may declare itself a CAN FD map with the optional `codec_map`
+flag:
+
+```yaml
+codec_map:
+  name: radar
+  version: 1.0.0
+  can_fd: true
+  messages:
+    - id: 0x1F0
+      name: RadarCluster
+      dlc: 64
+      signals:
+        - name: RadarTail
+          start_bit: 504
+          bit_length: 8
+          type: uint
+          endianness: little
+```
+
+The flag switches two vocabularies, and nothing else:
+
+| | classic map (`can_fd` absent or false) | CAN FD map (`can_fd: true`) |
+|---|---|---|
+| `dlc` | 0..8 | 0-8, 12, 16, 20, 24, 32, 48, 64 (the ISO 11898-1 DLC codes) |
+| `start_bit` | 0..63 | 0..511 |
+| signal width | at most 64 bits | at most 64 bits (unchanged) |
+| bit model | section 3 LSB0 | section 3 LSB0 (unchanged) |
+
+Rules:
+
+- `can_fd` is a `codec_map` field, not a message field; a message-level
+  `can_fd` is an unknown key and is rejected.
+- A classic map is validated exactly as it was before Phase 7, so existing
+  documents are unaffected (SW-FR-CANFD-001).
+- Payload lengths 9, 10 and 11 bytes are not representable on either bus, so
+  the codec rejects them as an argument error rather than accepting a frame no
+  controller can produce (SW-FR-CANFD-002).
+- A map that declares `can_fd: true` is refused at load time, with
+  `CANCESTRY_CODEC_ERR_UNSUPPORTED`, when the platform capabilities passed to
+  the loader do not include CAN FD. The mismatch is a load-time error, never a
+  runtime surprise (SW-FR-CANFD-004, "schema is law").
+- The normative JSON Schema for both variants is
+  [`schemas/codec-map-0.3.0.schema.json`](../../schemas/codec-map-0.3.0.schema.json)
+  (`classic_message` / `fd_message`).
 
 ## 9. Provenance and Attribution (Phase 2.5+)
 

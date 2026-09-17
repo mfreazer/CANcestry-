@@ -25,6 +25,8 @@ add_subdirectory(unit/core/recipe)
 add_subdirectory(unit/core/fsm)
 add_subdirectory(conformance/fsm)
 add_subdirectory(conformance/hal)
+# CAN FD conformance (issue #20, Phase 7).
+add_subdirectory(conformance/codec)
 
 # The runtime cores must not allocate. This is verified on the built archives,
 # which is a stronger and more portable check than intercepting malloc at

@@ -35,3 +35,6 @@ cancestry_add_conformance_test(cancestry_conformance_fsm_transition_precedence
 cancestry_add_conformance_test(cancestry_conformance_fsm_capability_enforcement
     test_capability_enforcement.c)
 cancestry_add_conformance_test(cancestry_conformance_fsm_queue_overflow test_queue_overflow.c)
+# CAN FD egress (issue #20, Phase 7): the declarative send path is classic-only
+# and must refuse an FD message rather than truncate it.
+cancestry_add_conformance_test(cancestry_conformance_fsm_can_fd_egress test_can_fd_egress.c)

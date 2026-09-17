@@ -1699,6 +1699,8 @@ typedef struct codec_map_spec {
     size_t name_length;
     char *version;
     char *description;
+    /** True when the map declares `can_fd: true` (SW-FR-CANFD-001). */
+    bool can_fd;
     codec_message_spec_t *messages;
     size_t message_count;
     size_t total_signals;
@@ -1706,7 +1708,8 @@ typedef struct codec_map_spec {
 } codec_map_spec_t;
 
 static const char *const CODEC_TOP_KEYS[] = {"schema_version", "codec_map"};
-static const char *const CODEC_MAP_KEYS[] = {"name", "version", "description", "messages"};
+static const char *const CODEC_MAP_KEYS[] = {"name",    "version", "description",
+                                             "can_fd",  "messages"};
 static const char *const CODEC_MESSAGE_KEYS[] = {"id", "name", "dlc", "period_ms",
                                                  "description", "signals"};
 static const char *const CODEC_SIGNAL_KEYS[] = {"name",       "start_bit", "bit_length",
@@ -1715,9 +1718,17 @@ static const char *const CODEC_SIGNAL_KEYS[] = {"name",       "start_bit", "bit_
                                                 "unit",       "values",    "min",
                                                 "max",        "strict"};
 
+/**
+ * Parse one signal.
+ *
+ * @p max_payload_bits is 64 for a classic map and
+ * CANCESTRY_CODEC_FD_PAYLOAD_MAX_BITS for a map that declares `can_fd: true`
+ * (SW-FR-CANFD-001); a signal may never address a payload bit beyond it.
+ */
 static bool codec_parse_signal(const codec_ast_node_t *node,
                                codec_arena_t *arena,
                                uint32_t message_id,
+                               uint32_t max_payload_bits,
                                codec_signal_spec_t *spec,
                                cancestry_codec_load_error_t *error)
 {
@@ -1763,7 +1774,10 @@ static bool codec_parse_signal(const codec_ast_node_t *node,
     }
     {
         int64_t value = 0;
-        if (!codec_field_int(node->pairs[index].value, false, 0, 63, &value, error,
+        /* The highest addressable payload bit: 63 for a classic map, 511 for
+         * a map that declares can_fd (SW-FR-CANFD-001). */
+        int64_t start_bit_max = (int64_t)max_payload_bits - 1;
+        if (!codec_field_int(node->pairs[index].value, false, 0, start_bit_max, &value, error,
                              "start_bit")) {
             return false;
         }
@@ -1994,17 +2008,17 @@ static bool codec_parse_signal(const codec_ast_node_t *node,
     if (spec->layout == CANCESTRY_CODEC_LAYOUT_SAWTOOTH) {
         /* Sawtooth: validate that the sawtooth bit set fits in 64 bits. */
         uint32_t idx = (spec->start_bit >> 3u) * 8u + (7u - (spec->start_bit & 7u));
-        if (idx + spec->bit_length > CANCESTRY_CODEC_PAYLOAD_MAX_BITS) {
+        if (idx + spec->bit_length > max_payload_bits) {
             return codec_load_fail(error, CANCESTRY_CODEC_ERR_PARSE, node->line, node->column,
-                                   "sawtooth signal '%s' exceeds the 64-bit payload",
-                                   spec->name);
+                                   "sawtooth signal '%s' exceeds the %u-bit payload",
+                                   spec->name, (unsigned)max_payload_bits);
         }
     } else if (spec->endianness == CANCESTRY_CODEC_ENDIANNESS_LITTLE) {
         if ((uint64_t)spec->start_bit + (uint64_t)spec->bit_length >
-            CANCESTRY_CODEC_PAYLOAD_MAX_BITS) {
+            (uint64_t)max_payload_bits) {
             return codec_load_fail(error, CANCESTRY_CODEC_ERR_PARSE, node->line, node->column,
-                                   "little-endian signal '%s' exceeds the 64-bit payload",
-                                   spec->name);
+                                   "little-endian signal '%s' exceeds the %u-bit payload",
+                                   spec->name, (unsigned)max_payload_bits);
         }
     } else {
         if (spec->start_bit < spec->bit_length - 1u) {
@@ -2016,8 +2030,16 @@ static bool codec_parse_signal(const codec_ast_node_t *node,
     return true;
 }
 
+/**
+ * Parse one message.
+ *
+ * @p can_fd selects the dlc vocabulary: a classic message declares 0..8, a
+ * CAN FD message one of the lengths CAN FD can put on the wire
+ * (SW-FR-CANFD-001, codec-map-spec.md section 4).
+ */
 static bool codec_parse_message(const codec_ast_node_t *node,
                                 codec_arena_t *arena,
+                                bool can_fd,
                                 codec_message_spec_t *spec,
                                 cancestry_codec_load_error_t *error)
 {
@@ -2068,8 +2090,17 @@ static bool codec_parse_message(const codec_ast_node_t *node,
     }
     {
         int64_t value = 0;
-        if (!codec_field_int(node->pairs[index].value, false, 0, 8, &value, error, "dlc")) {
+        int64_t dlc_max = can_fd ? (int64_t)CANCESTRY_CODEC_FRAME_MAX_LENGTH : 8;
+        if (!codec_field_int(node->pairs[index].value, false, 0, dlc_max, &value, error, "dlc")) {
             return false;
+        }
+        if (!cancestry_can_payload_length_is_valid(can_fd, (size_t)value)) {
+            return codec_load_fail(error, CANCESTRY_CODEC_ERR_PARSE, node->pairs[index].line,
+                                   node->pairs[index].column,
+                                   can_fd ? "message '%s' dlc %d is not a CAN FD payload length "
+                                            "(0-8, 12, 16, 20, 24, 32, 48 or 64)"
+                                          : "message '%s' dlc %d exceeds the classic payload (0-8)",
+                                   spec->name, (int)value);
         }
         spec->dlc = (uint8_t)value;
     }
@@ -2111,6 +2142,8 @@ static bool codec_parse_message(const codec_ast_node_t *node,
     }
     for (i = 0u; i < spec->signal_count; ++i) {
         if (!codec_parse_signal(node->pairs[index].value->items[i], arena, spec->id,
+                                can_fd ? CANCESTRY_CODEC_FD_PAYLOAD_MAX_BITS
+                                       : CANCESTRY_CODEC_PAYLOAD_MAX_BITS,
                                 &spec->signals[i], error)) {
             return false;
         }
@@ -2220,6 +2253,14 @@ static bool codec_validate_map(const codec_ast_node_t *root,
                                    map_node->pairs[index].column, "codec map description too long");
         }
     }
+    /* `can_fd` is optional and defaults to false, so every classic map keeps
+     * its pre-Phase-7 meaning (SW-FR-CANFD-001). */
+    spec->can_fd = false;
+    if (codec_ast_find_pair(map_node, "can_fd", &index)) {
+        if (!codec_field_bool(map_node->pairs[index].value, &spec->can_fd, error, "can_fd")) {
+            return false;
+        }
+    }
     if (!codec_ast_find_pair(map_node, "messages", &index)) {
         return codec_load_fail(error, CANCESTRY_CODEC_ERR_PARSE, map_node->line,
                                map_node->column, "codec_map is missing required field 'messages'");
@@ -2244,7 +2285,8 @@ static bool codec_validate_map(const codec_ast_node_t *root,
                                    messages->column, "out of memory");
         }
         for (i = 0u; i < spec->message_count; ++i) {
-            if (!codec_parse_message(messages->items[i], arena, &spec->messages[i], error)) {
+            if (!codec_parse_message(messages->items[i], arena, spec->can_fd,
+                                     &spec->messages[i], error)) {
                 return false;
             }
         }
@@ -2392,6 +2434,7 @@ static cancestry_codec_map_t *codec_build_map(const codec_map_spec_t *spec,
     map->description = spec->description != NULL
                            ? codec_blob_string((char *)map, &cursor, spec->description)
                            : NULL;
+    map->can_fd = spec->can_fd;
     map->messages = messages;
     map->message_count = (uint16_t)spec->message_count;
 
@@ -2485,6 +2528,22 @@ cancestry_codec_map_t *cancestry_codec_map_load(const char *text,
                                                 size_t length,
                                                 cancestry_codec_load_error_t *error)
 {
+    /* The historical entry point loads classic-only maps: a document that
+     * declares `can_fd: true` is refused (SW-FR-CANFD-004, fail closed).
+     * Callers that know their target supports CAN FD use
+     * cancestry_codec_map_load_checked(). */
+    cancestry_codec_platform_caps_t caps;
+
+    caps.can_fd = false;
+    return cancestry_codec_map_load_checked(text, length, &caps, error);
+}
+
+cancestry_codec_map_t *cancestry_codec_map_load_checked(
+    const char *text,
+    size_t length,
+    const cancestry_codec_platform_caps_t *caps,
+    cancestry_codec_load_error_t *error)
+{
     codec_load_context_t context;
     codec_ast_node_t *root = NULL;
     codec_map_spec_t spec;
@@ -2516,6 +2575,21 @@ cancestry_codec_map_t *cancestry_codec_map_load(const char *text,
         return NULL;
     }
     if (!codec_validate_map(root, &context.arena, &spec, error)) {
+        codec_arena_free(&context.arena);
+        return NULL;
+    }
+    /*
+     * Schema is law, at load time (SW-FR-CANFD-004): a map that requests CAN
+     * FD is refused when the target platform does not provide it, so a
+     * deployment can never discover the mismatch by losing frames at runtime.
+     * A NULL caps argument means "capabilities unknown", which is treated as
+     * classic-only (fail closed, agents.md section 2).
+     */
+    if (spec.can_fd && (caps == NULL || !caps->can_fd)) {
+        codec_load_fail(error, CANCESTRY_CODEC_ERR_UNSUPPORTED, root->line, root->column,
+                        "codec map '%s' requests can_fd but the target platform does not "
+                        "support CAN FD",
+                        spec.name != NULL ? spec.name : "?");
         codec_arena_free(&context.arena);
         return NULL;
     }

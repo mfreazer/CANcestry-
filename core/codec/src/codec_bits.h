@@ -18,6 +18,9 @@
 #ifndef CANCESTRY_CODEC_BITS_H
 #define CANCESTRY_CODEC_BITS_H
 
+#include "cancestry/codec/types.h"
+
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -180,6 +183,26 @@ static inline void codec_bits_saw_range(uint32_t start_bit,
     }
     *min_out = min_p;
     *max_out = max_p;
+}
+
+/**
+ * @return true when @p frame_length is a payload length the codec accepts.
+ *
+ * Accepted lengths are exactly the ones a CAN bus can carry: 1..8 bytes for
+ * classic CAN, and 12/16/20/24/32/48/64 for CAN FD (SW-FR-CANFD-001,
+ * SW-FR-CANFD-002). 9, 10 and 11 bytes cannot exist on either bus, so they
+ * stay an argument error exactly as they were before CAN FD support; the
+ * codec never silently accepts a payload the wire format cannot express.
+ */
+static inline bool codec_frame_length_ok(size_t frame_length)
+{
+    if (frame_length == 0u || frame_length > CANCESTRY_CODEC_FRAME_MAX_LENGTH) {
+        return false;
+    }
+    if (frame_length <= CANCESTRY_CODEC_CLASSIC_FRAME_MAX_LENGTH) {
+        return true;
+    }
+    return cancestry_can_payload_length_is_valid(true, frame_length);
 }
 
 /**

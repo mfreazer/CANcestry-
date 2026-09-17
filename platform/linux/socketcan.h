@@ -9,10 +9,16 @@
  * poll() and sized to hold exactly one timestamp; file descriptors live in
  * the caller-supplied context struct.
  *
+ * CAN FD (issue #20): an interface configured with can_fd negotiates
+ * CAN_RAW_FD_FRAMES at open time and records the result in @c fd_enabled.
+ * Negotiation failure is not an open failure - the interface stays classic
+ * and the HAL rejects CAN FD frames on it (SW-FR-CANFD-003/004).
+ *
  * Implements: SW-FR-HAL-010 (Linux SocketCAN backend),
  *             SW-FR-HAL-003 (non-blocking I/O),
  *             SW-FR-HAL-004 (hardware/kernel timestamping),
- *             SW-FR-HAL-005 (fail-closed on syscall errors)
+ *             SW-FR-HAL-005 (fail-closed on syscall errors),
+ *             SW-FR-CANFD-003, SW-FR-CANFD-004
  */
 
 #ifndef CANCESTRY_PLATFORM_LINUX_SOCKETCAN_H
@@ -41,9 +47,19 @@ extern "C" {
  * Declare an array of these inside a cancestry_platform_socketcan_t and pass
  * it as backend_context to cancestry_hal_init().
  */
+/**
+ * Per-interface SocketCAN runtime state (caller-owned).
+ *
+ * Declare an array of these inside a cancestry_platform_socketcan_t and pass
+ * it as backend_context to cancestry_hal_init().
+ */
 typedef struct cancestry_platform_socketcan_iface {
     int fd;
     uint32_t interface_index; /* rtnetlink ifindex, set at open */
+    /** True when CAN_RAW_FD_FRAMES was negotiated at open (SW-FR-CANFD-004). */
+    bool fd_enabled;
+    /** True when transmitted CAN FD frames request bit-rate switching. */
+    bool fd_brs;
 } cancestry_platform_socketcan_iface_t;
 
 /**

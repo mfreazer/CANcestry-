@@ -44,8 +44,9 @@ extern "C" {
  * @param value        Physical value to encode.
  * @param frame        Destination buffer; existing bits outside the signal
  *                     span are preserved.
- * @param frame_length Number of bytes in @p frame, in [1, 8]; must cover the
- *                     signal's bit span.
+ * @param frame_length Number of bytes in @p frame: 1..8 for classic CAN, or
+ *                     a CAN FD payload length 12/16/20/24/32/48/64
+ *                     (SW-FR-CANFD-001); must cover the signal's bit span.
  * @param warnings     Warning counters, or NULL.
  * @return CANCESTRY_CODEC_OK, CANCESTRY_CODEC_WARN_VALUE_CLAMPED when a
  *         non-strict clamp was applied, or a negative status.

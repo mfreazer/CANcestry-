@@ -39,9 +39,12 @@ The system includes:
 - configuration and diagnostics interface.
 - tooling for ingestion of industry-standard DBC files (e.g., via comma.ai `opendbc`).
 - 
-v0.2.1 targets classic CAN.
+v0.2.1 targets classic CAN. From Phase 7 (issue #20) the runtime also carries
+CAN FD: 64-byte payloads through the codec engine, the HAL and the Linux
+SocketCAN backend, with a deterministic fallback for interfaces that do not
+negotiate CAN FD.
 
-CAN FD, full automotive functional safety certification, and production road-legal certification are out of scope.
+Full automotive functional safety certification and production road-legal certification are out of scope.
 
 ## 3. Definitions
 
@@ -146,7 +149,12 @@ GATEWAY and EMULATION are ACTIVE sub-profiles, not independent system modes.
 
 ## 11. Out of Scope
 
-- CAN FD support in v0.2.1.
+- CAN FD support in v0.2.1 (delivered in Phase 7, issue #20: see
+  SW-FR-CANFD-001..006 in `docs/software/SwRS.md`).
+- CAN FD on the declarative egress path: recipe and FSM `send_message` build
+  classic 8-byte frames and refuse a wider message instead of truncating it
+  (SW-FR-CANFD-006); CAN FD transmit goes through the HAL.
+- CAN XL.
 - Full UDS diagnostic stack.
 - Automotive functional safety certification.
 - Cloud package registry.

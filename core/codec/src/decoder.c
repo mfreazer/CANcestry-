@@ -137,7 +137,7 @@ cancestry_codec_status_t cancestry_codec_decode_signal(const cancestry_codec_sig
     if (signal == NULL || frame == NULL || out == NULL) {
         return CANCESTRY_CODEC_ERR_NULL;
     }
-    if (frame_length == 0u || frame_length > CANCESTRY_CAN_FRAME_MAX_LENGTH) {
+    if (!codec_frame_length_ok(frame_length)) {
         return CANCESTRY_CODEC_ERR_ARGUMENT;
     }
     if (signal->layout == CANCESTRY_CODEC_LAYOUT_SAWTOOTH) {
@@ -177,7 +177,7 @@ cancestry_codec_status_t cancestry_codec_decode_frame(const cancestry_codec_map_
     if (signals == NULL || capacity == 0u) {
         return CANCESTRY_CODEC_ERR_ARGUMENT;
     }
-    if (frame_length == 0u || frame_length > CANCESTRY_CAN_FRAME_MAX_LENGTH) {
+    if (!codec_frame_length_ok(frame_length)) {
         return CANCESTRY_CODEC_ERR_ARGUMENT;
     }
 

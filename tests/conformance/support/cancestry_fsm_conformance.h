@@ -180,6 +180,68 @@ static inline const char *fsm_test_codec_yaml(void)
            "          endianness: little\n";
 }
 
+/**
+ * The demo codec map plus one CAN FD message (issue #20).
+ *
+ * `FdMsg` (id 0x400) declares dlc 64 with a signal in the last payload byte, so
+ * any attempt to build it on the classic 8-byte egress path is a width error
+ * and not a silent truncation. The map declares `can_fd: true`, so the fixture
+ * loads it with CAN FD capabilities declared.
+ */
+static inline const char *fsm_test_codec_fd_yaml(void)
+{
+    return "schema_version: \"0.3.0\"\n"
+           "codec_map:\n"
+           "  name: demo\n"
+           "  version: 1.0.0\n"
+           "  can_fd: true\n"
+           "  messages:\n"
+           "    - id: 0x100\n"
+           "      name: StatusMsg\n"
+           "      dlc: 8\n"
+           "      signals:\n"
+           "        - name: VehicleSpeed\n"
+           "          start_bit: 0\n"
+           "          bit_length: 16\n"
+           "          type: uint\n"
+           "          endianness: little\n"
+           "        - name: IgnitionState\n"
+           "          start_bit: 16\n"
+           "          bit_length: 8\n"
+           "          type: uint\n"
+           "          endianness: little\n"
+           "    - id: 0x200\n"
+           "      name: ClusterMsg\n"
+           "      dlc: 2\n"
+           "      signals:\n"
+           "        - name: ClusterSpeed\n"
+           "          start_bit: 0\n"
+           "          bit_length: 16\n"
+           "          type: uint\n"
+           "          endianness: little\n"
+           "    - id: 0x300\n"
+           "      name: AlertMsg\n"
+           "      dlc: 1\n"
+           "      signals:\n"
+           "        - name: AlertLevel\n"
+           "          start_bit: 0\n"
+           "          bit_length: 8\n"
+           "          type: uint\n"
+           "          endianness: little\n"
+           "    - id: 0x400\n"
+           "      name: FdMsg\n"
+           "      dlc: 64\n"
+           "      signals:\n"
+           "        - name: FdTail\n"
+           "          start_bit: 504\n"
+           "          bit_length: 8\n"
+           "          type: uint\n"
+           "          endianness: little\n";
+}
+
+/** CAN id of the CAN FD message in fsm_test_codec_fd_yaml(). */
+#define FSM_TEST_MSG_FD ((uint32_t)0x400u)
+
 /* ------------------------------------------------------------------------- */
 /* Recording helpers                                                         */
 /* ------------------------------------------------------------------------- */
@@ -741,11 +803,20 @@ static inline void fsm_test_install_capabilities(fsm_test_fixture_t *fx)
     fsm_test_install_capabilities_ex(fx, 0u, 0u);
 }
 
-static inline bool fsm_test_init_with(fsm_test_fixture_t *fx,
-                                      const char *yaml,
-                                      const fsm_test_options_t *options)
+/**
+ * Initialize the fixture with an explicit codec map document.
+ *
+ * The document is loaded with CAN FD capabilities declared, so both the
+ * classic demo map and fsm_test_codec_fd_yaml() load unchanged; the load-time
+ * capability gate itself is covered by tests/conformance/codec/.
+ */
+static inline bool fsm_test_init_codec(fsm_test_fixture_t *fx,
+                                       const char *yaml,
+                                       const fsm_test_options_t *options,
+                                       const char *codec_yaml)
 {
     cancestry_fsm_engine_config_t config;
+    cancestry_codec_platform_caps_t codec_caps;
     cancestry_codec_load_error_t codec_error;
     fsm_test_options_t opts;
     size_t declared;
@@ -795,9 +866,9 @@ static inline bool fsm_test_init_with(fsm_test_fixture_t *fx,
     }
 
     if (!opts.no_codec) {
-        fx->codec_map =
-            cancestry_codec_map_load(fsm_test_codec_yaml(), strlen(fsm_test_codec_yaml()),
-                                     &codec_error);
+        codec_caps.can_fd = true;
+        fx->codec_map = cancestry_codec_map_load_checked(codec_yaml, strlen(codec_yaml),
+                                                         &codec_caps, &codec_error);
         if (fx->codec_map == NULL) {
             printf("    FAIL to load fixture codec map: %s\n", codec_error.message);
             fflush(stdout);
@@ -877,6 +948,14 @@ static inline bool fsm_test_init_with(fsm_test_fixture_t *fx,
         return false;
     }
     return true;
+}
+
+/** Same as fsm_test_init_codec() with the classic demo codec map. */
+static inline bool fsm_test_init_with(fsm_test_fixture_t *fx,
+                                      const char *yaml,
+                                      const fsm_test_options_t *options)
+{
+    return fsm_test_init_codec(fx, yaml, options, fsm_test_codec_yaml());
 }
 
 /**
