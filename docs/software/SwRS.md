@@ -174,3 +174,20 @@ The software includes:
 | SW-FR-FSM-053 | The runtime shall support golden-output tests. | High |
 | SW-FR-FSM-054 | Deferred action transitions shall not interrupt the current event-driven transition. | High |
 | SW-FR-FSM-055 | If multiple transition actions are requested in one action sequence, the first wins and later ones are ignored with warning. | High |
+
+## 11. Hardware Abstraction Layer Requirements (Phase 6, issue #17)
+
+| ID | Requirement | Priority |
+|---|---|---|
+| SW-FR-HAL-001 | The HAL shall define a hardware-agnostic CAN frame type with fixed payload, identifier, flags, and monotonic timestamp. | High |
+| SW-FR-HAL-002 | The HAL shall expose caller-owned bounded RX/TX rings that never allocate heap memory. | High |
+| SW-FR-HAL-003 | hal_poll_rx and hal_send_tx shall be strictly non-blocking and bounded in time. | High |
+| SW-FR-HAL-004 | The HAL shall capture hardware/kernel RX timestamps and map them into the CANcestry monotonic microsecond time base without floating-point conversion; timestamps shall be strictly monotonic per interface. | High |
+| SW-FR-HAL-005 | The HAL shall fail-closed: every syscall failure or bus error shall log a fault, transition the interface to a safe state, and inject a FAULT_RAISED event into the core/event queue rather than crashing. | High |
+| SW-FR-HAL-006 | The HAL RX/TX rings shall never silently overwrite unread data; overflows shall drop the incoming frame, increment a counter, and raise a RING_OVERFLOW fault. | High |
+| SW-FR-HAL-007 | The HAL shall deterministically raise FAULT_RAISED events for bus states Error Passive, Bus Off, Interface Down, and back-pressure so the FSM can react. | High |
+| SW-FR-HAL-008 | A mock HAL backend shall exist for CI that supports deterministic RX frame injection and TX frame capture without touching the kernel. | High |
+| SW-FR-HAL-009 | The mock HAL shall support deterministic injection of bus error faults (Error Passive, Bus Off, Interface Down) to exercise fail-closed behaviour. | High |
+| SW-FR-HAL-010 | A Linux SocketCAN backend shall be provided using non-blocking recvmsg/sendmsg with SO_TIMESTAMPNS. | High |
+| SW-FR-HAL-011 | The HAL shall provide a non-blocking get_status call returning per-interface counters, state, last fault, and last RX timestamp. | Medium |
+| SW-FR-HAL-012 | HAL configuration (interface names, bitrates, listen-only) shall be validated against schemas/hal-0.1.0.schema.json before the runtime opens any interface. | High |

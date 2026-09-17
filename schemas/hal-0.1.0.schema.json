@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cancestry.dev/schemas/hal-0.1.0.schema.json",
+  "title": "CANcestry HAL configuration (v0.1.0)",
+  "description": "Schema for the CANcestry Hardware Abstraction Layer configuration file (Phase 6, issue #17). Declares the set of physical CAN interfaces the gateway binds at startup, their bitrates, and optional listen-only mode. All strings must validate against this schema before being accepted by the runtime; configuration that fails validation is refused (fail-closed).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "hal"],
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0"
+    },
+    "hal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interfaces"],
+      "properties": {
+        "interfaces": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "interface_id", "bitrate"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 15,
+                "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$",
+                "description": "OS interface name (e.g., 'can0', 'vcan1'). Must match SIOCGIFINDEX naming rules."
+              },
+              "interface_id": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535,
+                "description": "CANcestry logical interface id used by codecs, recipes and FSMs. Must be unique within the configuration."
+              },
+              "bitrate": {
+                "type": "integer",
+                "minimum": 10000,
+                "maximum": 1000000,
+                "description": "Nominal bitrate in bits per second. 125000, 250000, 500000 are typical CAN values."
+              },
+              "listen_only": {
+                "type": "boolean",
+                "default": false,
+                "description": "When true the interface is opened in listen-only mode; hal_send_tx returns ERR_NO_INTERFACE for this interface."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

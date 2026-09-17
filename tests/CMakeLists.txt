@@ -24,6 +24,7 @@ add_subdirectory(unit/core/codec)
 add_subdirectory(unit/core/recipe)
 add_subdirectory(unit/core/fsm)
 add_subdirectory(conformance/fsm)
+add_subdirectory(conformance/hal)
 
 # The runtime cores must not allocate. This is verified on the built archives,
 # which is a stronger and more portable check than intercepting malloc at
@@ -60,4 +61,19 @@ if(CANCESTRY_PYTHON AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME cancestry_fsm_no_malloc_symbols
         COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_no_alloc.py"
                 $<TARGET_FILE:cancestry_fsm>)
+    # The HAL core must be zero-alloc (issue #17 constraint 1, SYS-NF-002).
+    add_test(NAME cancestry_hal_no_malloc_symbols
+        COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_no_alloc.py"
+                $<TARGET_FILE:cancestry_hal>)
+    # The mock platform used in CI must be zero-alloc.
+    add_test(NAME cancestry_platform_mock_no_malloc_symbols
+        COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_no_alloc.py"
+                $<TARGET_FILE:cancestry_platform_mock>)
+endif()
+
+# The Linux SocketCAN backend is only built on Linux; check it there.
+if(CANCESTRY_PYTHON AND NOT CMAKE_CROSSCOMPILING AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_test(NAME cancestry_platform_linux_no_malloc_symbols
+        COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_no_alloc.py"
+                $<TARGET_FILE:cancestry_platform_linux>)
 endif()
