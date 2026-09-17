@@ -2,7 +2,8 @@
  * CANcestry - Hardware Abstraction Layer: hardware-agnostic types.
  *
  * Normative references:
- *   docs/software/SwRS.md              SW-FR-HAL-001 .. SW-FR-HAL-012
+ *   docs/software/SwRS.md              SW-FR-HAL-001 .. SW-FR-HAL-012,
+ *                                      SW-FR-CANFD-002 .. SW-FR-CANFD-005
  *   docs/system/SyRS.md                SYS-NF-001 (determinism),
  *                                      SYS-NF-002 (zero heap allocation),
  *                                      SYS-SF-002 (fail-closed)
@@ -10,7 +11,10 @@
  *
  * Design notes:
  *   - The HAL frame is a fixed-size value type. It owns no pointers to
- *     dynamically allocated data and can be copied by assignment.
+ *     dynamically allocated data and can be copied by assignment. The
+ *     payload buffer is statically sized for the widest frame CANcestry
+ *     accepts (CAN FD, 64 bytes) so no frame is ever resized at runtime;
+ *     classic traffic copies only its declared length (SW-FR-CANFD-005).
  *   - Timestamps are CANcestry monotonic microseconds (cancestry_time_us_t) so
  *     they slot directly into core/event without conversion or floating point.
  *   - All buffers are caller-owned. The HAL never calls malloc/calloc/realloc/
@@ -44,8 +48,17 @@ extern "C" {
 /* Limits (bounded resources, SYS-NF-002)                                    */
 /* ------------------------------------------------------------------------- */
 
-/** Classic CAN payload length. CAN FD is out of scope for v0.4. */
-#define CANCESTRY_HAL_FRAME_MAX_LENGTH ((uint8_t)8u)
+/** Classic CAN payload length in bytes. */
+#define CANCESTRY_HAL_CLASSIC_FRAME_MAX_LENGTH ((uint8_t)CANCESTRY_CAN_FRAME_MAX_LENGTH)
+
+/**
+ * Widest payload a HAL frame can carry, in bytes (CAN FD, issue #20).
+ *
+ * The buffer is part of the caller-owned frame struct and is never resized;
+ * the HAL rejects rather than truncates any frame that does not fit
+ * (SW-FR-CANFD-003, fail closed).
+ */
+#define CANCESTRY_HAL_FRAME_MAX_LENGTH ((uint8_t)CANCESTRY_CAN_FD_FRAME_MAX_LENGTH)
 
 /** Maximum interface name length accepted by the HAL ("vcan0" etc.). */
 #define CANCESTRY_HAL_INTERFACE_NAME_MAX ((size_t)16u)
@@ -81,6 +94,12 @@ typedef enum cancestry_hal_fault_code {
     CANCESTRY_HAL_FAULT_MALFORMED_FRAME = 8,
     /** Initialization failed (e.g., socket() returned an error). */
     CANCESTRY_HAL_FAULT_INIT_FAILED = 9,
+    /**
+     * A CAN FD frame reached an interface that does not support CAN FD (or a
+     * CAN FD transmit was attempted on one). The frame is dropped, never
+     * truncated (SW-FR-CANFD-003, fail closed).
+     */
+    CANCESTRY_HAL_FAULT_PROTOCOL_UNSUPPORTED = 10,
     CANCESTRY_HAL_FAULT_COUNT
 } cancestry_hal_fault_code_t;
 
@@ -112,6 +131,20 @@ typedef struct cancestry_hal_frame {
     uint32_t can_id;
     /** Non-zero when can_id carries an extended (29-bit) identifier. */
     uint8_t is_extended;
+    /**
+     * Non-zero when this is a CAN FD frame.
+     *
+     * Only an FD frame may carry more than
+     * CANCESTRY_HAL_CLASSIC_FRAME_MAX_LENGTH bytes, and only an interface
+     * whose negotiated capabilities include CAN FD accepts one.
+     */
+    uint8_t is_fd;
+    /**
+     * Payload length in bytes, not a raw DLC code: for CAN FD the platform
+     * backend has already translated DLC 9..15 to 12/16/20/24/32/48/64.
+     * cancestry_can_payload_length_is_valid(is_fd, length) holds for every
+     * frame the HAL accepts (SW-FR-CANFD-002).
+     */
     uint8_t length;
     uint8_t data[CANCESTRY_HAL_FRAME_MAX_LENGTH];
     /**
@@ -182,6 +215,14 @@ typedef struct cancestry_hal_if_status {
     uint32_t fault_count;
     /** Last fault code observed, or CANCESTRY_HAL_FAULT_NONE. */
     cancestry_hal_fault_code_t last_fault;
+    /**
+     * Frames rejected because their protocol is not supported by the
+     * interface (CAN FD on a classic interface), or whose payload length is
+     * not representable (SW-FR-CANFD-003).
+     */
+    uint32_t rx_protocol_rejected;
+    /** Negotiated CAN FD support for this interface. */
+    bool can_fd;
     /** Last hardware timestamp observed on this interface (monotonic us). */
     cancestry_time_us_t last_rx_timestamp_us;
 } cancestry_hal_if_status_t;
@@ -204,7 +245,13 @@ typedef enum cancestry_hal_status {
     /** Underlying I/O error (e.g., bad fd); fail-closed, fault raised. */
     CANCESTRY_HAL_ERR_IO = -5,
     /** Initialization failed. */
-    CANCESTRY_HAL_ERR_INIT = -6
+    CANCESTRY_HAL_ERR_INIT = -6,
+    /**
+     * The interface does not support the frame's protocol (CAN FD on a
+     * classic interface). The frame was not queued and not truncated; a
+     * PROTOCOL_UNSUPPORTED fault was raised (SW-FR-CANFD-003).
+     */
+    CANCESTRY_HAL_ERR_UNSUPPORTED = -7
 } cancestry_hal_status_t;
 
 /* ------------------------------------------------------------------------- */
@@ -223,7 +270,37 @@ typedef struct cancestry_hal_if_config {
     uint32_t bitrate;   /* bits per second, e.g. 500000 for 500 kbit/s */
     /** Non-zero to open in listen-only mode (no TX allowed). */
     uint8_t listen_only;
+    /**
+     * Non-zero to request CAN FD on this interface.
+     *
+     * Requesting CAN FD never fails the open: when the hardware or driver
+     * cannot provide it the interface stays classic-only and every CAN FD
+     * frame is rejected with a PROTOCOL_UNSUPPORTED fault instead of being
+     * truncated (SW-FR-CANFD-003). Query the negotiated result with
+     * cancestry_hal_iface_can_fd().
+     */
+    uint8_t can_fd;
+    /**
+     * CAN FD data bitrate in bits per second, or 0 to let the platform pick
+     * its default. Only meaningful when @c can_fd is non-zero.
+     */
+    uint32_t data_bitrate;
 } cancestry_hal_if_config_t;
+
+/**
+ * Negotiated transport capabilities of one interface.
+ *
+ * Filled in by the platform backend at open time and reported through
+ * cancestry_hal_iface_can_fd(). An interface whose backend reports nothing
+ * is treated as classic-only (fail closed).
+ */
+typedef struct cancestry_hal_transport_caps {
+    cancestry_interface_id_t interface_id;
+    /** True when the interface negotiated CAN FD. */
+    bool can_fd;
+    /** Widest payload the interface accepts, in bytes (8 or 64). */
+    uint8_t max_length;
+} cancestry_hal_transport_caps_t;
 
 /* ------------------------------------------------------------------------- */
 /* Helpers                                                                   */
@@ -280,6 +357,19 @@ cancestry_hal_status_t cancestry_hal_tx_ring_push(cancestry_hal_tx_ring_t *ring,
  */
 cancestry_hal_status_t cancestry_hal_tx_ring_pop(cancestry_hal_tx_ring_t *ring,
                                                   cancestry_hal_frame_t *out_frame);
+
+/**
+ * @return true when @p frame is non-NULL and internally consistent:
+ *         its payload length is representable for its frame kind and it fits
+ *         the frame buffer.
+ *
+ * A classic frame carrying more than
+ * CANCESTRY_HAL_CLASSIC_FRAME_MAX_LENGTH bytes, or an FD frame whose length
+ * is not one of the CAN FD payload lengths, is malformed. The HAL applies
+ * this check on ingress and egress so no layer ever has to guess what a
+ * well-formed frame looks like (SW-FR-CANFD-002).
+ */
+bool cancestry_hal_frame_is_valid(const cancestry_hal_frame_t *frame);
 
 /** @return Stable, statically allocated name for @p state. Never NULL. */
 const char *cancestry_hal_if_state_name(cancestry_hal_if_state_t state);

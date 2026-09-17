@@ -4,8 +4,10 @@
  * Normative references:
  *   docs/packages/codec-map-spec.md        (v0.2.1) sections 2-8
  *   docs/software/SwRS.md                  SW-FR-CODEC-001 .. SW-FR-CODEC-008
+ *   docs/software/SwRS.md                  SW-FR-CANFD-001 (CAN FD payloads)
  *   docs/system/SyRS.md                    SYS-NF-001 (determinism), SYS-NF-002 (bounded resources)
  *   schemas/codec-map-0.2.0.schema.json    codec map v0.2.0 schema
+ *   schemas/codec-map-0.3.0.schema.json    codec map v0.3.0 schema (adds can_fd)
  *
  * Design notes:
  *   - A loaded codec map is a single, self-contained allocation. Every array
@@ -31,8 +33,23 @@
 extern "C" {
 #endif
 
-/** Classic CAN payload width in bits; the codec never sees frames wider than 8 bytes. */
+/** Classic CAN payload width in bits; the width a classic codec map may address. */
 #define CANCESTRY_CODEC_PAYLOAD_MAX_BITS ((uint32_t)64u)
+
+/**
+ * CAN FD payload width in bits (Phase 7, issue #20).
+ *
+ * A codec map that declares `can_fd: true` may address payload bits 0..511;
+ * a map without that flag keeps the classic 64-bit limit, so existing
+ * classic maps are validated exactly as before (SW-FR-CANFD-001).
+ */
+#define CANCESTRY_CODEC_FD_PAYLOAD_MAX_BITS ((uint32_t)512u)
+
+/** Classic CAN payload limit in bytes. */
+#define CANCESTRY_CODEC_CLASSIC_FRAME_MAX_LENGTH ((size_t)CANCESTRY_CAN_FRAME_MAX_LENGTH)
+
+/** Widest payload the codec accepts in bytes (CAN FD, SW-FR-CANFD-001). */
+#define CANCESTRY_CODEC_FRAME_MAX_LENGTH ((size_t)CANCESTRY_CAN_FD_FRAME_MAX_LENGTH)
 
 /** Maximum length of codec map, message and signal names accepted by the loader. */
 #define CANCESTRY_CODEC_NAME_MAX ((size_t)64u)
@@ -75,7 +92,13 @@ typedef enum cancestry_codec_status {
     /** Loader: out of memory. */
     CANCESTRY_CODEC_ERR_NO_MEMORY = -9,
     /** Namespace: no free registration slots. */
-    CANCESTRY_CODEC_ERR_CAPACITY = -10
+    CANCESTRY_CODEC_ERR_CAPACITY = -10,
+    /**
+     * Loader: the map requests a transport the target platform does not
+     * support (e.g. `can_fd: true` on a classic-only interface). Refused at
+     * load time, not at runtime (SW-FR-CANFD-004).
+     */
+    CANCESTRY_CODEC_ERR_UNSUPPORTED = -11
 } cancestry_codec_status_t;
 
 /** Signal value types; mirrors the codec map schema "type" field. */
@@ -166,7 +189,14 @@ typedef struct cancestry_codec_message {
     uint32_t id;
     /** Message name; borrowed from the map allocation. Never NULL. */
     const char *name;
-    /** Declared data length, in [0, 8]. */
+    /**
+     * Declared payload length in bytes.
+     *
+     * In a classic map (map-level @c can_fd false) this is in [0, 8]. In a
+     * CAN FD map it is one of the lengths CAN FD can represent on the wire:
+     * 0..8, 12, 16, 20, 24, 32, 48 or 64 (SW-FR-CANFD-001). The loader
+     * enforces both rules, so a runtime never sees an illegal dlc.
+     */
     uint8_t dlc;
     /** Declared period in milliseconds, or 0 when not declared. */
     uint32_t period_ms;
@@ -196,6 +226,18 @@ typedef struct cancestry_codec_map {
     const cancestry_codec_message_t *messages;
     /** Number of entries in @c messages; at least 1. */
     uint16_t message_count;
+    /**
+     * True when the map declares `can_fd: true`.
+     *
+     * An FD map may declare payload lengths above 8 bytes and address
+     * payload bits above 63; a classic map may not. The flag is validated
+     * against the target platform's capabilities at load time
+     * (cancestry_codec_map_load_checked(), SW-FR-CANFD-004).
+     *
+     * Declared last so existing positional initializers of this struct keep
+     * their meaning and default the flag to false (classic).
+     */
+    bool can_fd;
 } cancestry_codec_map_t;
 
 /**

@@ -1514,6 +1514,16 @@ static cancestry_recipe_status_t recipe_action_send_message(
     if (status != CANCESTRY_RECIPE_OK) {
         return status;
     }
+    /*
+     * SW-FR-CANFD-006: the declarative egress path builds classic 8-byte
+     * frames. A message from a CAN FD codec map needs a wider frame than this
+     * path owns, so it is refused here rather than truncated on the way out
+     * (fail closed, agents.md section 2). FD transmit goes through the HAL
+     * (cancestry_hal_send_tx with is_fd set).
+     */
+    if ((size_t)message->dlc > (size_t)CANCESTRY_CAN_FRAME_MAX_LENGTH) {
+        return CANCESTRY_RECIPE_ERR_UNSUPPORTED;
+    }
 
     memset(frame, 0, sizeof(frame));
     for (i = 0u; i < action->as.send_message.value_count; ++i) {

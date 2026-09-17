@@ -13,7 +13,10 @@
  *             SW-FR-HAL-004 (hardware timestamps mapped to event time base),
  *             SW-FR-HAL-005 (fail-closed I/O),
  *             SW-FR-HAL-006 (bounded rings),
- *             SW-FR-HAL-007 (bus fault events)
+ *             SW-FR-HAL-007 (bus fault events),
+ *             SW-FR-CANFD-002 (frame validation),
+ *             SW-FR-CANFD-003 (deterministic CAN FD fallback),
+ *             SW-FR-CANFD-005 (classic frames copy only their own length)
  */
 
 #include "cancestry/hal/hal.h"
@@ -43,6 +46,10 @@ static cancestry_fault_severity_t hal_fault_severity(cancestry_hal_fault_code_t 
     case CANCESTRY_HAL_FAULT_INTERFACE_DOWN:
     case CANCESTRY_HAL_FAULT_BUS_ERROR_PASSIVE:
     case CANCESTRY_HAL_FAULT_INIT_FAILED:
+    /* A protocol mismatch drops data deterministically and means the
+     * deployment is wired to a bus the configuration did not expect, so the
+     * FSM must see it (SW-FR-CANFD-003). */
+    case CANCESTRY_HAL_FAULT_PROTOCOL_UNSUPPORTED:
         return CANCESTRY_FAULT_SEVERITY_ERROR;
     case CANCESTRY_HAL_FAULT_BUS_OFF:
         return CANCESTRY_FAULT_SEVERITY_CRITICAL;
@@ -72,22 +79,57 @@ static uint8_t hal_find_iface(const cancestry_hal_t *hal, cancestry_interface_id
 /**
  * Push one CAN_RX event for a HAL frame into @p queue.
  *
- * Enforces the timestamp-monotonicity invariant: if the new frame's
- * timestamp is not strictly greater than the previous timestamp observed
- * on this interface, a TIMESTAMP_NON_MONOTONIC fault is raised and the
- * frame is dropped (SW-FR-HAL-004).
+ * Enforces, in this order:
+ *   1. the protocol/length contract (SW-FR-CANFD-002/003): a malformed frame,
+ *      or a CAN FD frame on an interface that did not negotiate CAN FD, is
+ *      dropped and a fault is raised. The check runs before the timestamp
+ *      check so a rejected frame never advances the interface's timestamp
+ *      watermark - the ordering is deterministic and identical for every
+ *      backend;
+ *   2. the timestamp-monotonicity invariant (SW-FR-HAL-004): if the new
+ *      frame's timestamp is not strictly greater than the previous timestamp
+ *      observed on this interface, a TIMESTAMP_NON_MONOTONIC fault is raised
+ *      and the frame is dropped.
  *
+ * @param fault_count When non-NULL, incremented once for every fault this
+ *                    call raised, so cancestry_hal_poll_rx() can report the
+ *                    total number of fault events it enqueued.
  * @return true when the frame was delivered as a CAN_RX event, false when
- *         it was dropped due to a monotonicity violation.
+ *         it was dropped.
  */
 static bool hal_deliver_rx(cancestry_hal_t *hal,
                            cancestry_event_queue_t *queue,
                            uint8_t iface_index,
-                           const cancestry_hal_frame_t *frame)
+                           const cancestry_hal_frame_t *frame,
+                           uint32_t *fault_count)
 {
     cancestry_event_t event;
     cancestry_event_payload_t payload;
     cancestry_event_queue_status_t qstatus;
+
+    /* Protocol contract check (SW-FR-CANFD-002/003). */
+    if (!cancestry_hal_frame_is_valid(frame)) {
+        hal->if_protocol_rejected[iface_index]++;
+        (void)cancestry_hal_raise_fault(hal, queue,
+                                         hal->ifaces[iface_index].interface_id,
+                                         CANCESTRY_HAL_FAULT_MALFORMED_FRAME,
+                                         CANCESTRY_FAULT_SEVERITY_WARNING);
+        if (fault_count != NULL) {
+            (*fault_count)++;
+        }
+        return false;
+    }
+    if (frame->is_fd != 0u && !hal->if_caps[iface_index].can_fd) {
+        hal->if_protocol_rejected[iface_index]++;
+        (void)cancestry_hal_raise_fault(hal, queue,
+                                         hal->ifaces[iface_index].interface_id,
+                                         CANCESTRY_HAL_FAULT_PROTOCOL_UNSUPPORTED,
+                                         CANCESTRY_FAULT_SEVERITY_ERROR);
+        if (fault_count != NULL) {
+            (*fault_count)++;
+        }
+        return false;
+    }
 
     /* Monotonicity check. */
     if (frame->timestamp_us != 0u &&
@@ -97,6 +139,9 @@ static bool hal_deliver_rx(cancestry_hal_t *hal,
                                          hal->ifaces[iface_index].interface_id,
                                          CANCESTRY_HAL_FAULT_TIMESTAMP_NON_MONOTONIC,
                                          CANCESTRY_FAULT_SEVERITY_ERROR);
+        if (fault_count != NULL) {
+            (*fault_count)++;
+        }
         return false;
     }
     if (frame->timestamp_us != 0u) {
@@ -107,8 +152,12 @@ static bool hal_deliver_rx(cancestry_hal_t *hal,
     payload.can_rx.interface_id = frame->interface_id;
     payload.can_rx.can_id = frame->can_id;
     payload.can_rx.is_extended = frame->is_extended;
+    payload.can_rx.is_fd = frame->is_fd;
     payload.can_rx.length = frame->length;
-    memcpy(payload.can_rx.data, frame->data, CANCESTRY_CAN_FRAME_MAX_LENGTH);
+    /* Copy only the declared payload, so a classic frame costs the same as
+     * it did before CAN FD existed (SW-FR-CANFD-005). The frame was
+     * validated above, so frame->length is within the payload buffer. */
+    memcpy(payload.can_rx.data, frame->data, (size_t)frame->length);
 
     cancestry_event_init(&event);
     event.type = CANCESTRY_EVENT_TYPE_CAN_RX;
@@ -173,6 +222,21 @@ bool cancestry_hal_init(cancestry_hal_t *hal, const cancestry_hal_config_t *conf
         if (hal->backend->open != NULL &&
             hal->backend->open(hal->backend_context, &hal->ifaces[i], i)) {
             hal->if_states[i] = CANCESTRY_HAL_IF_STATE_UP;
+            /* Record what the backend actually negotiated. A backend without
+             * a caps callback, or one that reports nothing, leaves the
+             * interface classic-only (fail closed, SW-FR-CANFD-003). */
+            hal->if_caps[i].interface_id = hal->ifaces[i].interface_id;
+            hal->if_caps[i].can_fd = false;
+            hal->if_caps[i].max_length = CANCESTRY_HAL_CLASSIC_FRAME_MAX_LENGTH;
+            if (hal->backend->caps != NULL) {
+                cancestry_hal_transport_caps_t negotiated;
+                memset(&negotiated, 0, sizeof(negotiated));
+                if (hal->backend->caps(hal->backend_context, i, &negotiated) &&
+                    negotiated.can_fd) {
+                    hal->if_caps[i].can_fd = true;
+                    hal->if_caps[i].max_length = CANCESTRY_HAL_FRAME_MAX_LENGTH;
+                }
+            }
         } else {
             hal->if_states[i] = CANCESTRY_HAL_IF_STATE_DOWN;
             hal->if_last_fault[i] = CANCESTRY_HAL_FAULT_INIT_FAILED;
@@ -287,7 +351,7 @@ cancestry_hal_status_t cancestry_hal_poll_rx(cancestry_hal_t *hal,
                 break;
             }
             frame.interface_id = hal->ifaces[i].interface_id;
-            if (hal_deliver_rx(hal, event_queue, i, &frame)) {
+            if (hal_deliver_rx(hal, event_queue, i, &frame, &fault_count)) {
                 rx_count++;
             }
         }
@@ -327,6 +391,20 @@ cancestry_hal_status_t cancestry_hal_poll_rx(cancestry_hal_t *hal,
     return CANCESTRY_HAL_OK;
 }
 
+bool cancestry_hal_iface_can_fd(const cancestry_hal_t *hal, cancestry_interface_id_t interface_id)
+{
+    uint8_t idx;
+
+    if (hal == NULL || !hal->initialized) {
+        return false;
+    }
+    idx = hal_find_iface(hal, interface_id);
+    if (idx >= hal->iface_count) {
+        return false;
+    }
+    return hal->if_caps[idx].can_fd;
+}
+
 cancestry_hal_status_t cancestry_hal_send_tx(cancestry_hal_t *hal,
                                               cancestry_event_queue_t *event_queue,
                                               const cancestry_hal_frame_t *frame)
@@ -348,6 +426,26 @@ cancestry_hal_status_t cancestry_hal_send_tx(cancestry_hal_t *hal,
     ring = hal->tx_rings[idx];
     if (ring == NULL) {
         return CANCESTRY_HAL_ERR_NO_INTERFACE;
+    }
+    /*
+     * Egress protocol check (SW-FR-CANFD-003): a frame the interface cannot
+     * carry is refused here rather than queued and truncated by the backend.
+     * The fault is raised through the same path as every other HAL fault, so
+     * the event order is deterministic.
+     */
+    if (!cancestry_hal_frame_is_valid(frame)) {
+        hal->if_protocol_rejected[idx]++;
+        (void)cancestry_hal_raise_fault(hal, event_queue, frame->interface_id,
+                                         CANCESTRY_HAL_FAULT_MALFORMED_FRAME,
+                                         CANCESTRY_FAULT_SEVERITY_WARNING);
+        return CANCESTRY_HAL_ERR_ARGUMENT;
+    }
+    if (frame->is_fd != 0u && !hal->if_caps[idx].can_fd) {
+        hal->if_protocol_rejected[idx]++;
+        (void)cancestry_hal_raise_fault(hal, event_queue, frame->interface_id,
+                                         CANCESTRY_HAL_FAULT_PROTOCOL_UNSUPPORTED,
+                                         CANCESTRY_FAULT_SEVERITY_ERROR);
+        return CANCESTRY_HAL_ERR_UNSUPPORTED;
     }
 
     status = cancestry_hal_tx_ring_push(ring, frame);
@@ -403,6 +501,8 @@ cancestry_hal_status_t cancestry_hal_get_status(const cancestry_hal_t *hal,
         s->state = hal->if_states[i];
         s->fault_count = hal->if_faults[i];
         s->last_fault = hal->if_last_fault[i];
+        s->rx_protocol_rejected = hal->if_protocol_rejected[i];
+        s->can_fd = hal->if_caps[i].can_fd;
         s->last_rx_timestamp_us = hal->if_last_ts[i];
         s->rx_count = (rx != NULL) ? rx->rx_total : 0u;
         s->rx_dropped = (rx != NULL) ? rx->dropped : 0u;

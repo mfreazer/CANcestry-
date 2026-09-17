@@ -4,7 +4,8 @@
  * All tables here are statically allocated and read-only. The ring helpers
  * operate on caller-owned storage and never allocate (SYS-NF-002).
  *
- * Implements: SW-FR-HAL-001, SW-FR-HAL-002, SW-FR-HAL-006 (bounded rings)
+ * Implements: SW-FR-HAL-001, SW-FR-HAL-002, SW-FR-HAL-006 (bounded rings),
+ *             SW-FR-CANFD-002 (frame validation)
  */
 
 #include "cancestry/hal/types.h"
@@ -134,6 +135,23 @@ cancestry_hal_status_t cancestry_hal_tx_ring_pop(cancestry_hal_tx_ring_t *ring,
 }
 
 /* ------------------------------------------------------------------------- */
+/* Frame validation (SW-FR-CANFD-002)                                        */
+/* ------------------------------------------------------------------------- */
+
+bool cancestry_hal_frame_is_valid(const cancestry_hal_frame_t *frame)
+{
+    if (frame == NULL) {
+        return false;
+    }
+    /* A frame wider than the buffer can never be carried, whatever it
+     * claims; checking this first keeps the length table lookup bounded. */
+    if ((size_t)frame->length > (size_t)CANCESTRY_HAL_FRAME_MAX_LENGTH) {
+        return false;
+    }
+    return cancestry_can_payload_length_is_valid(frame->is_fd != 0u, (size_t)frame->length);
+}
+
+/* ------------------------------------------------------------------------- */
 /* Name tables (static, read-only)                                           */
 /* ------------------------------------------------------------------------- */
 
@@ -177,6 +195,8 @@ const char *cancestry_hal_fault_code_name(cancestry_hal_fault_code_t fault)
         return "MALFORMED_FRAME";
     case CANCESTRY_HAL_FAULT_INIT_FAILED:
         return "INIT_FAILED";
+    case CANCESTRY_HAL_FAULT_PROTOCOL_UNSUPPORTED:
+        return "PROTOCOL_UNSUPPORTED";
     case CANCESTRY_HAL_FAULT_COUNT:
     default:
         return "INVALID";
@@ -209,6 +229,8 @@ const char *cancestry_hal_status_name(cancestry_hal_status_t status)
         return "ERR_IO";
     case CANCESTRY_HAL_ERR_INIT:
         return "ERR_INIT";
+    case CANCESTRY_HAL_ERR_UNSUPPORTED:
+        return "ERR_UNSUPPORTED";
     default:
         return "INVALID";
     }

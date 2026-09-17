@@ -7,6 +7,9 @@
  *                                      SW-FR-HAL-005 (fail-closed),
  *                                      SW-FR-HAL-006 (bounded rings),
  *                                      SW-FR-HAL-007 (bus fault injection)
+ *   docs/software/SwRS.md              SW-FR-CANFD-003 (deterministic CAN FD
+ *                                      fallback), SW-FR-CANFD-005 (classic
+ *                                      CAN keeps zero-overhead handling)
  *   docs/system/SyRS.md                SYS-NF-001 (determinism),
  *                                      SYS-NF-002 (zero heap allocation)
  *
@@ -35,6 +38,16 @@
  *   must be supplied by the caller. The conformance check in
  *   ci/check_no_alloc.py is extended to cover libcancestry_hal.a and
  *   libcancestry_platform_linux.a.
+ *
+ * CAN FD rule (issue #20, SW-FR-CANFD-003):
+ *   A frame is only ever delivered or transmitted when the interface
+ *   negotiated the protocol it uses. A CAN FD frame that reaches a
+ *   classic-only interface is dropped and a
+ *   CANCESTRY_HAL_FAULT_PROTOCOL_UNSUPPORTED fault is raised through the
+ *   same deterministic path as every other HAL fault; it is never truncated
+ *   to 8 bytes and never passed on. The check lives here, in the
+ *   platform-independent core, so every backend (SocketCAN, mock, future
+ *   targets) gets identical behaviour.
  *
  * Non-blocking rule (constraint 2, SW-FR-HAL-003):
  *   hal_poll_rx and hal_send_tx must return in bounded time. The SocketCAN
@@ -106,6 +119,14 @@ typedef struct cancestry_hal {
 
     /** Per-interface runtime state (UP/DOWN/ERROR_PASSIVE/BUS_OFF). */
     cancestry_hal_if_state_t if_states[CANCESTRY_HAL_INSTANCE_MAX_INTERFACES];
+    /**
+     * Per-interface transport capabilities negotiated by the backend at open
+     * time. Interfaces whose backend reports nothing are classic-only
+     * (fail closed).
+     */
+    cancestry_hal_transport_caps_t if_caps[CANCESTRY_HAL_INSTANCE_MAX_INTERFACES];
+    /** Per-interface count of frames rejected as PROTOCOL_UNSUPPORTED. */
+    uint32_t if_protocol_rejected[CANCESTRY_HAL_INSTANCE_MAX_INTERFACES];
     /** Per-interface fault counters. */
     uint32_t if_faults[CANCESTRY_HAL_INSTANCE_MAX_INTERFACES];
     cancestry_hal_fault_code_t if_last_fault[CANCESTRY_HAL_INSTANCE_MAX_INTERFACES];
@@ -210,6 +231,16 @@ cancestry_hal_status_t cancestry_hal_send_tx(cancestry_hal_t *hal,
                                               const cancestry_hal_frame_t *frame);
 
 /**
+ * @return true when @p interface_id refers to a configured interface whose
+ *         backend negotiated CAN FD support.
+ *
+ * Returns false for an unknown interface, an uninitialized HAL, and any
+ * interface whose backend did not report CAN FD, so callers can never send
+ * an FD frame somewhere it would be dropped (SW-FR-CANFD-003).
+ */
+bool cancestry_hal_iface_can_fd(const cancestry_hal_t *hal, cancestry_interface_id_t interface_id);
+
+/**
  * Read a bounded snapshot of per-interface status.
  *
  * @param hal      Initialized HAL.
@@ -280,11 +311,24 @@ typedef cancestry_hal_status_t (*cancestry_hal_backend_drain_tx_fn)(void *ctx,
                                                                      cancestry_hal_tx_ring_t *ring,
                                                                      cancestry_hal_fault_code_t *out_fault);
 
+/**
+ * Report the transport capabilities negotiated for one interface.
+ *
+ * Called by hal_init immediately after a successful open. The backend fills
+ * @p out_caps; returning false, or providing no @c caps entry at all, means
+ * "classic CAN only" (fail closed, SW-FR-CANFD-003).
+ */
+typedef bool (*cancestry_hal_backend_caps_fn)(void *ctx,
+                                               uint8_t iface_index,
+                                               cancestry_hal_transport_caps_t *out_caps);
+
 struct cancestry_hal_backend {
     cancestry_hal_backend_open_fn open;
     cancestry_hal_backend_close_fn close;
     cancestry_hal_backend_poll_fn poll;
     cancestry_hal_backend_drain_tx_fn drain_tx;
+    /** Optional; NULL is treated as "classic CAN only". */
+    cancestry_hal_backend_caps_fn caps;
 };
 
 #ifdef __cplusplus

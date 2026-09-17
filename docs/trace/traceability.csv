@@ -162,3 +162,16 @@ SYS-NF-002,platform/mock,test,cancestry_platform_mock_no_malloc_symbols,passing
 SYS-NF-002,platform/linux,test,cancestry_platform_linux_no_malloc_symbols,passing
 SYS-NF-001,HAL-DETERMINISM,test,HAL-NONBLOCK-001,passing
 SYS-SF-002,HAL-FAULT-EVENTS,test,HAL-BUS-ERROR-001,passing
+SW-FR-CANFD-001,core/codec,test,CODEC-CANFD-BOUNDS-001,passing
+SW-FR-CANFD-001,schemas/codec-map-0.3.0.schema.json,inspection,SCHEMA-VALIDATION,passing
+SW-FR-CANFD-002,core/event/src/types.c,test,CODEC-CANFD-BOUNDS-001,passing
+SW-FR-CANFD-002,core/hal/src/types.c,test,HAL-CANFD-FALLBACK-001,passing
+SW-FR-CANFD-003,core/hal/src/hal.c,test,HAL-CANFD-FALLBACK-001,passing
+SW-FR-CANFD-003,platform/mock/mock_hal.c,test,HAL-CANFD-FALLBACK-001,passing
+SW-FR-CANFD-004,core/codec/src/loader.c,test,CODEC-CANFD-SCHEMA-001,passing
+SW-FR-CANFD-004,platform/linux/socketcan.c,inspection,HAL-REAL-CANFD-001,planned
+SW-FR-CANFD-005,core/hal,test,cancestry_hal_no_malloc_symbols,passing
+SW-FR-CANFD-005,platform/linux,test,cancestry_platform_linux_no_malloc_symbols,passing
+SW-FR-CANFD-005,core/event,test,cancestry_event_no_malloc_symbols,passing
+SW-FR-CANFD-006,core/recipe/src/engine.c,test,RECIPE-CANFD-EGRESS-001,passing
+SW-FR-CANFD-006,core/fsm/src/engine.c,test,FSM-CANFD-EGRESS-001,passing

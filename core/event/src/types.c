@@ -9,6 +9,32 @@
 
 #include <string.h>
 
+/*
+ * CAN FD payload lengths, indexed by the ISO 11898-1 DLC code. Codes 0..8
+ * map to their own byte count; codes 9..15 map to the next larger legal
+ * payload. The table is static and read-only (SYS-NF-002).
+ */
+static const uint8_t cancestry_canfd_length_by_dlc[16] = {
+    0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 12u, 16u, 20u, 24u, 32u, 48u, 64u};
+
+bool cancestry_can_payload_length_is_valid(bool is_fd, size_t length)
+{
+    size_t i;
+
+    if (length > (size_t)CANCESTRY_CAN_FD_FRAME_MAX_LENGTH) {
+        return false;
+    }
+    if (!is_fd) {
+        return length <= (size_t)CANCESTRY_CAN_FRAME_MAX_LENGTH;
+    }
+    for (i = 0u; i < sizeof(cancestry_canfd_length_by_dlc); ++i) {
+        if ((size_t)cancestry_canfd_length_by_dlc[i] == length) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void cancestry_event_init(cancestry_event_t *event)
 {
     if (event == NULL) {

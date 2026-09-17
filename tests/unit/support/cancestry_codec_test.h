@@ -30,6 +30,58 @@ static inline cancestry_codec_map_t *cancestry_test_load_map(const char *yaml)
     return map;
 }
 
+/**
+ * A CAN FD codec map (issue #20): one 64-byte message with a signal in the
+ * last payload byte. Loaded with CAN FD capabilities declared, so callers that
+ * need the classic-only load path must expect CANCESTRY_CODEC_ERR_UNSUPPORTED.
+ */
+static const char *const cancestry_test_fd_codec_yaml =
+    "schema_version: \"0.3.0\"\n"
+    "codec_map:\n"
+    "  name: fdemo\n"
+    "  version: 1.0.0\n"
+    "  can_fd: true\n"
+    "  messages:\n"
+    "    - id: 0x100\n"
+    "      name: StatusMsg\n"
+    "      dlc: 8\n"
+    "      signals:\n"
+    "        - name: VehicleSpeed\n"
+    "          start_bit: 0\n"
+    "          bit_length: 16\n"
+    "          type: uint\n"
+    "          endianness: little\n"
+    "    - id: 0x400\n"
+    "      name: FdMsg\n"
+    "      dlc: 64\n"
+    "      signals:\n"
+    "        - name: FdTail\n"
+    "          start_bit: 504\n"
+    "          bit_length: 8\n"
+    "          type: uint\n"
+    "          endianness: little\n";
+
+#define CANCESTRY_TEST_FD_MESSAGE_ID ((uint32_t)0x400u)
+
+/** Load cancestry_test_fd_codec_yaml with CAN FD capabilities declared. */
+static inline cancestry_codec_map_t *cancestry_test_load_fd_map(void)
+{
+    cancestry_codec_platform_caps_t caps;
+    cancestry_codec_load_error_t error;
+    cancestry_codec_map_t *map;
+
+    caps.can_fd = true;
+    map = cancestry_codec_map_load_checked(cancestry_test_fd_codec_yaml,
+                                           strlen(cancestry_test_fd_codec_yaml), &caps, &error);
+    if (map == NULL) {
+        printf("    FAIL to load FD test codec map: %s (line %u, column %u)\n", error.message,
+               (unsigned)error.line, (unsigned)error.column);
+        fflush(stdout);
+        cancestry_test_failures++;
+    }
+    return map;
+}
+
 /*
  * Demo codec map used by the decoder, encoder and invalid-frame tests.
  *

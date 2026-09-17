@@ -29,3 +29,7 @@ cancestry_add_hal_conformance_test(cancestry_conformance_hal_bus_error_injection
     test_bus_error_injection.c)
 cancestry_add_hal_conformance_test(cancestry_conformance_hal_nonblocking
     test_nonblocking.c)
+# CAN FD fallback (issue #20, Phase 7): a CAN FD frame on a classic-only
+# interface must raise PROTOCOL_UNSUPPORTED and be dropped, never truncated.
+cancestry_add_hal_conformance_test(cancestry_conformance_hal_can_fd_fallback
+    test_can_fd_fallback.c)

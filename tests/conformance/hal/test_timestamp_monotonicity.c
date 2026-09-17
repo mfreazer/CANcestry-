@@ -135,18 +135,18 @@ int main(void)
     /* Poll. Expect:
      *   - 6 CAN_RX events with timestamps strictly increasing (1000..5000, then 6000)
      *   - 2 FAULT events for the two non-monotonic frames, delivered onto
-     *     the queue directly by the HAL (timestamp faults are raised during
-     *     frame delivery, not by the backend poll hook, so the out_fault_count
-     *     only counts backend-level faults; we verify by reading the queue).
+     *     the queue directly by the HAL during frame delivery.
+     *
+     * out_fault_count counts every fault event this call enqueued, whether it
+     * came from the backend poll hook or from the inline delivery checks
+     * (timestamp monotonicity here, protocol support since issue #20).
      */
     {
         uint32_t rx = 0u, flt = 0u;
         expect(cancestry_hal_status_is_ok(cancestry_hal_poll_rx(&hal, &queue, &rx, &flt)),
                "poll ok");
         expect(rx == 6u, "six CAN_RX delivered (5 initial + last good)");
-        /* flt only counts backend-reported faults; timestamp violations are
-         * raised inline during delivery and may not appear here. Count from
-         * the queue directly. */
+        expect(flt == 2u, "out_fault_count counts the two inline timestamp faults");
     }
 
     /* Verify the events on the queue: timestamps must be strictly increasing

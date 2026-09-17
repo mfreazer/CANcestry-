@@ -4,7 +4,7 @@
  * Zero heap allocation, strictly non-blocking, fully deterministic
  * (SYS-NF-001, SYS-NF-002).
  *
- * Implements: SW-FR-HAL-008, SW-FR-HAL-009
+ * Implements: SW-FR-HAL-008, SW-FR-HAL-009, SW-FR-CANFD-003
  */
 
 #include "mock_hal.h"
@@ -40,6 +40,31 @@ static void mock_hal_close(void *ctx, uint8_t iface_index)
     mock->ifaces[iface_index].opened = false;
 }
 
+/**
+ * Report the negotiated transport capability of one mock interface.
+ *
+ * The mock is a bus simulator: it delivers exactly what the test injected,
+ * including CAN FD frames on a classic-only interface. Rejecting those is
+ * the core HAL's job (hal.c), which is precisely why the fallback test can
+ * prove the contract against the same code path the real backend uses.
+ */
+static bool mock_hal_caps(void *ctx,
+                          uint8_t iface_index,
+                          cancestry_hal_transport_caps_t *out_caps)
+{
+    cancestry_mock_hal_t *mock = (cancestry_mock_hal_t *)ctx;
+
+    if (mock == NULL || out_caps == NULL ||
+        iface_index >= CANCESTRY_MOCK_HAL_MAX_INTERFACES) {
+        return false;
+    }
+    out_caps->can_fd = mock->ifaces[iface_index].fd_support;
+    out_caps->max_length = mock->ifaces[iface_index].fd_support
+                               ? CANCESTRY_HAL_FRAME_MAX_LENGTH
+                               : CANCESTRY_HAL_CLASSIC_FRAME_MAX_LENGTH;
+    return true;
+}
+
 static cancestry_hal_status_t mock_hal_poll(void *ctx,
                                               uint8_t iface_index,
                                               cancestry_hal_rx_ring_t *ring,
@@ -53,6 +78,10 @@ static cancestry_hal_status_t mock_hal_poll(void *ctx,
     }
     mif = &mock->ifaces[iface_index];
     mif->poll_call_count++;
+    if (mif->inject_count > 0u && mif->inject_slots[0].is_fd != 0u) {
+        /* Counted for the test's benefit only; the mock never drops. */
+        mif->fd_frames_injected++;
+    }
 
     /* Deliver scheduled fault, if any. */
     if (mif->next_poll_fault != CANCESTRY_HAL_FAULT_NONE) {
@@ -156,6 +185,7 @@ static const cancestry_hal_backend_t mock_backend = {
     mock_hal_close,
     mock_hal_poll,
     mock_hal_drain_tx,
+    mock_hal_caps,
 };
 
 const cancestry_hal_backend_t *cancestry_mock_hal_backend(void)
@@ -214,6 +244,24 @@ void cancestry_mock_hal_set_next_drain_fault(cancestry_mock_hal_t *mock,
     }
     mock->ifaces[iface_index].force_drain_fault = (fault != CANCESTRY_HAL_FAULT_NONE);
     mock->ifaces[iface_index].next_drain_fault = fault;
+}
+
+void cancestry_mock_hal_set_fd_support(cancestry_mock_hal_t *mock,
+                                        uint8_t iface_index,
+                                        bool can_fd)
+{
+    if (mock == NULL || iface_index >= CANCESTRY_MOCK_HAL_MAX_INTERFACES) {
+        return;
+    }
+    mock->ifaces[iface_index].fd_support = can_fd;
+}
+
+bool cancestry_mock_hal_fd_support(const cancestry_mock_hal_t *mock, uint8_t iface_index)
+{
+    if (mock == NULL || iface_index >= CANCESTRY_MOCK_HAL_MAX_INTERFACES) {
+        return false;
+    }
+    return mock->ifaces[iface_index].fd_support;
 }
 
 void cancestry_mock_hal_set_auto_timestamps(cancestry_mock_hal_t *mock,

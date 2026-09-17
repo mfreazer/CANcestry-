@@ -13,8 +13,19 @@
  * on a non-Linux host or in an unprivileged CI container) the binary prints
  * a SKIP message and exits 0 so the CTest wrapper can mark it skipped.
  *
- * Implements: SW-FR-HAL-003, SW-FR-HAL-004, SW-FR-HAL-005, SW-FR-HAL-010
- * Test id:    HAL-REAL-LOOP-001
+ * After the classic loop the example runs a CAN FD demonstration
+ * (issue #20, Phase 7): it asks the first interface for CAN FD, and either
+ *   - skips with a printed reason when the interface did not negotiate CAN FD
+ *     (a plain `vcan` without `fd on`), or
+ *   - round-trips a 64-byte CAN FD frame through HAL -> core/event -> codec
+ *     and transmits it with CANFD_MTU.
+ * The CAN FD path is also used to show the load-time capability gate: the
+ * same codec map is refused with ERR_UNSUPPORTED when the declared platform
+ * capabilities say "classic only".
+ *
+ * Implements: SW-FR-HAL-003, SW-FR-HAL-004, SW-FR-HAL-005, SW-FR-HAL-010,
+ *             SW-FR-CANFD-003, SW-FR-CANFD-004, SW-FR-CANFD-005
+ * Test ids:    HAL-REAL-LOOP-001, HAL-REAL-CANFD-001
  */
 
 #define _DEFAULT_SOURCE 1
@@ -62,6 +73,9 @@
 #define REAL_RECIPE_VARIABLES ((size_t)4u)
 #define REAL_DECODE_CAPACITY ((size_t)8u)
 #define REAL_MAX_TICKS ((uint32_t)100u)
+#define REAL_FD_PAYLOAD ((size_t)64u)
+#define REAL_FD_QUEUE_CAP ((uint16_t)16u)
+#define REAL_FD_RING_CAP ((uint16_t)8u)
 
 /* ------------------------------------------------------------------------- */
 /* Codec / FSM / Recipe definitions (same schema as the mock gateway)       */
@@ -89,6 +103,28 @@ static const char real_codec_yaml[] =
     "        - name: DisplaySpeed\n"
     "          start_bit: 0\n"
     "          bit_length: 16\n"
+    "          type: uint\n"
+    "          endianness: little\n";
+
+/*
+ * CAN FD codec map (issue #20). One 64-byte message with a signal in the last
+ * payload byte, so a successful decode proves the whole 64-byte path and not
+ * just the first 8 bytes.
+ */
+static const char real_fd_codec_yaml[] =
+    "schema_version: \"0.3.0\"\n"
+    "codec_map:\n"
+    "  name: real_gateway_fd\n"
+    "  version: 1.0.0\n"
+    "  can_fd: true\n"
+    "  messages:\n"
+    "    - id: 0x1F0\n"
+    "      name: RadarCluster\n"
+    "      dlc: 64\n"
+    "      signals:\n"
+    "        - name: RadarTail\n"
+    "          start_bit: 504\n"
+    "          bit_length: 8\n"
     "          type: uint\n"
     "          endianness: little\n";
 
@@ -504,13 +540,196 @@ static void drain_bus(void)
     }
 }
 
+
+/* ------------------- CAN FD demonstration (issue #20) -------------------- */
+
+typedef struct fd_demo {
+    cancestry_hal_t hal;
+    cancestry_platform_socketcan_t sc_ctx;
+    cancestry_clock_t clock;
+    cancestry_hal_frame_t rx_slots[REAL_FD_RING_CAP];
+    cancestry_hal_frame_t tx_slots[REAL_FD_RING_CAP];
+    cancestry_hal_rx_ring_t rx;
+    cancestry_hal_tx_ring_t tx;
+    cancestry_event_t queue_slots[REAL_FD_QUEUE_CAP];
+    cancestry_event_queue_t queue;
+} fd_demo_t;
+
+static fd_demo_t fd_world;
+
+/**
+ * Round-trip a 64-byte CAN FD frame through HAL -> core/event -> codec and
+ * transmit it with CANFD_MTU (HAL-REAL-CANFD-001).
+ *
+ * The demonstration skips, with a printed reason and a zero exit status, when
+ * the interface cannot provide CAN FD; that is the deterministic fallback
+ * contract, not an error (SW-FR-CANFD-003).
+ *
+ * @return 0 when the demonstration passed or was skipped, 1 on failure.
+ */
+static int fd_demo_run(const char *iface)
+{
+    cancestry_codec_platform_caps_t caps;
+    cancestry_codec_load_error_t cerr;
+    cancestry_codec_map_t *fd_map;
+    cancestry_hal_if_config_t ifaces[1];
+    cancestry_hal_rx_ring_t *rx_rings[1];
+    cancestry_hal_tx_ring_t *tx_rings[1];
+    cancestry_hal_config_t hc;
+    cancestry_hal_frame_t frame;
+    cancestry_decoded_signal_t decoded[1];
+    cancestry_codec_warnings_t warnings;
+    const cancestry_codec_signal_t *tail;
+    cancestry_value_t value;
+    size_t count = 0u;
+    size_t i;
+    uint32_t tick;
+    bool decoded_ok = false;
+    bool saw_fd_event = false;
+
+    printf("CAN FD demonstration on %s\n", iface);
+
+    /* 1. Load-time capability gate (SW-FR-CANFD-004): the very same document
+     *    is refused when the declared platform is classic-only. */
+    memset(&cerr, 0, sizeof(cerr));
+    caps.can_fd = false;
+    if (cancestry_codec_map_load_checked(real_fd_codec_yaml, sizeof(real_fd_codec_yaml) - 1u,
+                                         &caps, &cerr) != NULL) {
+        printf("RESULT FAIL (a can_fd map loaded against classic capabilities)\n");
+        return 1;
+    }
+    printf("  classic-caps load refused: %s\n", cancestry_codec_status_name(cerr.status));
+
+    /* 2. Open the interface, asking for CAN FD. */
+    cancestry_platform_socketcan_init(&fd_world.sc_ctx);
+    cancestry_hal_rx_ring_init(&fd_world.rx, fd_world.rx_slots, REAL_FD_RING_CAP);
+    cancestry_hal_tx_ring_init(&fd_world.tx, fd_world.tx_slots, REAL_FD_RING_CAP);
+    cancestry_event_queue_init(&fd_world.queue, fd_world.queue_slots, REAL_FD_QUEUE_CAP);
+    fd_world.clock = cancestry_clock_platform();
+    memset(ifaces, 0, sizeof(ifaces));
+    ifaces[0].interface_id = REAL_IFACE_CAN0;
+    ifaces[0].bitrate = 500000u;
+    ifaces[0].can_fd = 1u;
+    ifaces[0].data_bitrate = 2000000u;
+    copy_name(ifaces[0].name, iface);
+    rx_rings[0] = &fd_world.rx;
+    tx_rings[0] = &fd_world.tx;
+    memset(&hc, 0, sizeof(hc));
+    hc.backend = cancestry_platform_socketcan_backend();
+    hc.backend_context = &fd_world.sc_ctx;
+    hc.clock = &fd_world.clock;
+    hc.ifaces = ifaces;
+    hc.iface_count = 1u;
+    hc.rx_rings = rx_rings;
+    hc.tx_rings = tx_rings;
+    if (!cancestry_hal_init(&fd_world.hal, &hc)) {
+        printf("  CAN FD: SKIP (cannot open %s)\n", iface);
+        return 0;
+    }
+
+    /* 3. Deterministic fallback: no negotiation -> skip, never truncate. */
+    if (!cancestry_hal_iface_can_fd(&fd_world.hal, REAL_IFACE_CAN0)) {
+        printf("  CAN FD: SKIP (%s did not negotiate CAN_RAW_FD_FRAMES; enable it with\n"
+               "      ip link set %s type can bitrate 500000 dbitrate 2000000 fd on)\n",
+               iface, iface);
+        return 0;
+    }
+
+    memset(&cerr, 0, sizeof(cerr));
+    caps.can_fd = true;
+    fd_map = cancestry_codec_map_load_checked(real_fd_codec_yaml,
+                                              sizeof(real_fd_codec_yaml) - 1u, &caps, &cerr);
+    if (fd_map == NULL) {
+        printf("RESULT FAIL (FD codec map did not load: %s)\n", cerr.message);
+        return 1;
+    }
+    tail = cancestry_codec_map_find_signal(fd_map, "RadarTail");
+    if (tail == NULL) {
+        printf("RESULT FAIL (FD codec map has no RadarTail signal)\n");
+        cancestry_codec_map_free(fd_map);
+        return 1;
+    }
+
+    /* 4. Build a 64-byte FD frame with a signal in the last payload byte. */
+    memset(&frame, 0, sizeof(frame));
+    frame.interface_id = REAL_IFACE_CAN0;
+    frame.can_id = 0x1F0u;
+    frame.is_extended = 1u;
+    frame.is_fd = 1u;
+    frame.length = (uint8_t)REAL_FD_PAYLOAD;
+    for (i = 0u; i < REAL_FD_PAYLOAD; ++i) {
+        frame.data[i] = (uint8_t)(i & 0xFFu);
+    }
+    memset(&value, 0, sizeof(value));
+    value.kind = CANCESTRY_VALUE_KIND_UINT;
+    value.value.unsigned_integer = 0x5Au;
+    if (cancestry_codec_encode_signal(tail, &value, frame.data, (size_t)frame.length, NULL) <
+        CANCESTRY_CODEC_OK) {
+        printf("RESULT FAIL (could not encode into the 64-byte payload)\n");
+        cancestry_codec_map_free(fd_map);
+        return 1;
+    }
+
+    /* 5. RX path: HAL -> core/event -> codec decode of all 64 bytes. */
+    (void)cancestry_hal_rx_ring_push(&fd_world.rx, &frame);
+    for (tick = 0u; tick < REAL_MAX_TICKS && !decoded_ok; ++tick) {
+        cancestry_event_t ev;
+        (void)cancestry_hal_poll_rx(&fd_world.hal, &fd_world.queue, NULL, NULL);
+        while (cancestry_event_queue_pop(&fd_world.queue, &ev) == CANCESTRY_EVENT_QUEUE_OK) {
+            if (ev.type != CANCESTRY_EVENT_TYPE_CAN_RX) {
+                continue;
+            }
+            if (ev.payload.can_rx.is_fd != 0u && ev.payload.can_rx.length == REAL_FD_PAYLOAD) {
+                saw_fd_event = true;
+            }
+            memset(&warnings, 0, sizeof(warnings));
+            count = 0u;
+            if (cancestry_codec_decode_frame(fd_map, ev.payload.can_rx.can_id,
+                                             ev.payload.can_rx.data, ev.payload.can_rx.length,
+                                             decoded, 1u, &count, &warnings) ==
+                    CANCESTRY_CODEC_OK &&
+                count == 1u) {
+                decoded_ok = (decoded[0].raw == 0x5Au) && (warnings.frame_too_short == 0u);
+            }
+        }
+        if (!decoded_ok) {
+            usleep(1000);
+        }
+    }
+
+    /* 6. TX path: the same frame goes out with CANFD_MTU. */
+    if (!cancestry_hal_status_is_ok(cancestry_hal_send_tx(&fd_world.hal, &fd_world.queue,
+                                                          &frame))) {
+        printf("RESULT FAIL (the FD-capable interface refused an FD frame)\n");
+        cancestry_codec_map_free(fd_map);
+        return 1;
+    }
+    for (tick = 0u; tick < REAL_MAX_TICKS && cancestry_hal_tx_ring_count(&fd_world.tx) > 0u;
+         ++tick) {
+        (void)cancestry_hal_poll_rx(&fd_world.hal, &fd_world.queue, NULL, NULL);
+        usleep(1000);
+    }
+
+    printf("  fd_event=%s decoded=%s tx_sent=%u\n", saw_fd_event ? "yes" : "no",
+           decoded_ok ? "yes" : "no", fd_world.tx.sent);
+    cancestry_codec_map_free(fd_map);
+    if (!saw_fd_event || !decoded_ok) {
+        printf("RESULT FAIL (CAN FD round trip did not reproduce the payload)\n");
+        return 1;
+    }
+    printf("  CAN FD: PASS (64-byte payload through HAL, core/event and codec)\n");
+    return 0;
+}
+
 /* ------------------- main ------------------------------------------------ */
+
 
 int main(int argc, char **argv)
 {
     const char *iface0 = (argc > 1) ? argv[1] : "vcan0";
     const char *iface1 = (argc > 2) ? argv[2] : "vcan1";
     uint32_t tick;
+    int fd_result;
 
     printf("CANcestry real-gateway example (issue #17): %s -> %s\n", iface0, iface1);
 
@@ -550,10 +769,15 @@ int main(int argc, char **argv)
 
     printf("frames_seen=%u frames_tx=%u faults=%u\n",
            world.frames_seen, world.frames_tx, world.faults_seen);
-    if (world.frames_tx >= 1u) {
+
+    fd_result = fd_demo_run(iface0);
+
+    if (world.frames_tx >= 1u && fd_result == 0) {
         printf("RESULT PASS\n");
         return 0;
     }
-    printf("RESULT FAIL (no frames transmitted)\n");
+    if (world.frames_tx < 1u) {
+        printf("RESULT FAIL (no frames transmitted)\n");
+    }
     return 1;
 }

@@ -2,10 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://cancestry.dev/schemas/hal-0.1.0.schema.json",
   "title": "CANcestry HAL configuration (v0.1.0)",
-  "description": "Schema for the CANcestry Hardware Abstraction Layer configuration file (Phase 6, issue #17). Declares the set of physical CAN interfaces the gateway binds at startup, their bitrates, and optional listen-only mode. All strings must validate against this schema before being accepted by the runtime; configuration that fails validation is refused (fail-closed).",
+  "description": "Schema for the CANcestry Hardware Abstraction Layer configuration file (Phase 6, issue #17). Declares the set of physical CAN interfaces the gateway binds at startup, their bitrates, and optional listen-only mode. All strings must validate against this schema before being accepted by the runtime; configuration that fails validation is refused (fail-closed). Phase 7 (issue #20) adds the optional per-interface can_fd and data_bitrate fields; documents without them validate exactly as before.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "hal"],
+  "required": [
+    "schema_version",
+    "hal"
+  ],
   "properties": {
     "schema_version": {
       "const": "0.1.0"
@@ -13,7 +16,9 @@
     "hal": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["interfaces"],
+      "required": [
+        "interfaces"
+      ],
       "properties": {
         "interfaces": {
           "type": "array",
@@ -22,7 +27,11 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["name", "interface_id", "bitrate"],
+            "required": [
+              "name",
+              "interface_id",
+              "bitrate"
+            ],
             "properties": {
               "name": {
                 "type": "string",
@@ -47,6 +56,17 @@
                 "type": "boolean",
                 "default": false,
                 "description": "When true the interface is opened in listen-only mode; hal_send_tx returns ERR_NO_INTERFACE for this interface."
+              },
+              "can_fd": {
+                "type": "boolean",
+                "default": false,
+                "description": "When true the HAL asks the platform for CAN FD on this interface (CAN_RAW_FD_FRAMES on Linux). The request is best-effort: if the interface does not support CAN FD it stays classic-only and every CAN FD frame is rejected with a PROTOCOL_UNSUPPORTED fault instead of being truncated (SW-FR-CANFD-003/004). Additive, optional field introduced by Phase 7 (issue #20)."
+              },
+              "data_bitrate": {
+                "type": "integer",
+                "minimum": 100000,
+                "maximum": 8000000,
+                "description": "CAN FD data-phase bitrate in bits per second; only meaningful when can_fd is true. The value is declarative: the data bitrate is a property of the interface (set with `ip link set <if> type can dbitrate <n> fd on`), and the HAL uses a non-zero value to request bit-rate switching (CANFD_BRS) on transmitted FD frames."
               }
             }
           }

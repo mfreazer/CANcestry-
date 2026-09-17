@@ -3,10 +3,10 @@
 | Field | Value |
 |---|---|
 | Document | CANcestry Traceability Record |
-| Version | 0.3.0-rc.1 |
-| Status | Finalized for the v0.3.0 Release Candidate ([issue #13](https://github.com/mfreazer/CANcestry-/issues/13)) |
+| Version | 0.3.0-rc.1 + Phase 6/7 rows |
+| Status | Finalized for the v0.3.0 Release Candidate ([issue #13](https://github.com/mfreazer/CANcestry-/issues/13)); Phase 6 ([issue #17](https://github.com/mfreazer/CANcestry-/issues/17)) and Phase 7 ([issue #20](https://github.com/mfreazer/CANcestry-/issues/20)) rows added on the way to v0.4.0 |
 | Owner | QA |
-| Last Review | 2026-09-16 |
+| Last Review | 2026-09-17 |
 | Checked in CI | `cancestry_traceability_consistent` (`ci/check_traceability.py`) |
 
 This document accompanies [`traceability.csv`](traceability.csv). The CSV maps
@@ -30,7 +30,7 @@ requirement_id,artifact_id,verification_method,test_id,status
 | `status` | `passing` (executed and green in CI), `planned` (designed, not yet realized), or `failed`. |
 
 A requirement may appear in several rows; each row is one independent
-verification path (20 requirements have more than one). Requirement ids also
+verification path (26 requirements have more than one). Requirement ids also
 appear as `artifact_id`s where a system-level requirement is realized by a
 software requirement (for example `SYS-FR-003` realized by `SW-FR-CODEC-001`).
 
@@ -65,10 +65,10 @@ it end to end in the gateway integration harness ([issue
 
 ## 3. Coverage at v0.3.0-rc.1
 
-`docs/software/SwRS.md` and `docs/SyRS.md` define **149** requirement ids. Of
-those, **107 are traced in the CSV** and **42 are named in the deferred ledger**
-(section 5). Of the 107 traced requirements, 94 have at least one `passing` row
-and 13 have only `planned` rows; every one of those 13 is also listed in the
+`docs/software/SwRS.md` and `docs/SyRS.md` define **167** requirement ids. Of
+those, **125 are traced in the CSV** and **56 are named in the deferred ledger**
+(section 5). Of the 125 traced requirements, 111 have at least one `passing` row
+and 14 have only `planned` rows; every one of those 14 is also listed in the
 ledger.
 
 | Area | `passing` | `planned` | rows |
@@ -78,15 +78,17 @@ ledger.
 | `SW-FR-RECIPE` | 6 | 0 | 6 |
 | `SW-FR-FSM` (all 55 requirements) | 59 | 0 | 59 |
 | `SW-FR-GOV` (stub level, 005/006) | 5 | 0 | 5 |
+| `SW-FR-HAL` (Phase 6) | 11 | 1 | 12 |
+| `SW-FR-CANFD` (Phase 7) | 12 | 1 | 13 |
 | `SYS-FR` | 14 | 9 | 23 |
-| `SYS-NF` | 14 | 0 | 14 |
+| `SYS-NF` | 18 | 0 | 18 |
 | `SYS-IR` | 1 | 0 | 1 |
-| `SYS-SF` | 1 | 4 | 5 |
+| `SYS-SF` | 2 | 4 | 6 |
 | `SYS-SEC` | 0 | 2 | 2 |
 | `QA-*` review items | 8 | 7 | 15 |
-| **Total** | **124** | **22** | **146** |
+| **Total** | **152** | **24** | **176** |
 
-By method: 138 `test`, 5 `inspection`, 3 `demonstration`.
+By method: 162 `test`, 11 `inspection`, 3 `demonstration`.
 
 There are **no `failed` rows**: a failing row would mean a released claim is not
 met, and the release gate (section 6) refuses that state.
@@ -106,6 +108,22 @@ met, and the release gate (section 6) refuses that state.
 The executed evidence for these ids — commands, exit statuses, golden-output
 hash and the on-target procedure — is recorded in the
 [v0.3.0-rc.1 smoke test record](../qa/smoke-test-v0.3.0-rc.1.md).
+
+## 4.1 Phase 7 CAN FD test ids ([issue #20](https://github.com/mfreazer/CANcestry-/issues/20))
+
+| Test id | Executable / artifact | Proves |
+|---|---|---|
+| `CODEC-CANFD-BOUNDS-001` | `cancestry_conformance_codec_can_fd_payload_bounds` | 64-byte payloads encode/decode bit-exactly; an 8-byte classic buffer is never overrun (ASan); only wire-representable lengths are accepted |
+| `CODEC-CANFD-SCHEMA-001` | `cancestry_conformance_codec_can_fd_schema` | `can_fd: true` is refused at load time on a classic platform; classic maps keep the v0.2.0 `dlc`/`start_bit` limits; the FD `dlc` vocabulary is exactly the CAN FD one |
+| `HAL-CANFD-FALLBACK-001` | `cancestry_conformance_hal_can_fd_fallback` | A CAN FD frame on a classic-only interface raises `PROTOCOL_UNSUPPORTED`, is dropped and counted, and is ordered ahead of that poll's `CAN_RX` events; an FD-capable interface delivers all 64 bytes |
+| `FSM-CANFD-EGRESS-001` | `cancestry_conformance_fsm_can_fd_egress` | The declarative FSM send path refuses an FD message (action error) instead of truncating it, while classic sends on the same map still work |
+| `RECIPE-CANFD-EGRESS-001` | `cancestry_test_recipe_engine` | The same refusal on the recipe engine's send path |
+| `HAL-REAL-CANFD-001` | `examples/gateway_real` | SocketCAN `CAN_RAW_FD_FRAMES` negotiation, `CANFD_MTU` ingress/egress and the 64-byte round trip on a real interface (`planned`: needs `vcan` with `fd on`, unavailable in the CI sandbox - the example prints a SKIP and exits 0) |
+
+The zero-allocation half of `SW-FR-CANFD-005` reuses the existing archive scans
+(`cancestry_hal_no_malloc_symbols`, `cancestry_platform_linux_no_malloc_symbols`,
+`cancestry_event_no_malloc_symbols`), which now cover the 64-byte frame and
+`CANFD_MTU` wire buffers.
 
 ## 5. Deferred ledger: requirements with no verified artifact yet
 
@@ -131,7 +149,7 @@ requirement can only be "not verified" on purpose.
 ## 6. Reproduce and audit
 
 ```sh
-# Build the portable core and run every registered test (31 tests).
+# Build the portable core and run every registered test (44 tests at Phase 7).
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
@@ -171,6 +189,7 @@ the [smoke test record](../qa/smoke-test-v0.3.0-rc.1.md).
 
 | Version | Date | Change |
 |---|---|---|
+| 0.4.0-wip | 2026-09-17 | Phase 7 (issue #20): CAN FD requirement rows `SW-FR-CANFD-001..006`, the Phase 7 test-id table in section 4.1, and coverage numbers refreshed to the post-Phase-6/7 state (167 defined, 125 traced, 176 rows). |
 | 0.3.0-rc.1 | 2026-09-16 | Phase 5: gateway integration ids (`GATEWAY-*`), FSM schema finalization, coverage numbers, the deferred ledger in section 5, test-id resolution labels in the artifacts, and the CI gate. |
 | 0.3.0 | 2026-09-16 | Phase 4/5 scope: FSM runtime rows (`SW-FR-FSM-001..055`) and the conformance suites. |
 | 0.2.0 | 2026-09-13 | Skeleton record: event, codec and recipe rows, QA review items from the v0.2.0 acceptance review. |

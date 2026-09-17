@@ -191,3 +191,14 @@ The software includes:
 | SW-FR-HAL-010 | A Linux SocketCAN backend shall be provided using non-blocking recvmsg/sendmsg with SO_TIMESTAMPNS. | High |
 | SW-FR-HAL-011 | The HAL shall provide a non-blocking get_status call returning per-interface counters, state, last fault, and last RX timestamp. | Medium |
 | SW-FR-HAL-012 | HAL configuration (interface names, bitrates, listen-only) shall be validated against schemas/hal-0.1.0.schema.json before the runtime opens any interface. | High |
+
+## 12. CAN FD Requirements (Phase 7, issue #20)
+
+| ID | Requirement | Priority |
+|---|---|---|
+| SW-FR-CANFD-001 | The codec engine shall encode and decode payloads of up to 64 bytes. A codec map that declares `can_fd: true` shall be allowed to declare the CAN FD payload lengths (0-8, 12, 16, 20, 24, 32, 48, 64) as `dlc` and to address payload bits 0..511; a map without the flag shall keep the classic limits (`dlc` 0..8, payload bits 0..63) unchanged. | High |
+| SW-FR-CANFD-002 | The runtime shall define exactly one normative test for a representable CAN payload length - classic 0..8 bytes, CAN FD 0-8, 12, 16, 20, 24, 32, 48 and 64 bytes - and the codec, the HAL and the platform backends shall all use it, rejecting any other length as a malformed frame instead of truncating it. | High |
+| SW-FR-CANFD-003 | The HAL shall deliver or transmit a CAN FD frame only on an interface that negotiated CAN FD. On an interface without CAN FD the frame shall be dropped, counted in the interface status, and reported by a `PROTOCOL_UNSUPPORTED` `FAULT_RAISED` event raised through the same deterministic path and priority class as every other HAL fault. Truncating a CAN FD frame to 8 bytes is prohibited on both ingress and egress. | High |
+| SW-FR-CANFD-004 | CAN FD capability shall be negotiated once at interface open and reported by the platform backend. The Linux SocketCAN backend shall request `CAN_RAW_FD_FRAMES`, handle `CANFD_MTU` messages on ingress and egress, and continue as a classic-only interface without failing the open when the interface refuses CAN FD. The codec loader shall refuse a `can_fd: true` map at load time, with a distinct status, when the declared platform capabilities do not include CAN FD. | High |
+| SW-FR-CANFD-005 | CAN FD support shall not allocate heap memory in the runtime path and shall not degrade classic CAN handling: the 64-byte payload buffer shall be statically sized inside the caller-owned frame struct, platform wire buffers shall be fixed-size (`CAN_MTU`/`CANFD_MTU`), and a classic frame shall copy only its declared length. | High |
+| SW-FR-CANFD-006 | The declarative egress path (recipe and FSM `send_message`) shall refuse a message whose declared `dlc` exceeds the classic 8-byte payload instead of truncating it, and shall record the refusal as an action error. CAN FD transmit is performed through the HAL. | High |

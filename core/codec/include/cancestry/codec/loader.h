@@ -49,6 +49,18 @@ typedef struct cancestry_codec_load_error {
 } cancestry_codec_load_error_t;
 
 /**
+ * Transport capabilities of the target platform, supplied at load time.
+ *
+ * The loader is the last point at which a codec map can be refused cheaply,
+ * so capability mismatches are caught there instead of at runtime
+ * (SW-FR-CANFD-004, "schema is law").
+ */
+typedef struct cancestry_codec_platform_caps {
+    /** True when at least one interface the map will be used on speaks CAN FD. */
+    bool can_fd;
+} cancestry_codec_platform_caps_t;
+
+/**
  * Parse and validate a codec map YAML document and build the runtime
  * representation.
  *
@@ -61,6 +73,10 @@ typedef struct cancestry_codec_load_error {
  * cancestry_codec_map_free(). The input text is not referenced after this
  * call returns.
  *
+ * A document that declares `can_fd: true` is refused by this entry point
+ * with CANCESTRY_CODEC_ERR_UNSUPPORTED; use
+ * cancestry_codec_map_load_checked() when the target supports CAN FD.
+ *
  * @param text    NUL-free YAML document bytes.
  * @param length  Number of bytes in @p text.
  * @param error   Receives a failure report, or NULL.
@@ -70,6 +86,27 @@ typedef struct cancestry_codec_load_error {
 cancestry_codec_map_t *cancestry_codec_map_load(const char *text,
                                                 size_t length,
                                                 cancestry_codec_load_error_t *error);
+
+/**
+ * Load a codec map against known target-platform capabilities.
+ *
+ * Identical to cancestry_codec_map_load() except that a map declaring
+ * `can_fd: true` is accepted when @p caps->can_fd is true and refused with
+ * CANCESTRY_CODEC_ERR_UNSUPPORTED when it is not (SW-FR-CANFD-004). A NULL
+ * @p caps is treated as "capabilities unknown", i.e. classic-only, so the
+ * check always fails closed.
+ *
+ * @param text    NUL-free YAML document bytes.
+ * @param length  Number of bytes in @p text.
+ * @param caps    Target capabilities, or NULL for classic-only.
+ * @param error   Receives a failure report, or NULL.
+ * @return The loaded map, or NULL on any error.
+ */
+cancestry_codec_map_t *cancestry_codec_map_load_checked(
+    const char *text,
+    size_t length,
+    const cancestry_codec_platform_caps_t *caps,
+    cancestry_codec_load_error_t *error);
 
 /** Release a map returned by cancestry_codec_map_load(). NULL is a no-op. */
 void cancestry_codec_map_free(cancestry_codec_map_t *map);

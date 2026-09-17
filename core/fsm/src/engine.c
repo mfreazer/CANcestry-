@@ -1063,6 +1063,14 @@ static cancestry_fsm_status_t fsm_action_send_message(fsm_activation_t *act,
     if (status != CANCESTRY_FSM_OK) {
         return status;
     }
+    /*
+     * SW-FR-CANFD-006: this path builds classic 8-byte frames, so a message
+     * from a CAN FD codec map is refused rather than truncated (fail closed).
+     * FD transmit goes through the HAL (cancestry_hal_send_tx with is_fd set).
+     */
+    if ((size_t)message->dlc > (size_t)CANCESTRY_CAN_FRAME_MAX_LENGTH) {
+        return CANCESTRY_FSM_ERR_UNSUPPORTED;
+    }
     /* SW-FR-FSM-040: an id the package did not declare is never transmitted. */
     if (!fsm_in_id_list(capability->tx_ids, capability->tx_id_count, message->id)) {
         instance->counters.capability_denials++;

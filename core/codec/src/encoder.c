@@ -348,7 +348,7 @@ cancestry_codec_status_t cancestry_codec_encode_signal(const cancestry_codec_sig
     if (signal == NULL || value == NULL || frame == NULL) {
         return CANCESTRY_CODEC_ERR_NULL;
     }
-    if (frame_length == 0u || frame_length > CANCESTRY_CAN_FRAME_MAX_LENGTH) {
+    if (!codec_frame_length_ok(frame_length)) {
         return CANCESTRY_CODEC_ERR_ARGUMENT;
     }
     if (signal->layout == CANCESTRY_CODEC_LAYOUT_SAWTOOTH) {
