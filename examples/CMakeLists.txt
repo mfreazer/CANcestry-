@@ -4,3 +4,8 @@
 # the PR pipeline exercises the full integration paths they demonstrate.
 
 add_subdirectory(gateway)
+
+# The real SocketCAN gateway is Linux-only (issue #17, Phase 6).
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_CROSSCOMPILING)
+    add_subdirectory(gateway_real)
+endif()

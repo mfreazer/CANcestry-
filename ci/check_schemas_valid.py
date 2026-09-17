@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
+# Verify that every CANcestry JSON Schema is well-formed and self-consistent.
+# Test ids: SCHEMA-VALIDATION, PKG-VALIDATE-001, HAL-SCHEMA-001.
+# Reference: SW-FR-FSM-003, SW-FR-HAL-012, agents.md "Schema is law".
 """Verify that every CANcestry JSON Schema is well-formed and self-consistent.
 
 The schemas in ``schemas/`` are the source of truth the loaders enforce in C
-(SW-FR-FSM-003, SW-FR-CODEC, agents.md "Schema is law"). Issue #13 requires
+(SW-FR-FSM-003, agents.md "Schema is law"). Issue #13 requires
 ``schemas/fsm-0.3.0.schema.json`` to exist and be valid. This check guards the
 whole directory: every file must parse as JSON, declare the 2020-12 dialect,
 and carry an ``$id`` whose embedded version matches the file name.

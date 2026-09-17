@@ -126,6 +126,7 @@ requirement can only be "not verified" on purpose.
 | `SYS-FR-015`, `SYS-FR-016`, `SYS-SF-004` | Mode and fault state machine (SAFE mode) | Boot-into-safe-state, the complete fault-class table and SAFE-mode transitions. The fail-closed half of `SYS-FR-016` is demonstrated today (`GATEWAY-FAILCLOSED-001`); bus-off recovery and storage failure are not. |
 | `SW-FR-RECIPE-004` | Recipe engine (timeout watches) | The stub engine has no runtime clock, so a timeout trigger refuses to match (fail closed); documented in [`core/recipe/README.md`](../../core/recipe/README.md). |
 | `SYS-FR-007`, `SYS-SF-008`, `SYS-NF-003` | Emulation profile tests, static analysis, performance tooling | The v0.3.0 profile test for `SYS-FR-007`, the "no user code execution" inspection for `SYS-SF-008`, and event-to-action latency measurement for `SYS-NF-003` need later-phase tooling. |
+| `SW-FR-HAL-010` | Phase 6 hardware integration | The Linux SocketCAN backend is compiled and linked, but verification against a live `vcan0`/`vcan1` pair requires elevated privileges and kernel modules not present in the CI sandbox; the conformance suite covers behaviour against the mock HAL, and the source is reviewable. See `examples/gateway_real/README.md`. |
 
 ## 6. Reproduce and audit
 
