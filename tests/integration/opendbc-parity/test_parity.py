@@ -10,6 +10,10 @@ Requirements traced:
     SYS-FR-018  third-party extensibility via imported DBCs
     SYS-NF-008  testability via an independent reference parser
     QA-H02      bit-level semantics correctness validated against opendbc
+
+Test ids (docs/trace/traceability.csv):
+    PARITY-DECODE-001   SYS-NF-008
+    PARITY-BITPACK-001  QA-H02
 """
 
 from __future__ import annotations

@@ -37,17 +37,26 @@ if(CANCESTRY_PYTHON AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME cancestry_schemas_valid
         COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_schemas_valid.py"
                 "${CMAKE_CURRENT_SOURCE_DIR}/../schemas")
+    # Traceability completeness (Test strategy.md section 10): the CSV resolves,
+    # no requirement is silently absent, and the deferred ledger is explicit.
+    add_test(NAME cancestry_traceability_consistent
+        COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_traceability.py"
+                "${CMAKE_CURRENT_SOURCE_DIR}/..")
+    # Realizes the archive-scan half of EVENT-NO-ALLOC-001 (SYS-NF-002).
     add_test(NAME cancestry_event_no_malloc_symbols
         COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_no_alloc.py"
                 $<TARGET_FILE:cancestry_event>)
+    # Realizes CODEC-NO-ALLOC-001 (SYS-NF-002).
     add_test(NAME cancestry_codec_no_malloc_symbols
         COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_no_alloc.py"
                 $<TARGET_FILE:cancestry_codec>)
+    # Realizes RECIPE-NO-ALLOC-001 (SYS-NF-002).
     add_test(NAME cancestry_recipe_no_malloc_symbols
         COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_no_alloc.py"
                 $<TARGET_FILE:cancestry_recipe>)
     # The FSM runtime path must not allocate either (issue #11 constraint:
     # cancestry_fsm_engine_process_event and cancestry_fsm_engine_tick may not).
+    # Realizes the archive-scan half of FSM-NO-ALLOC-001 (SYS-NF-002).
     add_test(NAME cancestry_fsm_no_malloc_symbols
         COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_no_alloc.py"
                 $<TARGET_FILE:cancestry_fsm>)

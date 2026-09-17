@@ -17,6 +17,14 @@
  *                        a denial is recorded, never silently dropped
  *   SW-FR-FSM-046        deterministic FSM behavior
  *
+ * Test ids (docs/trace/traceability.csv):
+ *   GATEWAY-LOOP-001         SYS-FR-003/004/005/006, SW-FR-EVENT-004/006
+ *   GATEWAY-DETERMINISM-001  SYS-NF-001, SYS-FR-014, SW-FR-FSM-046
+ *   GATEWAY-NO-ALLOC-001     SYS-NF-002
+ *   GATEWAY-FAILCLOSED-001   SW-FR-FSM-024, SW-FR-GOV-005/006, SYS-SF-002
+ *   GATEWAY-COUNTERS-001     SYS-NF-005
+ *   GATEWAY-TRACE-001        SW-FR-FSM-053, SYS-FR-019
+ *
  * The harness runs the full mock cycle named by issue #13:
  *
  *   raw CAN frame ingress -> core/codec decode -> core/event queue ->

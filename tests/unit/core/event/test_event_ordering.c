@@ -11,6 +11,10 @@
  *   1. timestamp_us ascending
  *   2. priority_class ascending
  *   3. sequence ascending
+ *
+ * Test ids (docs/trace/traceability.csv):
+ *   EVENT-ORDERING-001  SW-FR-EVENT-006
+ *   EVENT-ORDERING-002  SYS-NF-001
  */
 
 #include "cancestry/event/queue.h"

@@ -5,6 +5,10 @@ documented skip rules (multiplexed signals) plus the v0.3.0 sawtooth support
 for multi-byte Motorola signals.
 
 Requirements traced: SYS-FR-018, QA-v0.2-R01 (and QA-H02 via test_parity.py).
+
+Test ids (docs/trace/traceability.csv):
+    DBC-IMPORT-001    SYS-FR-018
+    DBC-VALIDATE-001  QA-v0.2-R01
 """
 
 from __future__ import annotations

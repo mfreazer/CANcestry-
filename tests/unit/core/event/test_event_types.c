@@ -9,6 +9,10 @@
  *   SYS-NF-002       Bounded resource usage (fixed-size event value type).
  *
  * Normative source: docs/system/event-ordering.md sections 1, 3, 4.
+ *
+ * Test ids (docs/trace/traceability.csv):
+ *   EVENT-TYPES-001  SW-FR-EVENT-001
+ *   EVENT-TYPES-002  SW-FR-EVENT-003
  */
 
 #include "cancestry/event/types.h"
