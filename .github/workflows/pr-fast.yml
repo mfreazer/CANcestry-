@@ -42,9 +42,8 @@ jobs:
           ctest --test-dir build --output-on-failure 2>&1 | tee /tmp/ctest-output.log
           status=$?
           if [ $status -ne 0 ]; then
-            awk '/The following tests FAILED:/{flag=1;next}/Errors while running/{flag=0}flag' \
-              /tmp/ctest-output.log | sed 's/^[[:space:]]*//' | grep -v '^$' | head -12 \
-              | while IFS= read -r line; do echo "::error::$line"; done
+            grep -E '\(Failed\)|\*\*\*Failed|Failed tests:|tests failed' /tmp/ctest-output.log \
+              | head -14 | while IFS= read -r line; do echo "::error::$line"; done
           fi
           exit $status
 
@@ -74,9 +73,10 @@ jobs:
             --cov-fail-under=100 2>&1 | tee /tmp/pytest-output.log
           status=$?
           if [ $status -ne 0 ]; then
-            echo "::error::python $(python3 --version 2>&1) pytest $(python3 -m pytest --version 2>&1 | head -1)"
-            grep -E "^FAILED |^ERROR " /tmp/pytest-output.log | head -10 \
+            echo "::error::python $(python3 --version 2>&1)"
+            grep -E "^FAILED |^ERROR |coverage|Coverage" /tmp/pytest-output.log | head -10 \
               | while IFS= read -r line; do echo "::error::$line"; done
+            tail -6 /tmp/pytest-output.log | while IFS= read -r line; do echo "::error::TAIL $line"; done
           fi
           exit $status
 
