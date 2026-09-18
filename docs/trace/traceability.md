@@ -63,10 +63,10 @@ it end to end in the gateway integration harness ([issue
 | System integration | `SYS-FR-003..006, 009..010, 014, 019`; `SYS-SF-002` | `examples/gateway/` (`GATEWAY-*` tests) |
 | FSM schema finalization | `SW-FR-FSM-001..003` | `schemas/fsm-0.3.0.schema.json`, `FSM-LOAD-*` |
 
-## 3. Coverage at Phase 10 ([issue #26](https://github.com/mfreazer/CANcestry-/issues/26))
+## 3. Coverage at Phase 11 ([issue #28](https://github.com/mfreazer/CANcestry-/issues/28))
 
-`docs/software/SwRS.md` and `docs/SyRS.md` define **195** requirement ids. Of
-those, **153 have at least one `passing` row in the CSV** and **56 are named in
+`docs/software/SwRS.md` and `docs/SyRS.md` define **203** requirement ids. Of
+those, **161 have at least one `passing` row in the CSV** and **56 are named in
 the deferred ledger** (section 5); 24 rows remain `planned`, every one of them
 for a requirement that is also listed in the ledger.
 
@@ -82,15 +82,16 @@ for a requirement that is also listed in the ledger.
 | `SW-FR-TOOL` (Phases 5-7) | 24 | 0 | 24 |
 | `SW-FR-TP` (Phase 10) | 22 | 0 | 22 |
 | `SW-FR-UDS` (Phase 10) | 17 | 0 | 17 |
+| `SW-FR-BM` (Phase 11) | 15 | 0 | 15 |
 | `SYS-FR` | 14 | 9 | 23 |
 | `SYS-NF` | 18 | 0 | 18 |
 | `SYS-IR` | 1 | 0 | 1 |
 | `SYS-SF` | 2 | 4 | 6 |
 | `SYS-SEC` | 0 | 2 | 2 |
 | `QA-*` review items | 8 | 7 | 15 |
-| **Total** | **215** | **24** | **239** |
+| **Total** | **230** | **24** | **254** |
 
-By method: 225 `test`, 11 `inspection`, 3 `demonstration`.
+By method: 240 `test`, 11 `inspection`, 3 `demonstration`.
 
 There are **no `failed` rows**: a failing row would mean a released claim is not
 met, and the release gate (section 6) refuses that state.
@@ -188,6 +189,26 @@ timeout is a deterministic tick count.
 | `cancestry_transport_no_malloc_symbols` | `ci/check_no_alloc.py` over `libcancestry_transport.a` | The transport runtime path contains no heap allocation symbol |
 | `cancestry_uds_no_malloc_symbols` | `ci/check_no_alloc.py` over `libcancestry_uds.a` | The UDS runtime path contains no heap allocation symbol (the loader is a separate, load-time-only library) |
 
+## 4.4 Phase 11 Bare-Metal & Hard Real-Time HAL test ids ([issue #28](https://github.com/mfreazer/CANcestry-/issues/28))
+
+The Phase 11 bare-metal conformance suite runs against the Cortex-M HAL and watchdog
+implementations, verifying hard real-time latency bounds (< 50µs), bounded ISR execution,
+independent watchdog (IWDG) timeout reset, safe-state GPIO/transceiver recovery, and
+linker-level zero-allocation enforcement.
+
+| Test id | Executable / artifact | Proves |
+|---|---|---|
+| `BM-LAT-001` | `cancestry_conformance_bm_latency` | Sub-50µs single-frame latency from hardware CAN RX interrupt arrival to FSM event processing |
+| `BM-LAT-002` | `cancestry_conformance_bm_latency` | Sustained sub-50µs latency per frame during 20-frame bursts with zero dropped frames |
+| `BM-LAT-003` | `cancestry_conformance_bm_latency` | Hardware cycle-counter timestamp monotonicity and seamless 32-bit rollover handling without time glitches |
+| `BM-LAT-004` | `cancestry_conformance_bm_latency` | Bounded O(1) ISR execution time with non-blocking fail-closed overflow handling |
+| `BM-SAFE-001` | `cancestry_conformance_bm_watchdog` | Regular watchdog feeding during main loop ticks keeps the system alive and operational |
+| `BM-SAFE-002` | `cancestry_conformance_bm_watchdog` | Artificially hanging the main loop triggers an IWDG reset and immediate fail-safe state |
+| `BM-SAFE-003` | `cancestry_conformance_bm_watchdog` | Safe-state CAN transmission (0 Torque / Contactor Open) emitted upon reset recovery |
+| `BM-SAFE-004` | `cancestry_conformance_bm_watchdog` | FSM explicit authorization gate prevents unauthorized CAN transmission after reset |
+| `BM-ALLOC-001` | `cancestry_conformance_bm_zero_alloc` | Linker script `cancestry_baremetal.ld` strips allocator functions and rejects dynamic allocation calls with undefined reference errors |
+| `cancestry_platform_cortex_m_no_malloc_symbols` | `ci/check_no_alloc.py` over `libcancestry_platform_cortex_m.a` | Bare-metal Cortex-M platform archive contains zero heap allocation symbols |
+
 ## 5. Deferred ledger: requirements with no verified artifact yet
 
 Every requirement below is either absent from the CSV or present only with
@@ -252,6 +273,7 @@ the [smoke test record](../qa/smoke-test-v0.3.0-rc.1.md).
 
 | Version | Date | Change |
 |---|---|---|
+| 0.8.0-wip | 2026-09-18 | Phase 11 (issue #28): Bare-metal ARM Cortex-M port and hard real-time HAL. Added `SW-FR-BM-001..008`, the Phase 11 test-id table in section 4.4, and coverage numbers refreshed to Phase 11 state (203 defined, 161 traced, 254 rows). |
 | 0.7.0-wip | 2026-09-18 | Phase 10 (issue #26): ISO-TP transport rows `SW-FR-TP-001..010` and UDS rows `SW-FR-UDS-001..008`, the Phase 10 test-id table in section 4.3, and coverage numbers refreshed to the Phase 10 state (195 defined, 153 traced, 239 rows). |
 | 0.6.0-wip | 2026-09-18 | Phase 9 (issue #24): formal-verification artifact ids, ACSL/WP contracts, KLEE harnesses, MISRA driver and safety-manual evidence map. |
 | 0.4.0-wip | 2026-09-17 | Phase 7 (issue #20): CAN FD requirement rows `SW-FR-CANFD-001..006`, the Phase 7 test-id table in section 4.1, and coverage numbers refreshed to the post-Phase-6/7 state (167 defined, 125 traced, 176 rows). |

@@ -30,6 +30,8 @@ add_subdirectory(conformance/codec)
 # Diagnostic transport and UDS conformance (issue #26, Phase 10).
 add_subdirectory(conformance/transport)
 add_subdirectory(conformance/uds)
+# Bare-metal and hard real-time conformance (issue #28, Phase 11).
+add_subdirectory(conformance/baremetal)
 
 # The runtime cores must not allocate. This is verified on the built archives,
 # which is a stronger and more portable check than intercepting malloc at
@@ -84,6 +86,11 @@ if(CANCESTRY_PYTHON AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME cancestry_uds_no_malloc_symbols
         COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_no_alloc.py"
                 $<TARGET_FILE:cancestry_uds>)
+    # The bare-metal Cortex-M platform must be zero-alloc (issue #28 constraint,
+    # SW-FR-BM-001, SYS-NF-002).
+    add_test(NAME cancestry_platform_cortex_m_no_malloc_symbols
+        COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_no_alloc.py"
+                $<TARGET_FILE:cancestry_platform_cortex_m>)
 endif()
 
 # The Linux SocketCAN backend is only built on Linux; check it there.

@@ -148,7 +148,7 @@ def test_main_passes_on_the_repository_schemas(capsys):
     assert ci_check_schemas.main(["check_schemas_valid.py",
                                   str(SCHEMA_DIR)]) == 0
     out = capsys.readouterr().out
-    assert out.count("PASS:") == 7 and "all schemas are valid" in out
+    assert out.count("PASS:") == 8 and "all schemas are valid" in out
 
 
 def test_main_reports_every_problem(tmp_path, capsys):

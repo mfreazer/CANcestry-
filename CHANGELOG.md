@@ -5,7 +5,52 @@ Keep a Changelog style; requirement IDs refer to `docs/software/SwRS.md` and
 `docs/SyRS.md`, and the requirement-to-artifact mapping lives in
 `docs/trace/traceability.csv`.
 
-## [Unreleased] - Phase 10: UDS & ISO-TP Transport ([issue #26](https://github.com/mfreazer/CANcestry-/issues/26))
+## [Unreleased] - Phase 11: Bare-Metal Port & Hard Real-Time HAL ([issue #28](https://github.com/mfreazer/CANcestry-/issues/28))
+
+Phase 11 ports the Hardware Abstraction Layer to a bare-metal ARM Cortex-M
+target (e.g., STM32G4 / NXP S32K), replacing the OS-dependent SocketCAN
+implementation with direct register-level hardware peripheral drivers
+(FDCAN/bxCAN) and hardware-enforced safety mechanisms. New requirements:
+`SW-FR-BM-001..008` (`docs/software/SwRS.md` section 15), all traced in
+`docs/trace/traceability.csv`.
+
+### Added
+
+- **Bare-Metal HAL** (`platform/cortex_m/hal_stm32.c`, `hal_stm32.h`, SW-FR-BM-002..004, SW-FR-BM-007):
+  register-level driver for STM32 FDCAN/bxCAN hardware FIFOs; strictly
+  non-blocking interrupt-driven RX with hardware timestamp capture (DWT
+  CYCCNT with 64-bit cycle accumulation guaranteeing monotonicity across
+  32-bit counter rollovers); thin ISR contract performing only FIFO drain,
+  timestamping, and lock-free queue push, leaving all decoding and FSM logic
+  to the main loop.
+- **Hardware Watchdog Integration** (`platform/cortex_m/watchdog.c`, `watchdog.h`, SW-FR-BM-005, SW-FR-BM-006):
+  Independent Watchdog (IWDG) integration serviced at each `fsm_tick`;
+  watchdog timeout triggers hardware MCU reset; upon reset/boot, hardware
+  GPIO and CAN transceiver pins are immediately initialized into a safe
+  "0 Torque / Contactor Open" state until the FSM explicitly authorizes
+  transmission. Constructs and emits a safe-state CAN broadcast (`0x100`)
+  upon reset recovery.
+- **Linker-Level Zero-Alloc Enforcement** (`platform/cortex_m/cancestry_baremetal.ld`, `alloc_stubs.c`, SW-FR-BM-001, SW-FR-BM-008):
+  custom GNU ld linker script placing core data structures into dedicated
+  RAM sections (`.cancestry_core`, `.cancestry_rings`, `.cancestry_ram`),
+  stripping all heap allocation functions (`malloc`, `free`, `realloc`,
+  `calloc`, `_sbrk`, `sbrk`) in `/DISCARD/`, and enforcing rejection with
+  undefined reference errors and tripwire stubs.
+- **Lock-Free ISR Event Queue** (`core/event/include/cancestry/event/isr_queue.h`, `core/event/src/isr_queue.c`, SW-FR-BM-003):
+  bounded lock-free single-producer single-consumer (SPSC) ring buffer
+  providing O(1) bounded-time event hand-off from interrupt context to the
+  main loop min-heap event queue.
+- **Bare-Metal Conformance Suite** (`tests/conformance/baremetal/`, SW-FR-BM-001..007):
+  `test_baremetal_latency.c` (`BM-LAT-001..004`) proving sub-50µs latency
+  from CAN RX interrupt to FSM event processing and timestamp monotonicity;
+  `test_watchdog_fail_safe.c` (`BM-SAFE-001..004`) proving IWDG reset and
+  safe-state recovery; `test_baremetal_zero_alloc.c` (`BM-ALLOC-001`) proving
+  linker rejection of dynamic memory allocation; and archive gate
+  `cancestry_platform_cortex_m_no_malloc_symbols`.
+- **Documentation** (`platform/cortex_m/README.md`): architecture diagram,
+  hardware registers, watchdog timing, safe state, and compilation commands.
+
+## Phase 10: UDS & ISO-TP Transport ([issue #26](https://github.com/mfreazer/CANcestry-/issues/26))
 
 Phase 10 adds the diagnostic stack below the gateway: a zero-allocation,
 deterministic ISO 15765-2 (ISO-TP) transport engine over classic CAN, and a
