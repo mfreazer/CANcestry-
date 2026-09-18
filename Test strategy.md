@@ -168,6 +168,25 @@ Jobs:
 
 No hardware required.
 
+### 8.1.1 Phase 9 formal verification (issue #24)
+
+The ASIL-B alignment evidence is run in a verification environment with pinned
+Frama-C/WP, KLEE and cppcheck/MISRA tool versions. These tools are deliberately
+not linked into the firmware build:
+
+1. `formal/frama-c/verify_wp.sh` runs WP with runtime-error checks over the
+   queue, codec encode/decode and bounded bit helpers.
+2. `formal/klee/run.sh` runs symbolic expression and event-order harnesses,
+   including adversarial timestamps and arithmetic fault paths.
+3. `formal/misra/run_cppcheck.sh` runs the MISRA C:2012 addon over `core/` and
+   `platform/`; deviations are recorded in `docs/safety/MISRA_Deviations.md`.
+4. `docs/safety/SafetyManual.md` records the assumptions, fail-closed/fault
+   saturation behavior and release evidence required by the safety review.
+
+A missing formal tool is an environment failure, not a skipped passing test.
+Formal reports are retained as CI/release evidence and are not committed as
+compiler-dependent generated output.
+
 ### 8.2 Main / Nightly Workflow — `main-sim.yml`
 
 Runs on merge to `main` and nightly.

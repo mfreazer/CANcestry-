@@ -5,6 +5,29 @@ Keep a Changelog style; requirement IDs refer to `docs/software/SwRS.md` and
 `docs/SyRS.md`, and the requirement-to-artifact mapping lives in
 `docs/trace/traceability.csv`.
 
+## [Unreleased] - Phase 9: Formal Verification & ASIL-B Alignment ([issue #24](https://github.com/mfreazer/CANcestry-/issues/24))
+
+Phase 9 adds non-intrusive ACSL contracts for the event queue and codec bit
+paths, KLEE harnesses for bounded expression evaluation and adversarial event
+ordering, a strict cppcheck/MISRA C:2012 driver, and the initial software
+Safety Manual and deviation record. Formal tools remain optional host-side
+verification dependencies and are never linked into the runtime.
+
+### Added
+
+- **Frama-C/WP contracts** (`core/event`, `core/codec`): queue push/pop,
+  codec encode/decode and contiguous/Motorola bit helpers now state storage,
+  bit-width and legal-payload preconditions for RTE and functional review.
+- **KLEE harnesses** (`formal/klee`): symbolic expression depth, resolver
+  arithmetic fault paths and timestamp/priority/sequence comparator properties.
+- **MISRA and safety evidence** (`formal/misra`, `docs/safety`): strict static
+  analysis driver, reviewed deviation record and ASIL-B alignment manual draft.
+
+### Changed
+
+- **PR diagnostics** (`.github/workflows/pr-fast.yml`): removed the temporary
+  diagnostic commit/push path and restored normal workflow-run artifact uploads.
+
 ## [Unreleased] - Phase 8: Toolchain Enhancements, Static Codegen & Trace Visualizer ([issue #22](https://github.com/mfreazer/CANcestry-/issues/22))
 
 The host toolchain can now eliminate the runtime YAML loaders on the target

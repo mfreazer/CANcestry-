@@ -31,6 +31,15 @@
  * @p count may be 64. The caller guarantees every accessed bit lies within
  * @p length bytes.
  */
+/*@
+  requires frame != \null;
+  requires 0 < length <= CANCESTRY_CODEC_FRAME_MAX_LENGTH;
+  requires \valid_read(frame + (0 .. length - 1));
+  requires count <= 64;
+  requires first_bit + count <= length * 8;
+  assigns \nothing;
+  ensures \result <= UINT64_MAX;
+*/
 static inline uint64_t codec_bits_load(const uint8_t *frame,
                                        size_t length,
                                        uint32_t first_bit,
@@ -40,6 +49,10 @@ static inline uint64_t codec_bits_load(const uint8_t *frame,
     uint32_t i;
 
     (void)length;
+    /*@ loop invariant 0 <= i <= count;
+        loop assigns i, raw;
+        loop variant count - i;
+    */
     for (i = 0u; i < count; ++i) {
         uint32_t global = first_bit + i;
         uint8_t bit = (uint8_t)((frame[global >> 3u] >> (global & 7u)) & 1u);
@@ -55,6 +68,14 @@ static inline uint64_t codec_bits_load(const uint8_t *frame,
  * @p count may be 64. The caller guarantees every accessed bit lies within
  * @p length bytes.
  */
+/*@
+  requires frame != \null;
+  requires 0 < length <= CANCESTRY_CODEC_FRAME_MAX_LENGTH;
+  requires \valid(frame + (0 .. length - 1));
+  requires count <= 64;
+  requires first_bit + count <= length * 8;
+  assigns frame[0 .. length - 1];
+*/
 static inline void codec_bits_store(uint8_t *frame,
                                     size_t length,
                                     uint32_t first_bit,
@@ -64,6 +85,10 @@ static inline void codec_bits_store(uint8_t *frame,
     uint32_t i;
 
     (void)length;
+    /*@ loop invariant 0 <= i <= count;
+        loop assigns i, frame[0 .. length - 1];
+        loop variant count - i;
+    */
     for (i = 0u; i < count; ++i) {
         uint32_t global = first_bit + i;
         uint8_t mask = (uint8_t)(1u << (global & 7u));
@@ -87,11 +112,25 @@ static inline uint32_t codec_bits_be_bit(uint32_t idx)
     return (idx >> 3u) * 8u + (7u - (idx & 7u));
 }
 
+/* Forward declaration used by the sawtooth primitive contracts below. */
+static inline bool codec_bits_saw_fits(size_t length,
+                                       uint32_t start_bit,
+                                       uint32_t count);
+
 /**
  * Read @p count bits in DBC Motorola sawtooth order starting at @p start_bit
  * (MSB payload position). The first sawtooth element carries the most
  * significant raw bit. Mirrors opendbc's get_raw_value for big-endian signals.
  */
+/*@
+  requires frame != \null;
+  requires 0 < length <= CANCESTRY_CODEC_FRAME_MAX_LENGTH;
+  requires \valid_read(frame + (0 .. length - 1));
+  requires 1 <= count <= 64;
+  requires start_bit < length * 8;
+  requires codec_bits_saw_fits(length, start_bit, count);
+  assigns \nothing;
+*/
 static inline uint64_t codec_bits_load_saw(const uint8_t *frame,
                                            size_t length,
                                            uint32_t start_bit,
@@ -115,6 +154,15 @@ static inline uint64_t codec_bits_load_saw(const uint8_t *frame,
  * Mirrors the inverse of codec_bits_load_saw: raw's MSB goes to the first
  * sawtooth payload position.
  */
+/*@
+  requires frame != \null;
+  requires 0 < length <= CANCESTRY_CODEC_FRAME_MAX_LENGTH;
+  requires \valid(frame + (0 .. length - 1));
+  requires 1 <= count <= 64;
+  requires start_bit < length * 8;
+  requires codec_bits_saw_fits(length, start_bit, count);
+  assigns frame[0 .. length - 1];
+*/
 static inline void codec_bits_store_saw(uint8_t *frame,
                                         size_t length,
                                         uint32_t start_bit,
@@ -141,6 +189,11 @@ static inline void codec_bits_store_saw(uint8_t *frame,
  * @return true when all sawtooth payload bits for a signal lie within
  * @p length bytes.
  */
+/*@
+  requires length <= CANCESTRY_CODEC_FRAME_MAX_LENGTH;
+  requires count <= 64;
+  assigns \nothing;
+*/
 static inline bool codec_bits_saw_fits(size_t length,
                                        uint32_t start_bit,
                                        uint32_t count)
@@ -210,6 +263,10 @@ static inline bool codec_frame_length_ok(size_t frame_length)
  *
  * @p length may be 64; the pattern is then reinterpreted as int64_t.
  */
+/*@
+  requires 1 <= length <= 64;
+  assigns \nothing;
+*/
 static inline int64_t codec_bits_sign_extend(uint64_t raw, uint32_t length)
 {
     if (length == 64u) {
@@ -219,6 +276,10 @@ static inline int64_t codec_bits_sign_extend(uint64_t raw, uint32_t length)
 }
 
 /** @return 2^@p length - 1, or UINT64_MAX when @p length is 64. */
+/*@
+  requires 1 <= length <= 64;
+  assigns \nothing;
+*/
 static inline uint64_t codec_bits_mask(uint32_t length)
 {
     if (length == 64u) {

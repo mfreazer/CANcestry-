@@ -336,6 +336,35 @@ bool cancestry_codec_label_to_raw(const cancestry_codec_signal_t *signal,
     return false;
 }
 
+/*@
+  requires signal != \null;
+  requires value != \null;
+  requires frame != \null;
+  requires \valid_read(signal);
+  requires \valid_read(value);
+  requires 0 < frame_length <= CANCESTRY_CODEC_FRAME_MAX_LENGTH;
+  requires cancestry_can_payload_length_is_valid(frame_length > 8u, frame_length);
+  requires 1 <= signal->bit_length <= 64;
+  requires signal->layout != CANCESTRY_CODEC_LAYOUT_SAWTOOTH ||
+           codec_bits_saw_fits(frame_length, signal->start_bit, signal->bit_length);
+  requires signal->layout == CANCESTRY_CODEC_LAYOUT_SAWTOOTH ||
+           signal->last_bit < frame_length * 8u;
+  requires \valid(frame + (0 .. frame_length - 1));
+  requires warnings == \null || \valid(warnings);
+  behavior no_warnings:
+    assumes warnings == \null;
+    assigns frame[0 .. frame_length - 1];
+  behavior with_warnings:
+    assumes warnings != \null;
+    assigns frame[0 .. frame_length - 1], warnings->value_clamped;
+  complete behaviors;
+  disjoint behaviors;
+  ensures \result <= CANCESTRY_CODEC_WARN_VALUE_CLAMPED ||
+          \result == CANCESTRY_CODEC_ERR_ARGUMENT ||
+          \result == CANCESTRY_CODEC_ERR_RANGE ||
+          \result == CANCESTRY_CODEC_ERR_FRAME_TOO_SHORT ||
+          \result == CANCESTRY_CODEC_ERR_NULL;
+*/
 cancestry_codec_status_t cancestry_codec_encode_signal(const cancestry_codec_signal_t *signal,
                                                        const cancestry_value_t *value,
                                                        uint8_t *frame,

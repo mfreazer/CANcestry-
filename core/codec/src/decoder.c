@@ -126,6 +126,26 @@ static cancestry_codec_status_t decode_raw_into(const cancestry_codec_signal_t *
     return CANCESTRY_CODEC_OK;
 }
 
+/*@
+  requires signal != \null;
+  requires frame != \null;
+  requires out != \null;
+  requires \valid_read(signal);
+  requires 0 < frame_length <= CANCESTRY_CODEC_FRAME_MAX_LENGTH;
+  requires cancestry_can_payload_length_is_valid(frame_length > 8u, frame_length);
+  requires 1 <= signal->bit_length <= 64;
+  requires signal->layout != CANCESTRY_CODEC_LAYOUT_SAWTOOTH ||
+           codec_bits_saw_fits(frame_length, signal->start_bit, signal->bit_length);
+  requires signal->layout == CANCESTRY_CODEC_LAYOUT_SAWTOOTH ||
+           signal->last_bit < frame_length * 8u;
+  requires \valid_read(frame + (0 .. frame_length - 1));
+  requires \valid(out);
+  assigns *out;
+  ensures \result == CANCESTRY_CODEC_OK ||
+          \result == CANCESTRY_CODEC_ERR_ARGUMENT ||
+          \result == CANCESTRY_CODEC_ERR_FRAME_TOO_SHORT ||
+          \result == CANCESTRY_CODEC_ERR_NULL;
+*/
 cancestry_codec_status_t cancestry_codec_decode_signal(const cancestry_codec_signal_t *signal,
                                                        const uint8_t *frame,
                                                        size_t frame_length,
@@ -159,6 +179,32 @@ cancestry_codec_status_t cancestry_codec_decode_signal(const cancestry_codec_sig
 /* Frame-level decode                                                        */
 /* ------------------------------------------------------------------------- */
 
+/*@
+  requires map != \null;
+  requires frame != \null;
+  requires count != \null;
+  requires signals != \null;
+  requires \valid_read(map);
+  requires \valid_read(frame + (0 .. frame_length - 1));
+  requires 0 < frame_length <= CANCESTRY_CODEC_FRAME_MAX_LENGTH;
+  requires cancestry_can_payload_length_is_valid(frame_length > 8u, frame_length);
+  requires 0 < capacity;
+  requires \valid(signals + (0 .. capacity - 1));
+  requires \valid(count);
+  requires warnings == \null || \valid(warnings);
+  behavior no_warnings:
+    assumes warnings == \null;
+    assigns signals[0 .. capacity - 1], *count;
+  behavior with_warnings:
+    assumes warnings != \null;
+    assigns signals[0 .. capacity - 1], *count, *warnings;
+  complete behaviors;
+  disjoint behaviors;
+  ensures \result <= CANCESTRY_CODEC_WARN_ENUM_UNKNOWN ||
+          \result == CANCESTRY_CODEC_ERR_ARGUMENT ||
+          \result == CANCESTRY_CODEC_ERR_NOT_FOUND ||
+          \result == CANCESTRY_CODEC_ERR_NULL;
+*/
 cancestry_codec_status_t cancestry_codec_decode_frame(const cancestry_codec_map_t *map,
                                                       uint32_t can_id,
                                                       const uint8_t *frame,

@@ -125,6 +125,26 @@ The zero-allocation half of `SW-FR-CANFD-005` reuses the existing archive scans
 `cancestry_event_no_malloc_symbols`), which now cover the 64-byte frame and
 `CANFD_MTU` wire buffers.
 
+## 4.2 Phase 9 formal verification ids ([issue #24](https://github.com/mfreazer/CANcestry-/issues/24))
+
+The formal artifacts are kept outside the default target build and are invoked
+explicitly in the safety verification environment. Their source contracts and
+harnesses cite the existing requirement ids; a missing tool is an environment
+failure, never a passing result.
+
+| Verification id | Artifact | Proves |
+|---|---|---|
+| `FRAMA-WP-EVENT-CODEC-001` | `formal/frama-c/verify_wp.sh` and ACSL contracts in `core/event/src/queue.c`, `core/codec/src/{encoder,decoder}.c` | Queue writes remain within caller storage; encode/decode frame and bit-span preconditions prevent runtime errors; short-frame decode is atomic |
+| `KLEE-EXPR-001` | `formal/klee/expression_harness.c` | Bounded expression text and resolver values cannot cause unbounded parser depth, undefined arithmetic, division by zero or signed division overflow |
+| `KLEE-EVENT-ORDER-001` | `formal/klee/event_order_harness.c` | Symbolic adversarial timestamps preserve antisymmetry and transitivity of timestamp/priority/sequence ordering |
+| `MISRA-C2012-001` | `formal/misra/run_cppcheck.sh`, `docs/safety/MISRA_Deviations.md` | cppcheck MISRA C:2012 analysis is run against `core/` and `platform/`; every accepted exception has a bounded technical rationale |
+| `SAFETY-MANUAL-001` | `docs/safety/SafetyManual.md` | Architecture, fail-closed behavior, fault saturation, assumptions and the independent verification strategy are documented |
+
+These ids are verification-record labels rather than new software
+requirements. The existing rows for `SW-FR-EVENT-004..006`,
+`SW-FR-CODEC-001..008`, `SW-FR-FSM-035..038`, `SW-FR-FSM-045..046` and
+`SYS-NF-001..002` remain the normative requirement mappings.
+
 ## 5. Deferred ledger: requirements with no verified artifact yet
 
 Every requirement below is either absent from the CSV or present only with
@@ -189,6 +209,7 @@ the [smoke test record](../qa/smoke-test-v0.3.0-rc.1.md).
 
 | Version | Date | Change |
 |---|---|---|
+| 0.6.0-wip | 2026-09-18 | Phase 9 (issue #24): formal-verification artifact ids, ACSL/WP contracts, KLEE harnesses, MISRA driver and safety-manual evidence map. |
 | 0.4.0-wip | 2026-09-17 | Phase 7 (issue #20): CAN FD requirement rows `SW-FR-CANFD-001..006`, the Phase 7 test-id table in section 4.1, and coverage numbers refreshed to the post-Phase-6/7 state (167 defined, 125 traced, 176 rows). |
 | 0.3.0-rc.1 | 2026-09-16 | Phase 5: gateway integration ids (`GATEWAY-*`), FSM schema finalization, coverage numbers, the deferred ledger in section 5, test-id resolution labels in the artifacts, and the CI gate. |
 | 0.3.0 | 2026-09-16 | Phase 4/5 scope: FSM runtime rows (`SW-FR-FSM-001..055`) and the conformance suites. |
