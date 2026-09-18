@@ -37,7 +37,17 @@ jobs:
         run: cmake --build build --parallel
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: |
+          set -o pipefail
+          ctest --test-dir build --output-on-failure 2>&1 | tee /tmp/ctest-output.log
+
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctest-${{ matrix.compiler }}-${{ matrix.build_type }}
+          path: /tmp/ctest-output.log
+          if-no-files-found: ignore
 
   toolchain-checks:
     name: python toolchain (yaml2c, trace_viewer, schemas)
@@ -50,10 +60,19 @@ jobs:
 
       - name: Python unit tests (100% coverage gate, SW-FR-TOOL-*)
         run: |
+          set -o pipefail
           python3 -m pytest tests/unit/tools -q \
             --cov=tools/yaml2c --cov=tools/trace_viewer \
             --cov=ci/check_schemas_valid.py --cov-report=term-missing \
-            --cov-fail-under=100
+            --cov-fail-under=100 2>&1 | tee /tmp/pytest-output.log
+
+      - name: Upload pytest log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-toolchain
+          path: /tmp/pytest-output.log
+          if-no-files-found: ignore
 
       - name: Schema validation (SW-FR-TOOL-008)
         run: python3 ci/check_schemas_valid.py schemas
