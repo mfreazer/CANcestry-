@@ -51,6 +51,9 @@ jobs:
   toolchain-checks:
     name: python toolchain (yaml2c, trace_viewer, schemas)
     runs-on: ubuntu-latest
+    # contents:write powers the on-failure diagnostic log commit below.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -81,7 +84,7 @@ jobs:
           python3 ci/check_traceability.py . 2>&1 | tee /tmp/traceability-output.log
 
       - name: Commit diagnostics on failure (temporary; log storage down)
-        if: failure()
+        if: failure() && github.event_name == 'pull_request'
         env:
           BRANCH: ${{ github.head_ref }}
           TOKEN: ${{ github.token }}
