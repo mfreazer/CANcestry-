@@ -51,9 +51,6 @@ jobs:
   toolchain-checks:
     name: python toolchain (yaml2c, trace_viewer, schemas)
     runs-on: ubuntu-latest
-    # contents:write powers the on-failure diagnostic log commit below.
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -83,28 +80,15 @@ jobs:
         run: |
           python3 ci/check_traceability.py . 2>&1 | tee /tmp/traceability-output.log
 
-      - name: Commit diagnostics on failure (temporary; log storage down)
-        if: failure() && github.event_name == 'pull_request'
-        env:
-          BRANCH: ${{ github.head_ref }}
-          TOKEN: ${{ github.token }}
-        run: |
-          git config user.name "ci-log-bot"
-          git config user.email "ci-log-bot@users.noreply.github.com"
-          git fetch --depth=1 origin "$BRANCH"
-          git checkout -B logstage FETCH_HEAD
-          mkdir -p .ci-logs
-          { python3 --version
-            python3 -m pip list 2>/dev/null | grep -Ei 'pytest|coverage|yaml|jsonschema|rpds|referencing'
-            for f in pytest-output schema-output traceability-output; do
-              echo "===== $f ====="
-              cat "/tmp/$f.log" 2>/dev/null
-            done
-          } > .ci-logs/toolchain-diagnostics.txt 2>&1
-          git add .ci-logs
-          git commit -m "ci: toolchain diagnostics [skip ci]"
-          for i in 1 2 3 4 5; do
-            git pull --rebase origin "$BRANCH" && \
-              git push "https://x-access-token:$TOKEN@github.com/${{ github.repository }}.git" "HEAD:$BRANCH" && break
-            sleep 5
-          done
+      # Keep diagnostics in the workflow run rather than mutating the PR branch.
+      # This is the normal artifact path and is retained for both passing and
+      # failing toolchain jobs (the GitHub artifact service is dependable again).
+      - name: Upload toolchain logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: toolchain-logs
+          path: |
+            /tmp/schema-output.log
+            /tmp/traceability-output.log
+          if-no-files-found: ignore

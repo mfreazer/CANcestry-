@@ -224,6 +224,26 @@ bool cancestry_event_queue_is_full(const cancestry_event_queue_t *queue)
 /* Producer side                                                             */
 /* ------------------------------------------------------------------------- */
 
+/*@
+  requires queue != \null;
+  requires event != \null;
+  requires \valid(queue);
+  requires \valid_read(event);
+  requires queue->slots != \null;
+  requires 0 < queue->capacity <= CANCESTRY_EVENT_QUEUE_MAX_CAPACITY;
+  requires queue->size <= queue->capacity;
+  requires queue->fault_count <= queue->size;
+  requires \valid(queue->slots + (0 .. queue->capacity - 1));
+  requires cancestry_event_is_valid(event);
+  assigns queue->slots[0 .. queue->capacity - 1], queue->size,
+          queue->fault_count, queue->next_sequence, queue->next_event_id,
+          queue->counters;
+  ensures queue->size <= queue->capacity;
+  ensures queue->fault_count <= queue->size;
+  ensures \result == CANCESTRY_EVENT_QUEUE_OK ||
+          \result == CANCESTRY_EVENT_QUEUE_OK_EVICTED_VICTIM ||
+          \result < 0;
+*/
 cancestry_event_queue_status_t cancestry_event_queue_push(cancestry_event_queue_t *queue,
                                                           const cancestry_event_t *event)
 {
@@ -338,6 +358,29 @@ const cancestry_event_t *cancestry_event_queue_peek(const cancestry_event_queue_
     return &queue->slots[0];
 }
 
+/*@
+  requires queue != \null;
+  requires \valid(queue);
+  requires queue->slots != \null;
+  requires 0 < queue->capacity <= CANCESTRY_EVENT_QUEUE_MAX_CAPACITY;
+  requires queue->size <= queue->capacity;
+  requires queue->fault_count <= queue->size;
+  requires \valid(queue->slots + (0 .. queue->capacity - 1));
+  requires out_event == \null || \valid(out_event);
+  behavior discard:
+    assumes out_event == \null;
+    assigns queue->slots[0 .. queue->capacity - 1], queue->size,
+            queue->fault_count, queue->counters;
+  behavior copy:
+    assumes out_event != \null;
+    assigns queue->slots[0 .. queue->capacity - 1], queue->size,
+            queue->fault_count, queue->counters, *out_event;
+  complete behaviors;
+  disjoint behaviors;
+  ensures queue->size <= queue->capacity;
+  ensures queue->fault_count <= queue->size;
+  ensures \result == CANCESTRY_EVENT_QUEUE_OK || \result < 0;
+*/
 cancestry_event_queue_status_t cancestry_event_queue_pop(cancestry_event_queue_t *queue,
                                                          cancestry_event_t *out_event)
 {

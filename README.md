@@ -45,6 +45,7 @@ local build is a clean CI build.
 | `tests/conformance/` | The FSM conformance suites (seven contracts, run against the shipping loader and engine). |
 | `tests/integration/` | Cross-implementation checks, including the opendbc parity harness. |
 | `ci/` | Repository checks that run as CTest tests (`check_no_alloc.py`, `check_schemas_valid.py`, `check_traceability.py`). |
+| `formal/` | Optional Phase 9 verification drivers for Frama-C/WP, KLEE and MISRA C:2012 cppcheck analysis. |
 | `docs/qa/` | QA records: the executed v0.3.0-rc.1 smoke test and its on-target procedure. |
 | `docs/releases/` | Release notes and community announcements. |
 
@@ -56,4 +57,6 @@ local build is a clean CI build.
 - [`docs/trace/traceability.md`](docs/trace/traceability.md) - scope, coverage numbers, deferred ledger and how to audit them.
 - [`docs/trace/traceability.csv`](docs/trace/traceability.csv) - requirement-to-test mapping (checked in CI).
 - [`docs/qa/smoke-test-v0.3.0-rc.1.md`](docs/qa/smoke-test-v0.3.0-rc.1.md) - executed verification evidence and the on-target procedure.
+- [`docs/safety/SafetyManual.md`](docs/safety/SafetyManual.md) - Phase 9 software safety manual draft and verification strategy.
+- [`docs/safety/MISRA_Deviations.md`](docs/safety/MISRA_Deviations.md) - MISRA C:2012 deviation record and static-analysis procedure.
 - [`Test strategy.md`](Test%20strategy.md) - the QA strategy the checks above implement.
