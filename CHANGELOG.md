@@ -5,6 +5,64 @@ Keep a Changelog style; requirement IDs refer to `docs/software/SwRS.md` and
 `docs/SyRS.md`, and the requirement-to-artifact mapping lives in
 `docs/trace/traceability.csv`.
 
+## [Unreleased] - Phase 8: Toolchain Enhancements, Static Codegen & Trace Visualizer ([issue #22](https://github.com/mfreazer/CANcestry-/issues/22))
+
+The host toolchain can now eliminate the runtime YAML loaders on the target
+and post-mortem a captured run: `tools/yaml2c` compiles canonical FSM and
+codec-map YAML into pure `const static` C headers, `tools/trace_viewer`
+reconstructs a chronological timeline (and a state graph) from a binary
+trace ring dump, and `ci/check_schemas_valid.py` validates the schema set
+with full Draft-2020-12 logical validation. New requirements:
+`SW-FR-TOOL-001..010` (`docs/software/SwRS.md` section 13), all traced in
+`docs/trace/traceability.csv`.
+
+### Added
+
+- **Static code generator** (`tools/yaml2c`, SW-FR-TOOL-001..004):
+  converts a schema-valid `fsm-0.3.0` or `codec-map-0.3.0` YAML document
+  into a compilable C99 header of `const static` data that initializes the
+  runtime definition types 1:1 (`cancestry_fsm_set_t`,
+  `cancestry_codec_map_t`), derived fields included
+  (payload bit windows, sawtooth bounds). Inputs are validated against the
+  canonical Draft-2020-12 schemas before emission, and the loaders'
+  structural rules (duplicate keys, YAML 1.1 scalars, number grammar,
+  expression grammar, limits) are enforced with loader-identical verdicts.
+  A binary linking the generated headers passes `ci/check_no_alloc.py`.
+- **Gateway static example** (`examples/gateway_real`, SW-FR-TOOL-001/003):
+  `main_static.c` plus `gateway_fsm.yaml`/`gateway_codec.yaml` and a
+  `cancestry_gateway_real_static` CMake target demonstrate a full FSM+codec
+  binary with both runtime loaders replaced by generated headers
+  (`cancestry_gateway_real_static_loop`,
+  `cancestry_gateway_real_static_no_alloc_symbols` tests).
+- **Trace dump format** (`docs/system/trace-dump-format.md`,
+  SW-FR-TOOL-005): normative specification of the `CTRC` binary dump of the
+  FSM trace ring and HAL fault/frame records, including the
+  sequence-number-based chronological reconstruction rule for wrapped rings
+  (fail-closed on ambiguous dumps).
+- **Trace viewer** (`tools/trace_viewer`, SW-FR-TOOL-005..007/009/010):
+  dependency-free CLI that parses `CTRC` dumps into a chronological
+  timeline (text or JSON, relative or absolute times, kind/instance
+  filters) and optionally emits a Graphviz `.dot` graph of the transitions
+  actually taken, with faulted edges drawn red.
+- **Schema logical validation** (`ci/check_schemas_valid.py`,
+  SW-FR-TOOL-008): beyond the structural checks, every schema in
+  `schemas/` is now validated against the Draft-2020-12 metaschema with
+  format checkers (catching, e.g., invalid regex `pattern`s); without
+  `jsonschema` the check degrades to an explicit SKIP, never a silent pass.
+- **Toolchain requirements and traceability** (`docs/software/SwRS.md`
+  section 13, `docs/trace/traceability.csv`, SW-FR-TOOL-001..010).
+- **Python unit tests** (`tests/unit/tools`, issue #22 acceptance):
+  243 tests covering the new tools with 100% line coverage
+  (`python3 -m coverage run -m pytest tests/unit/tools && python3 -m
+  coverage report`), including loader-parity refusal matrices, expression
+  acceptance matrices, wrap-around reconstruction and CLI contracts.
+
+### Changed
+
+- **CI** (`.github/workflows/pr-fast.yml`): a `toolchain-checks` job
+  installs the Python tool dependencies and runs the `tests/unit/tools`
+  suite and `ci/check_schemas_valid.py` on every PR.
+
 ## [Unreleased] - Phase 7: CAN FD & Extended Frame Support ([issue #20](https://github.com/mfreazer/CANcestry-/issues/20))
 
 CAN FD is now a first-class citizen of the runtime path: 64-byte payloads flow

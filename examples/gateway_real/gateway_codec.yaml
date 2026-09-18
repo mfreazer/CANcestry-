@@ -1,0 +1,42 @@
+# CANcestry codec map for the gateway_real *static* demo (Phase 8, issue #22).
+#
+# tools/yaml2c compiles this into gateway_codec_static.h at build time;
+# main_static.c registers the generated `gateway_static_codec_map` with a
+# codec namespace so send_message resolves without the runtime loader
+# (SW-FR-TOOL-002, SW-FR-TOOL-003). The VehicleStatus/ClusterDisplay
+# definitions mirror the embedded maps of main.c.
+schema_version: "0.3.0"
+codec_map:
+  name: gateway_static
+  version: 1.0.0
+  description: "Static demo codec map for the gateway_real example"
+  messages:
+    - id: 0x120
+      name: VehicleStatus
+      dlc: 8
+      period_ms: 10
+      signals:
+        - name: VehicleSpeed
+          start_bit: 0
+          bit_length: 16
+          type: uint
+          endianness: little
+          scale: 0.01
+          unit: "km/h"
+          min: 0.0
+          max: 65.53
+    - id: 0x321
+      name: ClusterDisplay
+      dlc: 8
+      signals:
+        - name: DisplaySpeed
+          start_bit: 0
+          bit_length: 16
+          type: uint
+          endianness: little
+          scale: 0.01
+        - name: Kickdown
+          start_bit: 16
+          bit_length: 1
+          type: boolean
+          endianness: little
