@@ -1,9 +1,14 @@
 cmake_minimum_required(VERSION 3.16)
 
+# CMake's project(VERSION ...) grammar accepts numeric components only. Keep
+# the release-candidate marker explicit here rather than silently advertising
+# final 1.0.0 metadata.
+set(CANCESTRY_RELEASE_VERSION "1.0.0-rc.1")
 project(cancestry
-    VERSION 1.0.0
     DESCRIPTION "CAN codec, recipe and emulation runtime"
     LANGUAGES C)
+set(PROJECT_VERSION "${CANCESTRY_RELEASE_VERSION}")
+set(CMAKE_PROJECT_VERSION "${CANCESTRY_RELEASE_VERSION}")
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)

@@ -47,7 +47,9 @@ def test_final_trace_report_has_v1_scope_and_deferred_ledger():
 def test_release_markers_and_no_failed_rows():
     """SAFETY-RELEASE-001: v1 release markers are internally consistent."""
 
-    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "1.0.0"
+    # The final version bump is explicitly deferred until QA-EV-01 closes.
+    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "1.0.0-rc.1"
+    assert "QA-EV-01" in (ROOT / "docs/versions.md").read_text(encoding="utf-8")
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     assert "Phase 12" in changelog
     matrix = (ROOT / "docs/trace/traceability.csv").read_text(encoding="utf-8")

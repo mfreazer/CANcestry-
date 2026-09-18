@@ -5,10 +5,14 @@
  *   SW-FR-EVENT-005  The software shall expose event drop counters.
  *   SYS-NF-002       Bounded resource usage (enforced queue limits).
  *   QA-v0.2-R04      Per-FSM incoming queue overflow policy.
- *   SW-FR-FSM-020    Per-FSM incoming queue overflow shall drop-newest for
- *                    non-fault events and never drop fault events.
+ *   SW-FR-FSM-020    The Path A per-FSM reserve policy is covered by the
+ *                    reserved-slot suite; this file retains the zero-reserve
+ *                    generic overflow reference model.
  *
  * Normative source: docs/system/event-ordering.md section 9.
+ * The reference-model cases explicitly configure zero reserved slots so they
+ * continue to exercise the historical generic overflow primitive; Path A is
+ * covered by test_reserved_fault_slots.c and is the default initializer policy.
  *
  * Policy under test, for a queue that is full:
  *   - non-fault event: the new event is dropped (drop-newest);
@@ -69,7 +73,7 @@ static void test_non_fault_events_drop_newest(void)
     const cancestry_event_queue_counters_t *counters;
     uint32_t index;
 
-    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init(&queue, storage, TEST_CAPACITY));
+    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
 
     for (index = 0u; index < TEST_CAPACITY; ++index) {
         event = make_rx_event((cancestry_time_us_t)(index + 1u), 0x100u + index);
@@ -105,7 +109,7 @@ static void test_fault_is_admitted_and_evicts_the_newest_non_fault(void)
     const cancestry_event_queue_counters_t *counters;
     uint32_t index;
 
-    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init(&queue, storage, TEST_CAPACITY));
+    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
 
     /* Fill with non-fault events at t=10, 20, 30, 40. */
     for (index = 0u; index < TEST_CAPACITY; ++index) {
@@ -147,7 +151,7 @@ static void test_victim_is_newest_by_ordering_key(void)
     cancestry_event_t event;
     cancestry_event_t out;
 
-    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init(&queue, storage, TEST_CAPACITY));
+    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
 
     /* Insertion order deliberately differs from ordering order: the victim is
      * the event with the highest key (t=30, HOST), not the last pushed. */
@@ -184,7 +188,7 @@ static void test_faults_fill_the_queue_then_drop_newest_fault(void)
     const cancestry_event_queue_counters_t *counters;
     uint32_t index;
 
-    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init(&queue, storage, TEST_CAPACITY));
+    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
 
     for (index = 0u; index < TEST_CAPACITY; ++index) {
         event = make_fault_event((cancestry_time_us_t)(index + 1u), 0x300u + index);
@@ -221,7 +225,7 @@ static void test_repeated_faults_evict_one_victim_each(void)
     const cancestry_event_queue_counters_t *counters;
     uint32_t index;
 
-    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init(&queue, storage, TEST_CAPACITY));
+    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
 
     for (index = 0u; index < TEST_CAPACITY; ++index) {
         event = make_rx_event((cancestry_time_us_t)(index + 1u), 0x400u + index);
@@ -254,7 +258,7 @@ static void test_persistent_overflow_is_reported(void)
     const cancestry_event_queue_counters_t *counters;
     uint32_t index;
 
-    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init(&queue, storage, TEST_CAPACITY));
+    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
 
     for (index = 0u; index < TEST_CAPACITY; ++index) {
         event = make_rx_event((cancestry_time_us_t)(index + 1u), 0x600u + index);
@@ -409,7 +413,7 @@ static void test_overflow_policy_matches_reference_model(void)
     memset(&model, 0, sizeof(model));
     model.random_state = 0x5EEDu;
 
-    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init(&queue, storage, MODEL_CAPACITY));
+    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, MODEL_CAPACITY, 0u));
 
     /* Few distinct timestamps and all seven priority classes: lots of ties,
      * lots of overflow, and a fault about one time in seven. */
@@ -457,7 +461,7 @@ static void test_rejections_are_not_counted_as_drops(void)
     cancestry_event_t event;
     const cancestry_event_queue_counters_t *counters;
 
-    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init(&queue, storage, TEST_CAPACITY));
+    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
 
     event = make_event(CANCESTRY_EVENT_TYPE_INVALID, CANCESTRY_PRIORITY_CLASS_FAULT, 1u);
     CANCESSTRY_TEST_CHECK(cancestry_event_queue_push(&queue, &event) ==

@@ -362,13 +362,16 @@ static void test_emit_generated_follows_the_generated_event_rules(void)
 static void test_fill_to_capacity_within_caller_storage(void)
 {
     /* The storage is exactly TEST_CAPACITY events: any write past the end is
-     * caught by AddressSanitizer. */
+     * caught by AddressSanitizer. This test intentionally disables the
+     * reserved-fault policy because it is a raw storage-boundary exercise;
+     * Path A is covered by test_reserved_fault_slots.c. */
     cancestry_event_queue_t queue;
     cancestry_event_t storage[TEST_CAPACITY];
     cancestry_event_t event;
     uint32_t index;
 
-    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init(&queue, storage, TEST_CAPACITY));
+    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(
+        &queue, storage, TEST_CAPACITY, 0u));
 
     for (index = 0u; index < TEST_CAPACITY; ++index) {
         event = make_event(CANCESTRY_EVENT_TYPE_CAN_RX, CANCESTRY_PRIORITY_CLASS_CAN_RX,

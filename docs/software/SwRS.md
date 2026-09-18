@@ -3,11 +3,12 @@
 | Field | Value |
 |---|---|
 | Document | CANcestry Software Requirements Specification |
-| Version | 0.2.1 |
-| Status | Draft for approval |
+| Version | 1.0.0-rc.1 |
+| Status | Release candidate; QA-EV-01 remains open |
+| Release gate | Final 1.0.0 bump, tag, and milestone closure are deferred until QA-EV-01 is formally closed |
 | Owner | System Engineer |
 | Approver | Maintainer + QA |
-| Last Review | 2026-09-14 |
+| Last Review | 2026-09-18 |
 
 ## 1. Software Scope
 
@@ -59,8 +60,9 @@ The software includes:
 | SW-FR-EVENT-003 | The software shall support can_rx, signal_changed, timer_expired, state_entered, state_exited, fault_raised, and power_mode_changed events. | High |
 | SW-FR-EVENT-004 | The software shall maintain bounded event queues. | High |
 | SW-FR-EVENT-005 | The software shall expose event drop counters. | High |
-| SW-FR-EVENT-006 | The software shall process events according to the normative event-ordering specification. | High |
-| SW-FR-EVENT-006 | The software shall process events according to the normative event-ordering specification, including fault admission and saturation behavior. | High | Test |
+| SW-FR-EVENT-006 | The software shall process events according to the normative event-ordering specification, including deterministic fault admission and saturation behavior. | High |
+| SW-FR-EVENT-007 | The event queue shall reserve a configured number of physical slots for fault events so ordinary traffic cannot consume the fault reserve. | High |
+| SW-FR-EVENT-008 | When a full queue contains only fault events, the runtime shall preserve the bounded fault set and invoke the configured HAL fail-safe and IWDG escalation hooks in that order. | High |
 
 ## 5. Recipe Requirements
 
@@ -138,7 +140,7 @@ The software includes:
 | SW-FR-FSM-017 | The runtime shall support can_rx, signal_changed, timer_expired, state_entered, state_exited, fault_raised, and power_mode_changed events. | High |
 | SW-FR-FSM-018 | Events shall carry type, timestamp, source, and payload. | High |
 | SW-FR-FSM-019 | Each FSM instance shall use a bounded incoming event queue. Default depth: 64. | High |
-| SW-FR-FSM-020 | Per-FSM incoming queue overflow shall drop-newest for non-fault events and never drop fault events. | High |
+| SW-FR-FSM-020 | Per-FSM incoming queue overflow shall reserve fault slots, drop-newest ordinary events at the reserve boundary, admit faults deterministically, and escalate when all slots contain faults. | High |
 | SW-FR-FSM-021 | The runtime shall prevent uncontrolled recursive event generation. | High |
 | SW-FR-FSM-022 | The runtime shall support send_message, set_signal, set_variable, start_timer, stop_timer, reset_timer, log, raise_fault, and transition actions. | High |
 | SW-FR-FSM-023 | Actions shall be validated against package capabilities before execution. | High |
@@ -267,8 +269,8 @@ watchdog (IWDG) fail-safe recovery, and bounded sub-50µs real-time latency.
 | SW-FR-BM-002 | The software shall provide a bare-metal Hardware Abstraction Layer (`platform/cortex_m/hal_stm32.c`) that directly interfaces with CAN/FDCAN hardware peripheral registers and FIFOs on ARM Cortex-M without operating system dependencies or blocking syscalls, integrating with `cancestry_hal_backend_t`. | High |
 | SW-FR-BM-003 | The CAN RX interrupt service routine (`hal_stm32_can_rx_isr`) shall be strictly bounded in execution time (O(1)), performing only hardware FIFO drain, timestamp capture, and non-blocking push into the lock-free ISR event queue. No decoding, UDS parsing, or FSM evaluation shall execute in interrupt context. | High |
 | SW-FR-BM-004 | Hardware frame timestamps shall be captured at interrupt arrival from a hardware cycle counter (DWT CYCCNT) or high-resolution timer with microsecond resolution, and multi-word rollover tracking shall guarantee strictly monotonic timestamps over extended gateway uptime without rollover glitches. | High |
-| SW-FR-BM-005 | The runtime shall integrate an Independent Watchdog (IWDG) timer (`platform/cortex_m/watchdog.c`). If the main execution loop misses its deadline or hangs without feeding the watchdog, the IWDG shall assert a hardware MCU reset. | High |
-| SW-FR-BM-006 | Upon MCU reset or watchdog reset, hardware GPIO and CAN transceiver pins shall be immediately latched into a safe "0 Torque / Contactor Open" state, and transmission authorization shall be revoked until explicitly authorized by the FSM. A safe-state broadcast frame (ID 0x100) shall be constructed and emitted upon recovery. | High |
+| SW-FR-BM-005 | The runtime shall integrate an Independent Watchdog (IWDG) timer (`platform/cortex_m/watchdog.c`). If the main execution loop misses its deadline or a hard-fault escalation occurs without a feed, the IWDG shall assert a hardware MCU reset. | High |
+| SW-FR-BM-006 | Upon MCU reset, watchdog escalation, or hard-fault queue saturation, hardware GPIO and CAN transceiver pins shall be immediately latched into a safe "0 Torque / Contactor Open" state, and transmission authorization shall be revoked until explicitly authorized by the FSM. A safe-state broadcast frame (ID 0x100) shall be constructed and emitted upon recovery. | High |
 | SW-FR-BM-007 | The software shall achieve deterministically bounded latency of less than 50 microseconds from hardware CAN RX interrupt FIFO arrival to FSM event processing into the event queue. | High |
 | SW-FR-BM-008 | The bare-metal system shall execute without an external RTOS (`main() -> while(1)`), placing stack, vectors, static rings, and event queues into dedicated SRAM sections (`.cancestry_core`, `.cancestry_rings`, `.cancestry_ram`). | High |
 
@@ -303,5 +305,5 @@ watchdog (IWDG) fail-safe recovery, and bounded sub-50µs real-time latency.
 | SW-FR-SAFETY-001 | The final Safety Manual shall describe CANcestry system architecture, data flow, assumptions, hardware boundary and fail-closed safe behavior for an external safety assessor. | High |
 | SW-FR-SAFETY-002 | The Safety Manual shall include an FMEA summary covering malformed CAN/CRC, Bus-Off, brownout/watchdog, BMS derating, queue/resource faults and unauthorized transmission. | High |
 | SW-FR-SAFETY-003 | The Safety Manual shall map implemented IWDG/BOR, CAN CRC boundary, zero-allocation execution, SPSC ISR queue, bounded event processing and BMS/UDS governor evidence to ASIL-B-aligned technical safety requirements. | High |
-| SW-FR-SAFETY-004 | The final v1 traceability report shall identify all in-scope v1.0.0 requirements, passing evidence, and every deferred item with a justified v1.1.0 owner. | High |
-| SW-FR-SAFETY-005 | The v1.0.0 release artifacts shall include the completed Safety Manual, final traceability report, HIL report, changelog and version marker, with no failed release-gate row. | High |
+| SW-FR-SAFETY-004 | The v1.0.0-rc.1 traceability report shall identify all in-scope candidate requirements, passing evidence, and every deferred item with a justified v1.1.0 owner. | High |
+| SW-FR-SAFETY-005 | The v1.0.0-rc.1 evidence package shall include the Safety Manual, candidate traceability report, HIL report, changelog and version marker, with final 1.0.0 release gating explicitly deferred while QA-EV-01 is open. | High |

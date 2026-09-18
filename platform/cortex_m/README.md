@@ -62,6 +62,7 @@ Phase 11 (issue #28) provides the bare-metal ARM Cortex-M target port for CANces
 ### 5. Conformance Suite (`tests/conformance/baremetal/`)
 - `test_baremetal_latency.c`: proves cycle-accurate sub-50µs latency from CAN RX interrupt to FSM event processing (`BM-LAT-001`, `BM-LAT-002`), timestamp monotonicity across rollovers (`BM-LAT-003`), and bounded ISR execution (`BM-LAT-004`).
 - `test_watchdog_fail_safe.c`: proves regular feeding keeps the system running (`BM-SAFE-001`), induced hangs trigger IWDG reset and immediate safe state (`BM-SAFE-002`), safe-state CAN broadcast is emitted (`BM-SAFE-003`), and FSM authorization gate prevents premature transmission (`BM-SAFE-004`).
+- `test_hard_fault_escalation.c`: proves QA-EV-01 all-fault saturation binds the queue to the HAL safe-state action first and the IWDG escalation path second (`HARD-FAULT-ESCALATION-001..002`).
 - `test_baremetal_zero_alloc.c`: proves linker script rejects allocation symbols (`BM-ALLOC-001`).
 
 ## Compilation

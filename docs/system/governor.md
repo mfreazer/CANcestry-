@@ -1,8 +1,10 @@
 # CANcestry Safety Governor Specification
 
-Version: 1.0.0
+Version: 1.0.0-rc.1
 
-> **Status**: the side-effect governor retains the fail-closed integration
+> **Status**: release-candidate specification; final `1.0.0` bump, tag and
+> milestone closure remain deferred while QA-EV-01 is open. The side-effect
+> governor retains the fail-closed integration
 > contract described below. Phase 12 adds the independent BMS thermal/torque
 > governor in `core/governor`; this document describes how an integration must
 > consume its result.

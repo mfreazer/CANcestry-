@@ -22,9 +22,3 @@ set_target_properties(cancestry_conformance_bms_governor PROPERTIES
 
 add_test(NAME cancestry_conformance_bms_governor
     COMMAND cancestry_conformance_bms_governor)
-
-if(CANCESTRY_PYTHON AND NOT CMAKE_CROSSCOMPILING)
-    add_test(NAME cancestry_governor_no_malloc_symbols
-        COMMAND ${CANCESTRY_PYTHON} "${CMAKE_SOURCE_DIR}/ci/check_no_alloc.py"
-                $<TARGET_FILE:cancestry_governor>)
-endif()

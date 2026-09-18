@@ -47,7 +47,7 @@ if(CANCESTRY_PYTHON AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME cancestry_schemas_valid
         COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_schemas_valid.py"
                 "${CMAKE_CURRENT_SOURCE_DIR}/../schemas")
-    # Traceability completeness (Test strategy.md section 10): the CSV resolves,
+    # Traceability completeness (docs/qa/test-strategy.md section 10): the CSV resolves,
     # no requirement is silently absent, and the deferred ledger is explicit.
     add_test(NAME cancestry_traceability_consistent
         COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_traceability.py"

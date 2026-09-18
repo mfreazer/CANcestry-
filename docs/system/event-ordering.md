@@ -1,26 +1,32 @@
 # CANcestry Event Ordering Specification
 
-Version: 0.2.1
+Version: 1.0.0-rc.1
 
-## 1. Event Metadata
+This specification is the normative event and queue policy for the release
+candidate. QA-EV-01 is open until the reserved-slot and hard-fault escalation
+proof is accepted; the final `1.0.0` release marker is intentionally deferred.
+
+## 1. Event metadata
 
 Every event shall contain:
 
-- event_id
-- type
-- timestamp_us
-- sequence
-- cause_sequence
-- priority_class
-- payload
+- `event_id`
+- `type`
+- `timestamp_us`
+- `sequence`
+- `cause_sequence`
+- `priority_class`
+- `payload`
 
-## 2. Time Base
+The queue assigns a non-zero `event_id` and `sequence` when the producer leaves
+them unset. The caller owns event storage and no queue operation allocates.
 
-The runtime shall use a monotonic microsecond clock.
+## 2. Time base
 
-Simulation shall use a deterministic virtual monotonic clock.
+The runtime shall use a monotonic microsecond clock. Simulation shall use a
+deterministic virtual monotonic clock.
 
-## 3. Priority Classes
+## 3. Priority classes
 
 Lower number means higher priority.
 
@@ -34,124 +40,143 @@ Lower number means higher priority.
 | GENERATED | 5 |
 | TRACE | 6 |
 
-Critical faults may be handled synchronously and bypass normal queueing.
+A critical fault may be handled synchronously by a safety monitor, but any fault
+event that enters a queue still follows the bounded admission rules in section
+11.
 
-## 4. Event Selection Order
+## 4. Event selection order
 
 The dispatcher shall select events using:
 
-1. timestamp_us ascending
-2. priority_class ascending
-3. sequence ascending
+1. `timestamp_us` ascending;
+2. `priority_class` ascending;
+3. `sequence` ascending.
 
-## 5. CAN RX Ordering
+The queue implements this total order with a fixed-storage binary min-heap.
+
+## 5. CAN RX ordering
 
 CAN frames shall be processed in hardware timestamp or ISR arrival sequence.
+Frames shall not be reordered by higher-level code before they become events.
 
-Frames shall not be reordered by higher-level code.
-
-## 6. Codec Decoding Order
+## 6. Codec decoding order
 
 For each CAN RX frame:
 
-1. Matching message definitions are selected.
-2. Definitions are ordered by package load order, codec map order, then message ID ascending.
-3. Signals are decoded in compiler-assigned signal order.
-4. Only changed signals generate signal_changed events.
-5. Signal events are emitted in compiler-assigned signal order.
+1. matching message definitions are selected;
+2. definitions are ordered by package load order, codec map order, then message
+   ID ascending;
+3. signals are decoded in compiler-assigned signal order;
+4. only changed signals generate `signal_changed` events; and
+5. signal events are emitted in compiler-assigned signal order.
 
-## 7. Subscriber Dispatch Order
+## 7. Subscriber dispatch order
 
 For each dispatched event, subscribers run in this order:
 
-1. Built-in safety monitors
-2. Recipe instances
-3. FSM instances
-4. Logger / trace
+1. built-in safety monitors;
+2. recipe instances;
+3. FSM instances; and
+4. logger / trace.
 
-The governor is not a normal subscriber. It observes and approves side-effect requests.
+The governor is not a normal subscriber. It observes and approves side-effect
+requests. Recipe and FSM instance order is declaration order after package load
+order.
 
-Recipe order:
-
-- package load order
-- recipe file order
-- recipe definition order
-
-FSM instance order:
-
-- package load order
-- instance declaration order
-
-## 8. Generated Events
+## 8. Generated events
 
 Generated events shall:
 
-- be placed in the GENERATED priority class,
-- carry cause_sequence,
-- inherit the timestamp of the causing event unless explicitly delayed,
-- be appended in action execution order,
+- use the `GENERATED` priority class;
+- carry `cause_sequence`;
+- inherit the causing timestamp unless explicitly delayed;
+- be appended in action execution order; and
 - not be processed recursively.
 
-## 9. Queue Overflow Policies
+## 9. Queue overflow policies
 
-| Queue | Policy |
-|---|---|
-| CAN RX queue | drop-oldest |
-| Global event queue | drop-newest for non-fault events |
-| Per-FSM incoming event queue | drop-newest for non-fault events |
-| Per-FSM generated event queue | drop-newest |
-| Fault events | never dropped |
-| Trace queue | drop-newest |
+The portable queue primitive has one deterministic policy. A queue is initialized
+with a physical capacity and a `reserved_fault_slots` count. The default
+initializer reserves two slots (clamped so a one-slot queue remains usable);
+callers may use `cancestry_event_queue_init_with_reserved_fault_slots()` for an
+explicit value.
 
-Overflow shall increment counters.
+| Incoming event | Admission rule | Result |
+|---|---|---|
+| non-fault below the non-fault limit | ordinary storage remains | enqueue |
+| non-fault depth at or above the non-fault limit | protected slots remain available | drop newest, increment `dropped` and `overflow_events`, return `ERR_RESERVED_FAULT_SLOTS` |
+| fault with physical room | any physical slot is available | enqueue, including use of a reserved slot |
+| fault at physical capacity with a non-fault present | evict the newest non-fault by the full ordering key | enqueue the fault, return `OK_EVICTED_VICTIM`, increment `dropped` and `overflow_events` |
+| fault at physical capacity with only faults present | no safe software victim exists | retain all queued faults, reject the incoming fault, increment `dropped` and `overflow_events`, and invoke hard-fault escalation |
 
-Persistent overflow shall raise at least WARNING.
+The non-fault limit is `capacity - reserved_fault_slots` **non-fault events**,
+counted independently from queued faults. Reserved slots are physical capacity,
+not a second buffer, so the storage bound is always exact.
+A zero explicit reservation is supported for a non-safety queue that elects the
+historical generic overflow policy; safety/FSM queues use the default reserve.
 
-## 10. Event Identity
+Every overflow is counted. `consecutive_overflows` resets after an admitted push
+that did not drop or evict an event. Persistent overflow is reported when it
+reaches `CANCESTRY_EVENT_QUEUE_PERSISTENT_OVERFLOW_THRESHOLD`.
 
-- `event_id`: Globally unique identifier assigned by the event producer
-  at event creation time. Monotonically increasing across the entire
-  runtime. Used for traceability, log correlation, and debugging.
-  Never reused, even after queue eviction.
+## 10. Event identity
 
-- `sequence`: Per-source monotonic counter. Each event producer (CAN RX,
-  FSM instance, recipe engine, etc.) maintains its own sequence. Used
-  only as the third tiebreaker in deterministic pop ordering.
+- `event_id` is a queue-local, non-zero identity for trace and replay
+  correlation. It is never reused within a queue lifetime, including after
+  eviction.
+- `sequence` is a queue-local monotonic ordering tie-breaker. It is assigned on
+  every admitted push and is not assigned to rejected events.
 
-## 11. Fault Admission and Saturation
+## 11. Fault admission and hard-fault saturation
 
-### 11.1 Fault admission on non-fault-full queue
+### 11.1 Reserved-slot admission
 
-When a fault event arrives at a full queue containing non-fault events,
-the non-fault event to evict is selected by:
+Ordinary events are admitted only while the queued non-fault depth is below
+the non-fault limit. Faults are not subject to that limit and may use every
+free physical slot. Consequently, a burst of ordinary traffic cannot consume
+the capacity needed to record the configured number of faults.
 
-1. Lowest priority class (highest numeric value).
-2. Among equal priority: highest timestamp_us (newest).
-3. Among equal timestamp: highest sequence.
+### 11.2 Full queue containing non-fault events
 
-### 11.2 Fault-on-fault saturation
+When a fault arrives at physical capacity and a non-fault is present, the victim
+is the non-fault event with the greatest event ordering key:
 
-When a fault event arrives at a full queue containing only fault events,
-the existing fault event to evict is selected by:
+1. greatest `timestamp_us`;
+2. among equal timestamps, greatest `priority_class`; and
+3. among equal values, greatest `sequence`.
 
-1. Lowest priority class (highest numeric value).
-2. Among equal priority: lowest timestamp_us (oldest).
-3. Among equal timestamp: lowest sequence.
+This is the deterministic drop-newest analogue of the queue's pop order. The
+incoming fault receives a fresh sequence and remains queued.
 
-This ensures that under fault saturation, the most recent and
-highest-priority faults are preserved.
+### 11.3 Full queue containing only faults
 
-### 11.3 Policy summary
+When all physical slots contain faults, the primitive does **not** evict an
+existing fault and does not pretend the incoming fault was admitted. It records
+`ERR_FULL_FAULT`, increments `hard_fault_escalations`, and calls
+`cancestry_event_hard_fault_escalate()` with the configured hooks.
 
-- Fault events are never dropped due to non-fault admission.
-- Under fault-only saturation, bounded deterministic eviction occurs.
-- All eviction increments drop_count and sets the persistent-overflow
-  flag for the fault manager.
+The escalation hook order is mandatory:
 
-## 12. Queue Policy Instantiation
+1. the HAL fail-safe action forces zero torque / open contactors and revokes TX;
+2. the IWDG action leaves the independent watchdog on its reset path.
 
-The event queue primitive implements a single overflow policy. Different
-queue classes (global event queue, per-FSM incoming queue, per-FSM
-generated queue, CAN RX/TX queues) may require different policies.
-Multiple instantiations with different policies may be added in future
-phases if needed.
+The portable core supplies the ordered hook boundary. The Cortex-M binding in
+`platform/cortex_m/watchdog.c` connects those hooks to
+`cancestry_hardware_set_safe_state()` and `cancestry_watchdog_escalate()`.
+Missing hooks are a configuration error; the queue remains bounded and the
+existing fault set is retained rather than evicted.
+
+### 11.4 Policy summary
+
+- Reserved fault slots protect fault admission from ordinary saturation.
+- Faults may evict only a non-fault event, and the victim is selected
+  deterministically.
+- An all-fault full queue is a hard-fault condition, not an eviction case.
+- All drops, evictions, and escalations are observable through queue counters.
+
+## 12. Queue policy instantiation
+
+The same primitive is used by global and per-FSM queues. Safety queues shall
+use the default reserve or an explicit non-zero reserve and shall bind both hard-
+fault hooks. A queue that deliberately uses zero reserved slots must document
+that choice and must not be used as the sole safety fault sink.

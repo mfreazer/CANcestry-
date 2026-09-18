@@ -3,20 +3,21 @@
 | Field | Value |
 |---|---|
 | Document | CANcestry Safety Manual |
-| Version | 1.0.0 safety-case baseline |
-| Status | Complete software safety-case evidence package; not an ISO 26262 certification |
+| Version | 1.0.0-rc.1 candidate safety-case baseline |
+| Status | Candidate software safety-case evidence package; QA-EV-01 remains open; not an ISO 26262 certification |
 | Intended safety integrity | ASIL-B alignment target for a gateway software element |
 | Scope | `core/` execution archives, `core/governor/`, `platform/`, HIL verification and release evidence |
 | Owner | CANcestry safety and verification review |
 | Last review | 2026-09-18 |
-| Requirements | `SW-FR-BMS-001..006`, `SW-FR-HIL-001..006`, `SW-FR-SAFETY-001..005` plus the existing core/HAL/BM requirements |
+| Requirements | `SW-FR-EVENT-007..008`, `SW-FR-BMS-001..006`, `SW-FR-HIL-001..006`, `SW-FR-SAFETY-001..005`, `SW-FR-BM-005..006`, `QA-EV-01` plus the existing core/HAL requirements |
 
 ## 1. Purpose and safety claim
 
 CANcestry is a declarative CAN codec, event, recipe and FSM runtime for a
 safety-related gateway. This manual defines the software safety argument for
-the v1.0.0 candidate and identifies the evidence that an external assessor
-must review.
+the v1.0.0-rc.1 candidate and identifies the evidence that an external assessor
+must review. Final `1.0.0` release, tagging and milestone closure are deferred
+until QA-EV-01 is formally closed.
 
 The bounded claim is:
 
@@ -90,8 +91,10 @@ The layers have one-way dependencies:
    It performs no codec decode, UDS parsing, FSM evaluation or blocking call.
 3. **Event queue.** The main loop transfers valid ISR events into a bounded
    deterministic min-heap ordered by timestamp, priority class and sequence.
-   Fault events have admission priority; a full queue never silently evicts a
-   fault for ordinary traffic.
+   Path A reserves physical slots for faults: ordinary traffic stops at the
+   non-fault limit, faults may use the reserve, and a full all-fault queue
+   invokes the HAL fail-safe hook followed by the IWDG escalation hook rather
+   than evicting an existing fault (`SW-FR-EVENT-007..008`, `QA-EV-01`).
 4. **Codec and transport.** The codec atomically rejects short/malformed
    frames and out-of-range values. ISO-TP reassembly and UDS request handling
    use fixed caller-owned buffers. Hardware CRC rejection is upstream of both.
@@ -183,6 +186,25 @@ The integration must not turn a `DERATE` result into an approval for the
 original request. It shall log/raise the returned fault before it sends the
 safe response or moves the FSM.
 
+### 4.3 Hard-fault queue escalation
+
+The queue's Path A reserve is a safety capacity partition, not a promise that
+an unbounded number of faults can be stored. When every physical slot already
+contains a fault, `cancestry_event_hard_fault_escalate()` preserves the bounded
+fault set and invokes two caller-bound actions in a fixed order:
+
+1. the HAL fail-safe action calls `cancestry_hardware_set_safe_state()`, which
+   forces zero torque, opens contactors and revokes transmission authorization;
+2. the IWDG action calls `cancestry_watchdog_escalate()`, leaving the independent
+   watchdog on its reset path.
+
+The queue increments `hard_fault_escalations` and returns `ERR_FULL_FAULT`; it
+does not evict an existing diagnostic fault. The portable hook boundary is tested
+by `EVENT-RESERVED-SLOTS-001..005`, and the Cortex-M binding is tested by
+`HARD-FAULT-ESCALATION-001..002`. A host pass demonstrates software ordering and
+boundedness; target GPIO, watchdog and contactor timing remain integrator/HIL
+measurements required for QA-EV-01 closure.
+
 ## 5. Failure Modes and Effects Analysis summary
 
 This is a software-level FMEA summary, not a replacement for the item HARA or
@@ -193,7 +215,7 @@ the vehicle program's rating scheme.
 |---|---|---|---|---|
 | Corrupted CAN bits or invalid CRC | Physical frame is not trustworthy | Controller CRC/error counter; `HIL-CRC-001` | Hardware drops frame before software queue; no decode or FSM action | `SW-FR-HIL-003`, `SW-FR-CODEC-008` |
 | CAN controller Bus-Off | No trustworthy transmit path | Controller state, HAL fault, `HIL-BUSOFF-001` | Revoke TX, FSM `SAFE_STATE`; hardware recovery then bounded re-arm | `SW-FR-HIL-002`, `SW-FR-CAN-004..005`, `SW-FR-BM-006` |
-| RX/TX ring or event queue full | Traffic or diagnostics may be lost | Drop/overflow counters and fault-priority queue tests | Drop ordinary newest traffic; retain/raise fault; no unbounded retry | `SW-FR-EVENT-004..006`, `SW-FR-BM-003` |
+| RX/TX ring or event queue full | Traffic or diagnostics may be lost | Reserved-slot, overflow and hard-fault escalation tests | Stop ordinary admission at the reserve boundary; retain faults; HAL safe state then IWDG on all-fault saturation | `SW-FR-EVENT-004..008`, `SW-FR-FSM-020`, `SW-FR-BM-005..006`, `QA-EV-01` |
 | Short, unsupported or out-of-range frame | Partial signal could be unsafe | HAL/codec validation and conformance tests | Atomic drop; no partial signal update | `SW-FR-CODEC-008`, `SW-FR-CANFD-002..003` |
 | ISR overrun or main-loop hang | Events are delayed; control deadline is missed | WCET/latency measurement and IWDG | IWDG reset; hardware zero torque/contactors open | `SW-FR-BM-003..007` |
 | Brownout / supply collapse | MCU may execute unpredictably during power loss | BOR reset cause, voltage capture, `HIL-BROWNOUT-001` | BOR hardware latch forces zero torque/open contactors before power-down | `SW-FR-HIL-004`, `SW-FR-BM-005..006` |
@@ -224,14 +246,14 @@ manual/release evidence requirements are `SW-FR-SAFETY-001`,
 | TSR-BMS-02 | Prevent original request after derating | `DERATE` output and explicit intervention fault consumed by integration | `BMS-GOV-001`; governor README/integration contract; `SW-FR-BMS-004..005` |
 | TSR-BMS-03 | Fail safe when BMS data is invalid | Zero-output `BLOCK` for invalid/faulted snapshot | `BMS-GOV-003..004`; `SW-FR-BMS-006` |
 | TSR-UDS-01 | Gate diagnostic side effects | UDS governor checkpoint before any store/effect; NULL denies | `UDS-GOV-001..005`; `SW-FR-UDS-007` |
-| TSR-RES-01 | Bound resource use and fault saturation | Fixed capacities, priority fault admission, explicit drops/counters | event/FSM queue tests; `SW-FR-EVENT-004..006` |
+| TSR-RES-01 | Bound resource use and fault saturation | Fixed capacities, reserved fault slots, deterministic non-fault eviction, explicit drops/counters and ordered HAL/IWDG escalation | `EVENT-RESERVED-SLOTS-001..005`; `HARD-FAULT-ESCALATION-001..002`; `SW-FR-EVENT-004..008`; `QA-EV-01` |
 | TSR-TRACE-01 | Make safety evidence auditable | Traceability CSV, final v1 report, deterministic HIL JSON and release gates | `final_v1_report.md`; `ci/check_traceability.py`; `SW-FR-SAFETY-004..005` |
 
 ## 7. Resource, timing and independence constraints
 
 | Resource | Bound / policy | Safety relevance |
 |---|---|---|
-| Event queue | 1..32767 caller-owned slots | No heap growth; bounded heap operations |
+| Event queue | 1..32767 caller-owned slots; default reserve of two fault slots (clamped for tiny queues) | No heap growth; ordinary traffic cannot consume fault capacity; bounded heap operations |
 | ISR queue | Caller-owned fixed SPSC ring | O(1) interrupt hand-off; overflow is observable |
 | CAN payload | Classic 1..8; FD 1..8, 12, 16, 20, 24, 32, 48 or 64 bytes | No truncation or out-of-bounds bit access |
 | Expression text | 256 characters | Bounded parser/evaluator work |
@@ -263,11 +285,14 @@ The independent evidence set is:
 7. **Documentation review:** this manual, the FMEA/TSR mappings, BMS contract,
    HIL report, final v1 trace report and release notes.
 
-A v1.0.0 tag is permitted only when the build/test/traceability/no-allocation
-commands pass, no CSV row has status `failed`, the HIL simulation is green,
-and the target limitations in the HIL report are accepted by the responsible
-safety owner. Target hardware confirmation is a prerequisite for a vehicle
-release even though the repository's host evidence is complete.
+The current `1.0.0-rc.1` candidate is not a final release. A final `1.0.0`
+tag is permitted only when the build/test/traceability/no-allocation commands
+pass, no CSV row has status `failed`, the HIL simulation is green, QA-EV-01 is
+formally closed, and the target limitations in the HIL report are accepted by
+the responsible safety owner. Target hardware confirmation is a prerequisite
+for a vehicle release even though the repository's host evidence is complete.
+Until those conditions hold, the final version bump, tag and milestone closure
+are explicitly deferred.
 
 ## 9. Change control
 
@@ -294,6 +319,6 @@ host test still passes.
 * Machine-readable matrix: [`docs/trace/traceability.csv`](../trace/traceability.csv)
 * Existing bare-metal safe-state evidence: [`platform/cortex_m/watchdog.c`](../../platform/cortex_m/watchdog.c)
 
-This manual is complete as the v1.0.0 software safety-manual baseline. It must
-not be represented as an ISO 26262 certificate or as evidence that a complete
-vehicle item has achieved ASIL-B.
+This manual is the `1.0.0-rc.1` candidate software safety-manual baseline;
+QA-EV-01 remains open. It must not be represented as an ISO 26262 certificate
+or as evidence that a complete vehicle item has achieved ASIL-B.

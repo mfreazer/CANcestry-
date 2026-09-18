@@ -3,12 +3,12 @@
 | Field | Value |
 |---|---|
 | Document | CANcestry Test Strategy |
-| Version | 0.2.0 |
-| Status | Draft for approval |
+| Version | 1.0.0-rc.1 |
+| Status | Release-candidate QA baseline; QA-EV-01 remains open |
 | Owner | QA |
 | Approver | System Engineer + Maintainer |
-| Last Review | 2026-09-13 |
-| Change Log | v0.2.0: Formal test strategy derived from QA review and v0.2.0 corrective baseline |
+| Last Review | 2026-09-18 |
+| Change Log | v1.0.0-rc.1: Phase 12 safety evidence plus QA-EV-01 reserved-slot correction |
 | Repository location | `docs/qa/test-strategy.md` |
 
 ---
@@ -28,7 +28,7 @@ The strategy establishes:
 - entry and exit criteria,
 - defect and release gates.
 
-This strategy is normative for CANcestry v0.2.0 and later until superseded.
+This strategy is normative for the CANcestry 1.0.0-rc.1 candidate and later until superseded. Final 1.0.0 release, tagging, and milestone closure remain deferred until QA-EV-01 is formally closed.
 
 ---
 
@@ -57,7 +57,7 @@ This strategy does **not** cover:
 - full UDS diagnostics,
 - cloud services or marketplace infrastructure.
 
-Those remain out of scope for v0.2.0.
+Those remain outside the current release-candidate scope or are explicitly deferred in the v1.1.0 ledger.
 
 ---
 
@@ -272,10 +272,11 @@ requirement_id,artifact_type,artifact_id,verification_method,test_id,status
 
 Requirements:
 
-- Every High-priority requirement shall have at least one test.
-- Every test shall reference at least one requirement ID.
-- Every conformance suite shall map to SwRS FSM requirements.
-- Traceability completeness shall be checked in CI.
+- Every High-priority requirement shall have at least one verification row.
+- Every test source shall reference at least one requirement ID.
+- Every conformance suite shall map to SwRS requirements.
+- Reserved fault slots and hard-fault escalation shall have deterministic edge-case tests (`EVENT-RESERVED-SLOTS-*`, `HARD-FAULT-ESCALATION-*`).
+- Traceability completeness shall be checked in CI by `ci/check_traceability.py`.
 
 ---
 
@@ -290,6 +291,7 @@ Requirements:
 | Phase 4 — FSM runtime | Phase 3 complete, FSM conformance suite exists | FSM conformance passes, event-order/timer/expression/instance tests pass |
 | Phase 5 — CAN integration | Phase 4 complete | HIL CAN RX/TX and bus-off tests pass |
 | Phase 6 — CLI and simulator | Phase 3+ complete | Third-party package can be developed without hardware |
+| Phase 12 — v1.0.0-rc.1 safety evidence | Governor, HIL, safety artifacts and QA-EV-01 correction present | Strict build/tests, traceability and safety review pass; final 1.0.0 gate remains explicitly deferred while QA-EV-01 is open |
 
 No FSM runtime code shall be merged before the FSM conformance suite exists and passes.
 
@@ -391,10 +393,11 @@ ci/docker/
 
 This test strategy is approved when:
 
-1. The v0.2.0 schemas are committed.
-2. The FSM conformance suite exists.
-3. Traceability is generated and complete for all High-priority requirements.
-4. The HIL runner is available for release testing.
-5. QA and System Engineer sign off.
+1. The release-candidate schemas and requirements are committed.
+2. The FSM, governor, event-reserve and hard-fault conformance suites exist.
+3. Traceability is complete, with all deferred requirements named in the embedded ledger.
+4. HIL evidence identifies the simulation limitation and target completion procedure.
+5. QA-EV-01 is formally closed by QA and System Engineer.
+6. Only then may the final version bump, tag and milestone closure be approved.
 
-Until then, CANcestry remains **conditionally approved** for implementation, with Phase 4 FSM implementation blocked.
+Until those conditions hold, CANcestry remains **conditionally approved** as 1.0.0-rc.1; no final 1.0.0 claim is authorized.

@@ -260,7 +260,7 @@ A pass proves **SYS-NF-007 portability** and **SW-FR-FSM-046/SYS-NF-001
 determinism across a different CPU, ABI and C library** — the same events and
 the same egress frames on the target as on the host. It does **not** prove
 anything about bus behaviour; that is the CAN integration phase's HIL workflow
-(`Test strategy.md` section 8.3), and it should be planned with a CAN analyser
+(`docs/qa/test-strategy.md` section 8.3), and it should be planned with a CAN analyser
 in the loop, not with this harness.
 
 ### 5.4 Bench checklist

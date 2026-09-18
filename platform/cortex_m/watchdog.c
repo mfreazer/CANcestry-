@@ -115,6 +115,64 @@ void cancestry_watchdog_induce_hang(cancestry_watchdog_t *wdg)
     }
 }
 
+void cancestry_watchdog_escalate(cancestry_watchdog_t *wdg)
+{
+    if (wdg == NULL) {
+        return;
+    }
+
+    /* The outputs are safe before the watchdog reset is allowed to take its
+     * bounded course. This is deliberately duplicated in the hook adapter so
+     * a direct caller also gets the fail-safe invariant. */
+    cancestry_hardware_set_safe_state(wdg);
+    wdg->hang_induced = true;
+    wdg->remaining_time_ms = 0;
+
+#if defined(__arm__) || defined(__thumb__)
+    /* Leave the IWDG running but reduce the remaining period to the smallest
+     * useful reload. No feed can occur after escalation. */
+    IWDG_KR = 0x5555u;
+    IWDG_RLR = 1u;
+    IWDG_KR = 0xAAAAu;
+#endif
+}
+
+static void watchdog_hard_fault_fail_safe(void *context)
+{
+    cancestry_watchdog_t *wdg = (cancestry_watchdog_t *)context;
+    cancestry_hardware_set_safe_state(wdg);
+}
+
+static void watchdog_hard_fault_iwdg(void *context)
+{
+    cancestry_watchdog_t *wdg = (cancestry_watchdog_t *)context;
+    cancestry_watchdog_escalate(wdg);
+}
+
+void cancestry_watchdog_get_hard_fault_hooks(
+    cancestry_event_hard_fault_hooks_t *hooks,
+    cancestry_watchdog_t *wdg)
+{
+    if (hooks == NULL) {
+        return;
+    }
+    hooks->hal_fail_safe = watchdog_hard_fault_fail_safe;
+    hooks->iwdg_escalate = watchdog_hard_fault_iwdg;
+    hooks->context = wdg;
+}
+
+bool cancestry_watchdog_bind_event_queue(cancestry_watchdog_t *wdg,
+                                         cancestry_event_queue_t *queue)
+{
+    cancestry_event_hard_fault_hooks_t hooks;
+
+    if (wdg == NULL || queue == NULL) {
+        return false;
+    }
+    cancestry_watchdog_get_hard_fault_hooks(&hooks, wdg);
+    return cancestry_event_queue_set_hard_fault_hooks(queue, &hooks);
+}
+
 bool cancestry_watchdog_sim_tick(cancestry_watchdog_t *wdg, uint32_t delta_ms)
 {
     if (wdg == NULL || !wdg->is_running) {

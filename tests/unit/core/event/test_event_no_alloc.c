@@ -96,6 +96,7 @@ static bool status_is_acceptable(cancestry_event_queue_status_t status)
     case CANCESTRY_EVENT_QUEUE_OK_EVICTED_VICTIM:
     case CANCESTRY_EVENT_QUEUE_ERR_FULL:
     case CANCESTRY_EVENT_QUEUE_ERR_FULL_FAULT:
+    case CANCESTRY_EVENT_QUEUE_ERR_RESERVED_FAULT_SLOTS:
         return true;
     case CANCESTRY_EVENT_QUEUE_ERR_NULL:
     case CANCESTRY_EVENT_QUEUE_ERR_CAPACITY:

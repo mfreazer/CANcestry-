@@ -417,8 +417,8 @@ typedef struct cancestry_fsm_engine_counters {
  *
  * Each instance needs three bounded tables. Sizes are the caller's choice; the
  * engine refuses (ERR_CAPACITY) when a table cannot hold the machine's timers
- * or variables, and the incoming queue depth decides the overflow behaviour
- * (SW-FR-FSM-019: default 64).
+ * or variables. The incoming queue uses the shared Path A reserve policy
+ * (SW-FR-FSM-019: default depth 64; SW-FR-FSM-020).
  */
 typedef struct cancestry_fsm_instance_storage {
     /** Incoming event queue storage. */

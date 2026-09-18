@@ -9,7 +9,7 @@ source builds for firmware and for host simulation.
 |---|---|
 | Status | Implemented (issue #1, Phase 1) |
 | Normative sources | `docs/system/event-ordering.md`, `docs/software/SwRS.md`, `docs/system/SyRS.md` |
-| Requirements | SW-FR-EVENT-001 .. SW-FR-EVENT-006, SYS-IR-005, SYS-NF-001, SYS-NF-002, QA-v0.2-R04 |
+| Requirements | SW-FR-EVENT-001 .. SW-FR-EVENT-008, SW-FR-FSM-020, SW-FR-BM-005 .. SW-FR-BM-006, SYS-IR-005, SYS-NF-001, SYS-NF-002, QA-EV-01 |
 
 ## Layout
 
@@ -18,9 +18,11 @@ core/event/
   include/cancestry/event/
     clock.h    monotonic clock, virtual clock for simulation
     types.h    event struct, enumerations, typed payload union
+    fault.h    portable ordered HAL/IWDG escalation contract
     queue.h    bounded, caller-owned event queue
   src/
     clock.c
+    fault.c
     queue.c
     types.c
 tests/unit/core/event/   unit tests (CTest)
@@ -65,25 +67,31 @@ apart.
 
 ## Overflow policy
 
-Section 9 of the ordering spec is implemented as follows when the queue is full:
+The queue uses Path A from `docs/system/event-ordering.md` section 9. The
+three-argument initializer reserves two physical slots for faults by default
+(clamped for tiny capacities); callers that need an explicit policy use
+`cancestry_event_queue_init_with_reserved_fault_slots()`.
 
-| Incoming event | Queue content | Result |
+| Incoming event | Queue state | Result |
 |---|---|---|
-| non-fault | any | the incoming event is dropped (drop-newest), `dropped` and `overflow_events` increment, status `ERR_FULL` |
-| fault | at least one non-fault event | the fault is admitted and the **newest non-fault** event is evicted, `dropped` and `overflow_events` increment, status `OK_EVICTED_VICTIM` |
-| fault | only fault events | the incoming fault is dropped, `dropped` and `overflow_events` increment, status `ERR_FULL_FAULT` |
+| non-fault | non-fault limit reached | incoming event is dropped (drop-newest), status `ERR_RESERVED_FAULT_SLOTS` |
+| fault | physical room exists | fault is admitted, including into a reserved slot |
+| fault | physical full with a non-fault | newest non-fault by the full ordering key is evicted; status `OK_EVICTED_VICTIM` |
+| fault | physical full with only faults | existing faults are retained, status `ERR_FULL_FAULT`, `hard_fault_escalations` increments, and the configured HAL/IWDG hooks run |
 
-The eviction victim is the non-fault event with the highest ordering key, which
-is the event that would have been popped last. That is the direct analogue of
-drop-newest and is deterministic because sequence numbers are unique. Faults are
-therefore never dropped while any non-fault event remains queued
-(SW-FR-FSM-020, QA-v0.2-R04).
+The non-fault limit is `capacity - reserved_fault_slots` non-fault events,
+counted independently from queued faults. This means ordinary traffic cannot
+consume the capacity promised to faults. Fault admission is bounded and
+deterministic: the eviction victim is the non-fault event that would have been
+popped last. An all-fault queue has no safe software victim, so
+it is a hard-fault condition rather than a fault-on-fault eviction case
+(SW-FR-EVENT-007, SW-FR-EVENT-008, SW-FR-FSM-020, QA-EV-01).
 
 `consecutive_overflows` counts overflow events since the last push that dropped
 nothing. Once it reaches `CANCESTRY_EVENT_QUEUE_PERSISTENT_OVERFLOW_THRESHOLD`,
 `cancestry_event_queue_overflow_is_persistent()` reports true. The queue only
-counts; raising the WARNING (or ERROR, for persistent overflow) is owned by the
-fault manager, which does not exist yet.
+counts; the configured hard-fault hooks perform immediate fail-safe escalation
+when fault capacity is exhausted.
 
 ## Clocks
 

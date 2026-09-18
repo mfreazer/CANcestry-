@@ -11,6 +11,9 @@
  *   - No allocation, no recursion, no global state, no threading primitives.
  *     Every operation is O(log n) except the fault-admission path, which scans
  *     the queue once to pick the drop-newest victim.
+ *   - Path A reserves physical slots for faults. Ordinary events cannot use
+ *     those slots; a fault may use any free slot or evict the newest non-fault.
+ *     An all-fault full queue invokes the configured fail-safe/IWDG hooks.
  */
 
 #include "cancestry/event/queue.h"
@@ -160,13 +163,32 @@ bool cancestry_event_queue_init(cancestry_event_queue_t *queue,
                                 cancestry_event_t *storage,
                                 uint16_t capacity)
 {
+    uint16_t reserved_fault_slots = CANCESTRY_EVENT_QUEUE_DEFAULT_RESERVED_FAULT_SLOTS;
+
+    /* A one-slot queue cannot reserve a slot and still accept an ordinary
+     * event. The explicit initializer remains available for callers that want
+     * a different trade-off. */
+    if (capacity <= reserved_fault_slots) {
+        reserved_fault_slots = (capacity > 0u) ? (uint16_t)(capacity - 1u) : 0u;
+    }
+    return cancestry_event_queue_init_with_reserved_fault_slots(
+        queue, storage, capacity, reserved_fault_slots);
+}
+
+bool cancestry_event_queue_init_with_reserved_fault_slots(
+    cancestry_event_queue_t *queue,
+    cancestry_event_t *storage,
+    uint16_t capacity,
+    uint16_t reserved_fault_slots)
+{
     if (queue == NULL) {
         return false;
     }
 
     memset(queue, 0, sizeof(*queue));
 
-    if (storage == NULL || capacity == 0u || capacity > CANCESTRY_EVENT_QUEUE_MAX_CAPACITY) {
+    if (storage == NULL || capacity == 0u || capacity > CANCESTRY_EVENT_QUEUE_MAX_CAPACITY ||
+        reserved_fault_slots > capacity) {
         return false;
     }
 
@@ -174,6 +196,7 @@ bool cancestry_event_queue_init(cancestry_event_queue_t *queue,
     queue->capacity = capacity;
     queue->size = 0u;
     queue->fault_count = 0u;
+    queue->reserved_fault_slots = reserved_fault_slots;
     queue->next_sequence = 0u;
     queue->next_event_id = 0u;
     return true;
@@ -183,7 +206,28 @@ bool cancestry_event_queue_is_valid(const cancestry_event_queue_t *queue)
 {
     return (queue != NULL) && (queue->slots != NULL) && (queue->capacity > 0u) &&
            (queue->capacity <= CANCESTRY_EVENT_QUEUE_MAX_CAPACITY) &&
+           (queue->reserved_fault_slots <= queue->capacity) &&
            (queue->size <= queue->capacity) && (queue->fault_count <= queue->size);
+}
+
+uint16_t cancestry_event_queue_reserved_fault_slots(
+    const cancestry_event_queue_t *queue)
+{
+    if (!cancestry_event_queue_is_valid(queue)) {
+        return 0u;
+    }
+    return queue->reserved_fault_slots;
+}
+
+bool cancestry_event_queue_set_hard_fault_hooks(
+    cancestry_event_queue_t *queue,
+    const cancestry_event_hard_fault_hooks_t *hooks)
+{
+    if (!cancestry_event_queue_is_valid(queue) || hooks == NULL) {
+        return false;
+    }
+    queue->hard_fault_hooks = *hooks;
+    return true;
 }
 
 uint16_t cancestry_event_queue_capacity(const cancestry_event_queue_t *queue)
@@ -260,14 +304,28 @@ cancestry_event_queue_status_t cancestry_event_queue_push(cancestry_event_queue_
         return CANCESTRY_EVENT_QUEUE_ERR_EVENT;
     }
 
+    /* Path A: ordinary traffic can never consume more than the unreserved
+     * non-fault share. Faults already occupying reserved slots do not reduce
+     * the remaining non-fault share. */
+    if (event->priority_class != CANCESTRY_PRIORITY_CLASS_FAULT &&
+        queue->reserved_fault_slots != 0u &&
+        (uint16_t)(queue->size - queue->fault_count) >=
+            (uint16_t)(queue->capacity - queue->reserved_fault_slots)) {
+        queue->counters.overflow_events++;
+        queue->counters.consecutive_overflows++;
+        queue->counters.dropped++;
+        return CANCESTRY_EVENT_QUEUE_ERR_RESERVED_FAULT_SLOTS;
+    }
+
     if (queue->size < queue->capacity) {
         queue->counters.consecutive_overflows = 0u;
         return queue_enqueue(queue, event);
     }
 
     /*
-     * Overflow. docs/system/event-ordering.md section 9: drop-newest for
-     * non-fault events, fault events are never dropped.
+     * Physical overflow. A fault is admitted by evicting the newest non-fault
+     * event. A full queue containing only faults has no safe software victim:
+     * preserve the existing fault set and escalate to the HAL/IWDG path.
      */
     queue->counters.overflow_events++;
     queue->counters.consecutive_overflows++;
@@ -279,8 +337,10 @@ cancestry_event_queue_status_t cancestry_event_queue_push(cancestry_event_queue_
 
     victim = queue_find_newest_non_fault(queue);
     if (victim == CANCESTRY_QUEUE_NO_INDEX) {
-        /* The queue holds nothing but faults; there is no victim to evict. */
+        /* The queue holds nothing but faults; do not evict a diagnostic fault. */
         queue->counters.dropped++;
+        queue->counters.hard_fault_escalations++;
+        (void)cancestry_event_hard_fault_escalate(&queue->hard_fault_hooks);
         return CANCESTRY_EVENT_QUEUE_ERR_FULL_FAULT;
     }
 
@@ -459,6 +519,8 @@ const char *cancestry_event_queue_status_name(cancestry_event_queue_status_t sta
         return "ERR_FULL";
     case CANCESTRY_EVENT_QUEUE_ERR_FULL_FAULT:
         return "ERR_FULL_FAULT";
+    case CANCESTRY_EVENT_QUEUE_ERR_RESERVED_FAULT_SLOTS:
+        return "ERR_RESERVED_FAULT_SLOTS";
     case CANCESTRY_EVENT_QUEUE_ERR_EMPTY:
         return "ERR_EMPTY";
     default:

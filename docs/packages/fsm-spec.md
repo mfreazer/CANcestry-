@@ -114,8 +114,15 @@ Per-instance incoming event queue default depth:
 
 Overflow policy:
 
-- drop-newest for non-fault events,
-- never drop fault events.
+- reserve two fault slots by default so ordinary events stop at the non-fault
+  depth limit;
+- admit faults into free reserved capacity, or evict only the deterministic
+  newest non-fault event when physical capacity is full; and
+- retain the bounded fault set and invoke ordered HAL/IWDG escalation when all
+  physical slots contain faults.
+
+The normative implementation and explicit per-instance reserve behavior are
+specified in `docs/system/event-ordering.md` sections 9 and 11.
 
 ## 12. Schema versioning
 

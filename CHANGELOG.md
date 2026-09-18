@@ -2,11 +2,12 @@
 
 All notable changes to CANcestry are documented here.
 
-## [1.0.0] - 2026-09-18
+## [1.0.0-rc.1] - 2026-09-18
 
-Phase 12 (issue #30) completes the v1.0.0 software safety-case baseline for
-an EV Battery Replacement Gateway. The release is an ASIL-B alignment target,
-not an ISO 26262 certification.
+Phase 12 (issue #30) and the QA-EV-01 correction establish the v1.0.0-rc.1
+software safety-case candidate for an EV Battery Replacement Gateway. This is
+an ASIL-B alignment target, not an ISO 26262 certification; final `1.0.0`
+release, tagging and milestone closure remain deferred until QA-EV-01 is closed.
 
 ### Added
 
@@ -26,13 +27,20 @@ not an ISO 26262 certification.
 - **Governor conformance and archive gate** (`BMS-GOV-001..008`,
   `cancestry_governor_no_malloc_symbols`) covering thermal edge cases,
   conservative rounding, BMS fault handling and NULL/invalid inputs.
+- **QA-EV-01 Path A correction** (`core/event/`): the default queue reserves
+  physical fault slots, rejects ordinary traffic at the reserve boundary,
+  preserves all-fault sets without fault-on-fault eviction, and invokes ordered
+  HAL fail-safe then IWDG escalation hooks. Added reserved-slot and hard-fault
+  conformance tests and candidate release-control records.
 
 ### Changed
 
-- `VERSION` is now `1.0.0`.
-- `docs/trace/traceability.csv` contains the Phase 12 evidence rows; the final
-  report records 164/164 implemented v1 requirements covered, 56 explicit
-  v1.1.0 deferrals, 275 rows, and no failed row.
+- `VERSION` and root CMake metadata are `1.0.0-rc.1`; the final `1.0.0`
+  bump is explicitly deferred.
+- `docs/trace/traceability.csv` now uses six columns and contains the Phase 12
+  and QA-EV-01 evidence rows; the candidate report records 166/166 implemented
+  requirements covered, 56 explicit v1.1.0 deferrals, 288 rows, and no failed
+  row.
 - The release gate now treats the physical HIL limitation as an explicit
   acceptance item rather than silently claiming target hardware validation.
 
@@ -404,5 +412,5 @@ Release notes and announcement: [`docs/releases/v0.3.0-rc.1.md`](docs/releases/v
 ## [0.2.0] - 2026-09-13
 
 v0.2.0 corrective baseline: schemas, traceability skeleton and the test
-strategy recorded in `Test strategy.md` v0.2.0; portable event core, codec
+strategy recorded in `docs/qa/test-strategy.md`; portable event core, codec
 engine and recipe engine implemented with host unit tests.

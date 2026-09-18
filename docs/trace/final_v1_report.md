@@ -1,30 +1,31 @@
-# CANcestry v1.0.0 final traceability report
+# CANcestry v1.0.0-rc.1 candidate traceability report
 
 | Field | Value |
 |---|---|
-| Release | v1.0.0 candidate |
-| Report version | 1.0.0 |
+| Release | v1.0.0-rc.1 candidate |
+| Report version | 1.0.0-rc.1 |
 | Date | 2026-09-18 |
 | Requirement source | [`docs/software/SwRS.md`](../software/SwRS.md), [`docs/SyRS.md`](../SyRS.md) |
 | Machine-readable matrix | [`traceability.csv`](traceability.csv) |
 | Gate | `python3 ci/check_traceability.py .` |
-| Status | Passing software evidence; target hardware confirmation remains a vehicle-release prerequisite |
+| Status | Passing candidate software evidence; QA-EV-01 remains open; target hardware confirmation remains a vehicle-release prerequisite |
 
 ## 1. Executive result
 
-The v1.0.0 software scope has complete traceability:
+The v1.0.0-rc.1 candidate software scope has complete traceability:
 
-* **220** software/system requirement ids are defined by the SwRS and SyRS.
-* **164** defined requirement ids are in the v1.0.0 implemented scope and have
-  at least one `passing` row: **164/164 = 100%**.
+* **222** software/system requirement ids are defined by the SwRS and SyRS.
+* **166** defined requirement ids are in the v1.0.0-rc.1 implemented scope and have
+  at least one `passing` row: **166/166 = 100%**.
 * **56** defined requirement ids are explicitly deferred to v1.1.0 in the
   ledger in section 5; none is silently absent.
-* The CSV contains **275 rows**: **251 passing**, **24 planned**, and **0
+* The CSV contains **288 rows**: **264 passing**, **24 planned**, and **0
   failed**. Planned rows are supplemental paths for requirements that already
   have a passing primary path and are also named in the deferred ledger where
   appropriate.
-* The Phase 12 additions are all passing: six BMS requirements, six HIL
-  requirements and five final-safety-case requirements (**17/17 = 100%**).
+* The Phase 12 additions and QA-EV-01 correction are passing: six BMS
+  requirements, six HIL requirements, five safety-case requirements and two
+  reserved-slot requirements (**19/19 = 100%**).
 * The traceability gate resolves every passing test id to a source artifact and
   checks every C test source for a requirement citation.
 
@@ -51,16 +52,16 @@ The expected traceability output is a `PASS` line with the counts above. The
 HIL JSON is deterministic: it contains no wall-clock time, random identifier
 or host-dependent path.
 
-## 3. In-scope v1.0.0 coverage
+## 3. In-scope v1.0.0-rc.1 coverage
 
-The following requirement groups are the implemented v1.0.0 software scope.
+The following requirement groups are the implemented v1.0.0-rc.1 candidate software scope.
 The number in the last column is the number of distinct requirement ids with
 at least one passing row, not the number of CSV rows.
 
 | Requirement group | Passing ids | Evidence families | Coverage |
 |---|---|---|---:|
 | `SW-FR-CODEC-001..008` | 8 | codec unit/conformance, parity, no-allocation gate | 8/8 |
-| `SW-FR-EVENT-001..006` | 6 | event unit/conformance, queue/order tests | 6/6 |
+| `SW-FR-EVENT-001..008` | 8 | event unit/conformance, reserved-slot and escalation tests | 8/8 |
 | `SW-FR-RECIPE-001..003,005..007` | 6 | recipe unit tests, gateway loop, governor tests | 6/6 |
 | `SW-FR-FSM-001..055` | 55 | loader, runtime and conformance suites | 55/55 |
 | `SW-FR-GOV-005..006` | 2 | fail-closed recipe/FSM/gateway paths | 2/2 |
@@ -74,11 +75,11 @@ at least one passing row, not the number of CSV rows.
 | `SW-FR-HIL-001..006` | 6 | `HIL-BUSOFF-001`, `HIL-CRC-001`, `HIL-BROWNOUT-001`, report check | 6/6 |
 | `SW-FR-SAFETY-001..005` | 5 | manual, FMEA/TSR, report and release-marker checks | 5/5 |
 | Passing `SYS-*` ids | 17 | gateway, HAL, tool, event and no-allocation evidence | 17/17 |
-| **Total defined and in v1 scope** | **164** | **all primary rows are `passing`** | **164/164 (100%)** |
+| **Total defined and in candidate scope** | **166** | **all primary rows are `passing`** | **166/166 (100%)** |
 
-The six passing QA review identifiers (`QA-H02`, `QA-v0.2-R01`,
+The passing QA review identifiers (`QA-H02`, `QA-v0.2-R01`,
 `QA-v0.2-R04`, `QA-v0.2-R06`, `QA-v0.2-R09`, `QA-v0.2-R10`) are supplementary
-review evidence and are not counted in the 220 SwRS/SyRS requirement total.
+review evidence and are not counted in the 222 SwRS/SyRS requirement total.
 
 ## 4. Phase 12 evidence map
 
@@ -102,7 +103,18 @@ review evidence and are not counted in the 220 SwRS/SyRS requirement total.
 | `SW-FR-SAFETY-004` | this report and machine CSV | `TRACE-V1-001` | passing |
 | `SW-FR-SAFETY-005` | version/changelog/release gate | `SAFETY-RELEASE-001` | passing |
 
-### 4.1 BMS decision evidence
+### 4.1 Event reserve and hard-fault evidence
+
+`EVENT-RESERVED-SLOTS-001..005` proves that the default queue reserve blocks
+ordinary admission after `capacity - reserved_fault_slots` non-fault events,
+admits faults into the reserved physical slots, covers the one-slot boundary,
+and selects only the deterministic newest non-fault victim when physical
+capacity is full. `HARD-FAULT-ESCALATION-001..002` binds
+those semantics to the Cortex-M platform: HAL safe state is asserted first and
+the IWDG reset path follows. QA-EV-01 is still open for formal review of this
+evidence and target timing; passing tests do not authorize the final release.
+
+### 4.2 BMS decision evidence
 
 The canonical vector is 100,000 W at 400,000 mV, a 250,000 mA
 `MaxDischargeCurrent` and 950 per-mille efficiency. `BMS-GOV-001..008`
@@ -114,7 +126,7 @@ not 100,000 W, to be emitted. Invalid voltage/efficiency and a faulted BMS
 return `BLOCK` with zero output. There are no mutable thresholds or heap
 references in the governor archive.
 
-### 4.2 HIL boundary evidence
+### 4.3 HIL boundary evidence
 
 The simulation deliberately proves negative properties:
 
@@ -130,10 +142,10 @@ are not silently represented as passing hardware evidence.
 
 ## 5. v1.1.0 deferred ledger
 
-The following 56 requirement ids are explicitly outside the v1.0.0 software
+The following 56 requirement ids are explicitly outside the v1.0.0-rc.1 candidate
 scope. They are not missing: each has an owner and rationale. The existing
 `planned` rows in `traceability.csv` are retained as forward-looking evidence
-names and do not weaken the 100% claim for the implemented v1 scope.
+names and do not weaken the 100% claim for the implemented candidate scope.
 
 | v1.1 owner | Deferred requirements | Rationale |
 |---|---|---|
@@ -154,13 +166,13 @@ that evidence is prohibited.
 
 | Artifact | Required state | Location |
 |---|---|---|
-| Version marker | `1.0.0` | `VERSION` |
-| Changelog | Phase 12 and v1.0.0 entry | `CHANGELOG.md` |
+| Version marker | `1.0.0-rc.1` | `VERSION` |
+| Changelog | Phase 12 candidate entry; final release deferred | `CHANGELOG.md` |
 | BMS governor | static, pure, unit/conformance covered | `core/governor/` |
 | HIL harness | three hardware-first scenarios | `tests/hil/` |
 | HIL report | simulation limitation and target procedure | `docs/qa/hil-fault-injection-report.md` |
 | Safety Manual | architecture, FMEA, ASIL-B TSR mapping | `docs/safety/SafetyManual.md` |
-| Traceability matrix | no failed row; all v1 ids passing | `docs/trace/traceability.csv` |
+| Traceability matrix | no failed row; all candidate ids passing | `docs/trace/traceability.csv` |
 | Final report | counts, evidence and v1.1 ledger | this file |
 | CI gates | build/tests, no-allocation and traceability green | CMake/CTest/CI |
 
@@ -177,4 +189,4 @@ The machine check enforces the following release properties:
 
 The authoritative command is the traceability gate, not the prose counts in
 this report. If the matrix changes, regenerate/review this report and rerun
-the gate before a v1.0.0 release.
+the gate before a final v1.0.0 release.

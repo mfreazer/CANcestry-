@@ -33,6 +33,8 @@ cancestry_add_bm_conformance_test(cancestry_conformance_bm_latency
     test_baremetal_latency.c)
 cancestry_add_bm_conformance_test(cancestry_conformance_bm_watchdog
     test_watchdog_fail_safe.c)
+cancestry_add_bm_conformance_test(cancestry_conformance_bm_hard_fault_escalation
+    test_hard_fault_escalation.c)
 cancestry_add_bm_conformance_test(cancestry_conformance_bm_zero_alloc
     test_baremetal_zero_alloc.c)
 target_compile_definitions(cancestry_conformance_bm_zero_alloc

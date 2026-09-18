@@ -1,15 +1,16 @@
 # CANcestry-
 CAN bus  open CAN codec maps, recipes, and emulation state machines.describe the bus, teach the machine, emulate the module
 
-**Latest release: v1.0.0** (software safety-case baseline) — the portable cores,
-stateless BMS governor and hardware-first HIL evidence are covered by the
-release gate. See the [changelog](CHANGELOG.md), the
+**Current release candidate: v1.0.0-rc.1** — the portable cores, stateless
+BMS governor, hardware-first HIL evidence and QA-EV-01 correction are recorded,
+but final release remains deferred. See the [changelog](CHANGELOG.md), the
 [Safety Manual](docs/safety/SafetyManual.md), the
-[HIL report](docs/qa/hil-fault-injection-report.md) and the
-[final traceability report](docs/trace/final_v1_report.md).
+[HIL report](docs/qa/hil-fault-injection-report.md), the
+[version policy](docs/versions.md) and the [candidate traceability report](docs/trace/final_v1_report.md).
 
-The v1.0.0 software evidence is an ASIL-B alignment target, not an ISO 26262
-certification; target-board HIL measurements remain an integration prerequisite.
+The candidate software evidence is an ASIL-B alignment target, not an ISO 26262
+certification; target-board HIL measurements and formal QA-EV-01 closure remain
+prerequisites for the final `1.0.0` bump, tag and milestone closure.
 
 ## Build and test
 
@@ -61,10 +62,12 @@ local build is a clean CI build.
 - [`docs/system/event-ordering.md`](docs/system/event-ordering.md) - normative event ordering and queue overflow policies.
 - [`docs/software/SwRS.md`](docs/software/SwRS.md) - software requirements.
 - [`docs/trace/traceability.md`](docs/trace/traceability.md) - scope, coverage numbers, deferred ledger and how to audit them.
-- [`docs/trace/final_v1_report.md`](docs/trace/final_v1_report.md) - v1.0.0 coverage result and v1.1.0 deferred ledger.
+- [`docs/trace/final_v1_report.md`](docs/trace/final_v1_report.md) - v1.0.0-rc.1 candidate coverage result and v1.1.0 deferred ledger.
 - [`docs/trace/traceability.csv`](docs/trace/traceability.csv) - requirement-to-test mapping (checked in CI).
 - [`docs/qa/hil-fault-injection-report.md`](docs/qa/hil-fault-injection-report.md) - Phase 12 fault-injection evidence and target procedure.
 - [`docs/qa/smoke-test-v0.3.0-rc.1.md`](docs/qa/smoke-test-v0.3.0-rc.1.md) - historical v0.3.0 verification evidence.
-- [`docs/safety/SafetyManual.md`](docs/safety/SafetyManual.md) - v1.0.0 architecture, FMEA and ASIL-B-aligned safety evidence.
+- [`docs/safety/SafetyManual.md`](docs/safety/SafetyManual.md) - v1.0.0-rc.1 architecture, FMEA and ASIL-B-aligned safety evidence.
 - [`docs/safety/MISRA_Deviations.md`](docs/safety/MISRA_Deviations.md) - MISRA C:2012 deviation record and static-analysis procedure.
-- [`Test strategy.md`](Test%20strategy.md) - the QA strategy the checks above implement.
+- [`docs/qa/test-strategy.md`](docs/qa/test-strategy.md) - the QA strategy the checks above implement.
+- [`docs/qa/closed-findings.md`](docs/qa/closed-findings.md) - candidate QA closure record and open QA-EV-01 decision.
+- [`docs/versions.md`](docs/versions.md) - release-candidate version and final-release gate policy.

@@ -621,7 +621,8 @@ static void fsm_queue_event(fsm_activation_t *act, const cancestry_event_t *even
     if (cancestry_event_queue_status_is_ok(status)) {
         act->instance->counters.events_queued++;
     } else {
-        /* Overflow policy: drop-newest for non-fault events (SW-FR-FSM-020). */
+        /* The shared Path A queue applies the reserve boundary, deterministic
+         * non-fault eviction and all-fault escalation (SW-FR-FSM-020). */
         act->instance->counters.events_dropped++;
     }
 }
@@ -1368,10 +1369,11 @@ static cancestry_fsm_status_t fsm_action_raise_fault(fsm_activation_t *act,
     payload.fault.source_id = instance->id;
     instance->counters.faults_raised++;
     /*
-     * Faults are never dropped by policy (event-ordering.md section 9), which is
-     * why a fault the instance raised for itself is queued for it - but only
-     * when the instance declared the fault subscription, so a machine cannot
-     * build an unbounded self-reaction loop by accident.
+     * Fault admission is protected by the event queue's reserved slots
+     * (event-ordering.md sections 9 and 11). A fault the instance raised for
+     * itself is queued only when the instance declared the fault subscription,
+     * so a machine cannot build an unbounded self-reaction loop by accident;
+     * all-fault saturation remains a bounded hard-fault escalation path.
      */
     fsm_emit_generated(act, CANCESTRY_EVENT_TYPE_FAULT_RAISED, &payload,
                        instance->def->subscriptions.has_faults &&
