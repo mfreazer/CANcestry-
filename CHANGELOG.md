@@ -5,6 +5,47 @@ Keep a Changelog style; requirement IDs refer to `docs/software/SwRS.md` and
 `docs/SyRS.md`, and the requirement-to-artifact mapping lives in
 `docs/trace/traceability.csv`.
 
+## [Unreleased] - Phase 10: UDS & ISO-TP Transport ([issue #26](https://github.com/mfreazer/CANcestry-/issues/26))
+
+Phase 10 adds the diagnostic stack below the gateway: a zero-allocation,
+deterministic ISO 15765-2 (ISO-TP) transport engine over classic CAN, and a
+UDS (ISO 14229-1) server for ReadDataByIdentifier (0x22),
+WriteDataByIdentifier (0x2E) and RoutineControl (0x31), with every write and
+routine side effect passing through the fail-closed governor stub. New
+requirements: `SW-FR-TP-001..010` and `SW-FR-UDS-001..008`
+(`docs/software/SwRS.md` section 14), all traced in
+`docs/trace/traceability.csv`.
+
+### Added
+
+- **ISO-TP transport engine** (`core/transport`, SW-FR-TP-001..010):
+  caller-owned static RX/TX buffers, SF/FF/CF/FC handling with the 12-bit FF
+  length and rolling 4-bit sequence number, fail-closed aborts (protocol
+  violation, sequence skip, buffer overflow with FC OVFLW) that clear the
+  session and raise `TRANSPORT_*` faults into the `core/event` queue, and
+  N_As/N_Bs/N_Cr timers driven exclusively by the deterministic 1 ms tick.
+  TX honours the receiver's Flow Control (Block Size, STmin in the ms and
+  100-900 us encodings, Wait-frame limit, OVFLW) and retries sink-declined
+  frames until N_As expires.
+- **UDS server** (`core/uds`, SW-FR-UDS-001..008): request in, response
+  bytes out; RDBI/WDBI/RoutineControl with the negative response codes
+  0x11/0x12/0x13/0x22/0x31/0x72; signal-mapped DIDs mirror through the codec
+  namespace and the shared signal store; the governor stub denies everything
+  when NULL and every denial leaves no partial effect.
+- **UDS configuration loader** (`core/uds/loader`, SW-FR-UDS-006): a
+  YAML-subset loader validating against `schemas/uds-0.1.0.schema.json`
+  (schema is law), with located 1-based line/column errors. Heap use is
+  load-time only and lives in the separate `cancestry_uds_loader` library.
+- **Conformance suites** (`tests/conformance/transport`,
+  `tests/conformance/uds`): `TP-RX-001..008`, `TP-TX-001..009`,
+  `UDS-SVC-001..007` and `UDS-GOV-001..005`, including the full
+  transport-to-UDS loop, all under ASan/UBSan with a virtual 1 ms clock;
+  plus the `cancestry_transport_no_malloc_symbols` and
+  `cancestry_uds_no_malloc_symbols` archive gates.
+- **Documentation** (`core/transport/README.md`, `core/uds/README.md`):
+  frame contract, tick order, timer semantics, fault codes, NRC table and
+  worked examples for both halves of the diagnostic stack.
+
 ## [Unreleased] - Phase 9: Formal Verification & ASIL-B Alignment ([issue #24](https://github.com/mfreazer/CANcestry-/issues/24))
 
 Phase 9 adds non-intrusive ACSL contracts for the event queue and codec bit

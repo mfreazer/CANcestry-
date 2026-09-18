@@ -27,6 +27,9 @@ add_subdirectory(conformance/fsm)
 add_subdirectory(conformance/hal)
 # CAN FD conformance (issue #20, Phase 7).
 add_subdirectory(conformance/codec)
+# Diagnostic transport and UDS conformance (issue #26, Phase 10).
+add_subdirectory(conformance/transport)
+add_subdirectory(conformance/uds)
 
 # The runtime cores must not allocate. This is verified on the built archives,
 # which is a stronger and more portable check than intercepting malloc at
@@ -71,6 +74,16 @@ if(CANCESTRY_PYTHON AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME cancestry_platform_mock_no_malloc_symbols
         COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_no_alloc.py"
                 $<TARGET_FILE:cancestry_platform_mock>)
+    # The ISO-TP runtime path must not allocate (issue #26 constraint,
+    # SW-FR-TP-001, SYS-NF-002).
+    add_test(NAME cancestry_transport_no_malloc_symbols
+        COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_no_alloc.py"
+                $<TARGET_FILE:cancestry_transport>)
+    # The UDS server runtime path must not allocate (issue #26 constraint,
+    # SW-FR-UDS-001, SYS-NF-002).
+    add_test(NAME cancestry_uds_no_malloc_symbols
+        COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_no_alloc.py"
+                $<TARGET_FILE:cancestry_uds>)
 endif()
 
 # The Linux SocketCAN backend is only built on Linux; check it there.
