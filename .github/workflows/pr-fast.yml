@@ -38,3 +38,25 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+  toolchain-checks:
+    name: python toolchain (yaml2c, trace_viewer, schemas)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tool dependencies
+        run: python3 -m pip install --disable-pip-version-check pytest pytest-cov PyYAML jsonschema
+
+      - name: Python unit tests (100% coverage gate, SW-FR-TOOL-*)
+        run: |
+          python3 -m pytest tests/unit/tools -q \
+            --cov=tools/yaml2c --cov=tools/trace_viewer \
+            --cov=ci/check_schemas_valid.py --cov-report=term-missing \
+            --cov-fail-under=100
+
+      - name: Schema validation (SW-FR-TOOL-008)
+        run: python3 ci/check_schemas_valid.py schemas
+
+      - name: Traceability record (Test strategy.md section 10)
+        run: python3 ci/check_traceability.py .

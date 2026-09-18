@@ -1,0 +1,4 @@
+# yaml2c host-tool dependencies (host-side only; no C dependencies are added
+# to core/ or platform/).
+PyYAML>=6.0
+jsonschema>=4.0

@@ -1,0 +1,74 @@
+# CANcestry FSM file for the gateway_real *static* demo (Phase 8, issue #22).
+#
+# This file is the build-time input of tools/yaml2c: CMake compiles it into
+# gateway_fsm_static.h, and main_static.c runs the FSM engine directly on the
+# generated `gateway_static_fsm_set` - no runtime YAML loader on the target
+# (SW-FR-TOOL-001, SW-FR-TOOL-003).
+#
+# The document is deliberately small but exercises every generated construct:
+# variables (with and without defaults), a timer, entry/exit actions, a guard,
+# send_message with two signal values, and instance bindings/subscriptions.
+schema_version: "0.3.0"
+state_machines:
+  - name: Cluster
+    description: "Static demo cluster controller"
+    initial: STANDBY
+    variables:
+      - name: wakeups
+        type: integer
+        default: 0
+    timers:
+      - name: poll
+        duration_ms: 5
+        repeat: true
+        auto_start: false
+    states:
+      - name: STANDBY
+        entry:
+          - log:
+              level: info
+              message: "cluster standby"
+        transitions:
+          - event: signal_changed
+            signal: VehicleSpeed
+            guard: "sig.VehicleSpeed > 5"
+            target: ACTIVE
+            actions:
+              - set_variable:
+                  variable: wakeups
+                  value: "var.wakeups + 1"
+              - start_timer:
+                  timer: poll
+                  duration_ms: 5
+      - name: ACTIVE
+        entry:
+          - send_message:
+              interface: can1
+              message: ClusterDisplay
+              signals:
+                DisplaySpeed: "sig.VehicleSpeed"
+                Kickdown: false
+        transitions:
+          - event: timer_expired
+            timer: poll
+            target: ACTIVE
+          - event: signal_changed
+            signal: VehicleSpeed
+            guard: "sig.VehicleSpeed < 2"
+            target: STANDBY
+            actions:
+              - stop_timer:
+                  timer: poll
+              - raise_fault:
+                  code: CLUSTER_IDLE
+                  severity: warning
+instances:
+  - id: cluster.static
+    machine: Cluster
+    enabled: true
+    bindings:
+      can1: vcan1
+    subscriptions:
+      signals:
+        - VehicleSpeed
+      timers: true

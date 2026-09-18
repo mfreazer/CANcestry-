@@ -30,6 +30,10 @@ compile_commands.json
 .idea/
 __pycache__/
 *.pyc
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
 
 # Logs
 *.log
