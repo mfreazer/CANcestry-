@@ -5,6 +5,7 @@
 
 add_library(cancestry_event STATIC
     src/clock.c
+    src/isr_queue.c
     src/queue.c
     src/types.c)
 

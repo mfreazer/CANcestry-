@@ -253,3 +253,21 @@ and belong to later phases.
 | SW-FR-UDS-006 | UDS server configuration (the DID and routine tables) shall be loaded from a YAML document validated against `schemas/uds-0.1.0.schema.json` at load time (schema is law), including the rejection of unknown fields, duplicate DIDs or routine ids, byte values outside 0..255, and signal-mapped DIDs whose length exceeds 8 bytes. | High |
 | SW-FR-UDS-007 | Every WriteDataByIdentifier and RoutineControl side effect shall pass through the fail-closed governor stub following the pattern of SW-FR-GOV-005/SW-FR-GOV-006: a NULL governor denies every write and routine execution, a denial produces no partial effect, increments a violation counter, and is reported as the negative response code `0x22`. | High |
 | SW-FR-UDS-008 | A DID may map to a shared signal through the codec namespace and the shared signal value store: ReadDataByIdentifier shall encode the current signal value little-endian into the response when one exists (falling back to the DID's stored bytes otherwise), and an approved WriteDataByIdentifier shall mirror the written bytes into the mapped signal as a little-endian unsigned integer. | High |
+
+## 15. Bare-Metal Port & Hard Real-Time HAL Requirements (Phase 11, issue #28)
+
+Scope note: this phase ports the Hardware Abstraction Layer to bare-metal ARM
+Cortex-M targets (STM32G4 / NXP S32K) with direct register-level hardware
+peripheral drivers (bxCAN/FDCAN), linker-enforced zero-allocation, independent
+watchdog (IWDG) fail-safe recovery, and bounded sub-50µs real-time latency.
+
+| ID | Requirement | Priority |
+|---|---|---|
+| SW-FR-BM-001 | The bare-metal linker script (`cancestry_baremetal.ld`) and toolchain stubs shall enforce zero heap allocation by removing standard library allocation functions (`malloc`, `free`, `realloc`, `calloc`, `_sbrk`, `sbrk`) in the `/DISCARD/` section and asserting against them, producing a linker undefined reference error if dynamic allocation is referenced, and providing tripwire stubs that trigger a HardFault or abort if invoked. | High |
+| SW-FR-BM-002 | The software shall provide a bare-metal Hardware Abstraction Layer (`platform/cortex_m/hal_stm32.c`) that directly interfaces with CAN/FDCAN hardware peripheral registers and FIFOs on ARM Cortex-M without operating system dependencies or blocking syscalls, integrating with `cancestry_hal_backend_t`. | High |
+| SW-FR-BM-003 | The CAN RX interrupt service routine (`hal_stm32_can_rx_isr`) shall be strictly bounded in execution time (O(1)), performing only hardware FIFO drain, timestamp capture, and non-blocking push into the lock-free ISR event queue. No decoding, UDS parsing, or FSM evaluation shall execute in interrupt context. | High |
+| SW-FR-BM-004 | Hardware frame timestamps shall be captured at interrupt arrival from a hardware cycle counter (DWT CYCCNT) or high-resolution timer with microsecond resolution, and multi-word rollover tracking shall guarantee strictly monotonic timestamps over extended gateway uptime without rollover glitches. | High |
+| SW-FR-BM-005 | The runtime shall integrate an Independent Watchdog (IWDG) timer (`platform/cortex_m/watchdog.c`). If the main execution loop misses its deadline or hangs without feeding the watchdog, the IWDG shall assert a hardware MCU reset. | High |
+| SW-FR-BM-006 | Upon MCU reset or watchdog reset, hardware GPIO and CAN transceiver pins shall be immediately latched into a safe "0 Torque / Contactor Open" state, and transmission authorization shall be revoked until explicitly authorized by the FSM. A safe-state broadcast frame (ID 0x100) shall be constructed and emitted upon recovery. | High |
+| SW-FR-BM-007 | The software shall achieve deterministically bounded latency of less than 50 microseconds from hardware CAN RX interrupt FIFO arrival to FSM event processing into the event queue. | High |
+| SW-FR-BM-008 | The bare-metal system shall execute without an external RTOS (`main() -> while(1)`), placing stack, vectors, static rings, and event queues into dedicated SRAM sections (`.cancestry_core`, `.cancestry_rings`, `.cancestry_ram`). | High |
