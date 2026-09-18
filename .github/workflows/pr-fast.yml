@@ -6,9 +6,6 @@
 
 name: pr-fast
 
-permissions:
-  contents: write
-
 on:
   pull_request:
   push:
@@ -41,14 +38,7 @@ jobs:
 
       - name: Test
         run: |
-          set +e
           ctest --test-dir build --output-on-failure 2>&1 | tee /tmp/ctest-output.log
-          status=$?
-          if [ $status -ne 0 ]; then
-            grep -E '\(Failed\)|\*\*\*Failed|Failed tests:|tests failed' /tmp/ctest-output.log \
-              | head -14 | while IFS= read -r line; do echo "::error::$line"; done
-          fi
-          exit $status
 
       - name: Upload test log
         if: always()
@@ -69,19 +59,10 @@ jobs:
 
       - name: Python unit tests (100% coverage gate, SW-FR-TOOL-*)
         run: |
-          set +e
           python3 -m pytest tests/unit/tools -q \
             --cov=tools/yaml2c --cov=tools/trace_viewer \
             --cov=ci/check_schemas_valid.py --cov-report=term-missing \
             --cov-fail-under=100 2>&1 | tee /tmp/pytest-output.log
-          status=$?
-          if [ $status -ne 0 ]; then
-            echo "::error::python $(python3 --version 2>&1)"
-            grep -E "^FAILED |^ERROR |coverage|Coverage" /tmp/pytest-output.log | head -10 \
-              | while IFS= read -r line; do echo "::error::$line"; done
-            tail -6 /tmp/pytest-output.log | while IFS= read -r line; do echo "::error::TAIL $line"; done
-          fi
-          exit $status
 
       - name: Upload pytest log
         if: always()
@@ -92,40 +73,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Schema validation (SW-FR-TOOL-008)
-        run: |
-          set +e
-          python3 ci/check_schemas_valid.py schemas 2>&1 | tee /tmp/schema-output.log
-          exit $?
+        run: python3 ci/check_schemas_valid.py schemas
 
       - name: Traceability record (Test strategy.md section 10)
-        run: |
-          set +e
-          python3 ci/check_traceability.py . 2>&1 | tee /tmp/traceability-output.log
-          exit $?
-
-      - name: Commit diagnostic logs (temporary; GitHub log storage down)
-        if: failure()
-        env:
-          BRANCH: ${{ github.head_ref }}
-          TOKEN: ${{ github.token }}
-        run: |
-          set +e
-          git config user.name "ci-log-bot"
-          git config user.email "ci-log-bot@users.noreply.github.com"
-          git fetch --depth=1 origin "$BRANCH"
-          git checkout -B logstage FETCH_HEAD
-          mkdir -p .ci-logs
-          { python3 --version
-            pip3 list 2>/dev/null | grep -Ei 'pytest|coverage|yaml|jsonschema'
-            for f in pytest-output schema-output traceability-output; do
-              echo "===== $f ====="
-              cat "/tmp/$f.log" 2>/dev/null
-            done
-          } > .ci-logs/toolchain-diagnostics.txt 2>&1
-          git add .ci-logs
-          git commit -m "ci: toolchain diagnostics [skip ci]"
-          for i in 1 2 3 4 5; do
-            git pull --rebase origin "$BRANCH" && \
-              git push "https://x-access-token:$TOKEN@github.com/${{ github.repository }}.git" "HEAD:$BRANCH" && break
-            sleep 5
-          done
+        run: python3 ci/check_traceability.py .
