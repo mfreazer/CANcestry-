@@ -6,6 +6,9 @@
 
 name: pr-fast
 
+permissions:
+  contents: write
+
 on:
   pull_request:
   push:
@@ -87,6 +90,31 @@ jobs:
           name: pytest-toolchain
           path: /tmp/pytest-output.log
           if-no-files-found: ignore
+
+      - name: Commit diagnostic logs (temporary, GitHub log storage down)
+        if: failure()
+        env:
+          BRANCH: ${{ github.head_ref }}
+          TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          git config user.name "ci-log-bot"
+          git config user.email "ci-log-bot@users.noreply.github.com"
+          git fetch --depth=1 origin "$BRANCH"
+          git checkout -B logstage FETCH_HEAD
+          mkdir -p .ci-logs
+          { python3 --version
+            pip3 list 2>/dev/null | grep -Ei 'pytest|coverage|yaml|jsonschema'
+            echo '--- pytest output ---'
+            cat /tmp/pytest-output.log
+          } > .ci-logs/pytest-toolchain.txt 2>&1
+          git add .ci-logs
+          git commit -m "ci: diagnostic logs (toolchain) [skip ci]"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin "$BRANCH" && \
+              git push "https://x-access-token:$TOKEN@github.com/${{ github.repository }}.git" "HEAD:$BRANCH" && break
+            sleep 5
+          done
 
       - name: Schema validation (SW-FR-TOOL-008)
         run: python3 ci/check_schemas_valid.py schemas
