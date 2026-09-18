@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cancestry.dev/schemas/uds-0.1.0.schema.json",
+  "title": "CANcestry UDS server configuration (v0.1.0)",
+  "description": "Schema for the CANcestry UDS server configuration file (Phase 10, issue #26). Declares the diagnostic data identifier (DID) table and the routine table the UDS server (core/uds) serves for ReadDataByIdentifier (0x22), WriteDataByIdentifier (0x2E) and RoutineControl (0x31). A document that fails this schema is refused at load time (fail-closed, schema is law). Byte arrays use block YAML sequences of integers 0..255; the C loader enforces the same YAML subset as the codec, recipe and FSM loaders.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "uds"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0"
+    },
+    "uds": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/did"
+          }
+        },
+        "routines": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/routine"
+          }
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "dids"
+          ]
+        },
+        {
+          "required": [
+            "routines"
+          ]
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "did": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "did",
+        "length"
+      ],
+      "properties": {
+        "did": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Data identifier (two bytes on the wire). Unique within the document."
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4095,
+          "description": "Fixed data length of the DID in bytes. A signal-mapped DID is additionally restricted to 1..8 bytes by the loader (little-endian mirror into a 64-bit signal value)."
+        },
+        "read_only": {
+          "type": "boolean",
+          "default": false,
+          "description": "Advisory policy flag carried into every governor WRITE_DID request; the reference governor denies writes to read-only DIDs (SW-FR-UDS-007)."
+        },
+        "signal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 129,
+          "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)?$",
+          "description": "Optional codec signal name (short or <codec_map>.<signal> canonical form). ReadDataByIdentifier encodes the current shared signal value little-endian; an approved WriteDataByIdentifier mirrors the written bytes into the signal (SW-FR-UDS-008)."
+        },
+        "default": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 4095,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "description": "Initial DID data bytes seeded into the DID data store at server initialization. When present the loader requires exactly `length` bytes."
+        }
+      }
+    },
+    "routine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "routine"
+      ],
+      "properties": {
+        "routine": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Routine identifier (two bytes on the wire). Unique within the document."
+        },
+        "start": {
+          "$ref": "#/$defs/routine_op"
+        },
+        "stop": {
+          "$ref": "#/$defs/routine_op"
+        },
+        "results": {
+          "$ref": "#/$defs/routine_op"
+        }
+      }
+    },
+    "routine_op": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allowed": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether this sub-function is accepted for the routine; a disallowed operation returns NRC 0x12."
+        },
+        "response": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 4095,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "description": "Static response record bytes appended to the positive response (SW-FR-UDS-004). Routines with dynamic behaviour are a later phase."
+        }
+      }
+    }
+  }
+}

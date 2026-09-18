@@ -81,6 +81,8 @@ add_subdirectory(core/codec)
 add_subdirectory(core/recipe)
 add_subdirectory(core/fsm)
 add_subdirectory(core/hal)
+add_subdirectory(core/transport)
+add_subdirectory(core/uds)
 add_subdirectory(platform)
 
 if(CANCESTRY_BUILD_TESTS)

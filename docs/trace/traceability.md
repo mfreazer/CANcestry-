@@ -63,13 +63,12 @@ it end to end in the gateway integration harness ([issue
 | System integration | `SYS-FR-003..006, 009..010, 014, 019`; `SYS-SF-002` | `examples/gateway/` (`GATEWAY-*` tests) |
 | FSM schema finalization | `SW-FR-FSM-001..003` | `schemas/fsm-0.3.0.schema.json`, `FSM-LOAD-*` |
 
-## 3. Coverage at v0.3.0-rc.1
+## 3. Coverage at Phase 10 ([issue #26](https://github.com/mfreazer/CANcestry-/issues/26))
 
-`docs/software/SwRS.md` and `docs/SyRS.md` define **167** requirement ids. Of
-those, **125 are traced in the CSV** and **56 are named in the deferred ledger**
-(section 5). Of the 125 traced requirements, 111 have at least one `passing` row
-and 14 have only `planned` rows; every one of those 14 is also listed in the
-ledger.
+`docs/software/SwRS.md` and `docs/SyRS.md` define **195** requirement ids. Of
+those, **153 have at least one `passing` row in the CSV** and **56 are named in
+the deferred ledger** (section 5); 24 rows remain `planned`, every one of them
+for a requirement that is also listed in the ledger.
 
 | Area | `passing` | `planned` | rows |
 |---|---:|---:|---:|
@@ -80,15 +79,18 @@ ledger.
 | `SW-FR-GOV` (stub level, 005/006) | 5 | 0 | 5 |
 | `SW-FR-HAL` (Phase 6) | 11 | 1 | 12 |
 | `SW-FR-CANFD` (Phase 7) | 12 | 1 | 13 |
+| `SW-FR-TOOL` (Phases 5-7) | 24 | 0 | 24 |
+| `SW-FR-TP` (Phase 10) | 22 | 0 | 22 |
+| `SW-FR-UDS` (Phase 10) | 17 | 0 | 17 |
 | `SYS-FR` | 14 | 9 | 23 |
 | `SYS-NF` | 18 | 0 | 18 |
 | `SYS-IR` | 1 | 0 | 1 |
 | `SYS-SF` | 2 | 4 | 6 |
 | `SYS-SEC` | 0 | 2 | 2 |
 | `QA-*` review items | 8 | 7 | 15 |
-| **Total** | **152** | **24** | **176** |
+| **Total** | **215** | **24** | **239** |
 
-By method: 162 `test`, 11 `inspection`, 3 `demonstration`.
+By method: 225 `test`, 11 `inspection`, 3 `demonstration`.
 
 There are **no `failed` rows**: a failing row would mean a released claim is not
 met, and the release gate (section 6) refuses that state.
@@ -145,6 +147,47 @@ requirements. The existing rows for `SW-FR-EVENT-004..006`,
 `SW-FR-CODEC-001..008`, `SW-FR-FSM-035..038`, `SW-FR-FSM-045..046` and
 `SYS-NF-001..002` remain the normative requirement mappings.
 
+## 4.3 Phase 10 UDS & ISO-TP test ids ([issue #26](https://github.com/mfreazer/CANcestry-/issues/26))
+
+The Phase 10 suites run the shipping transport engine and UDS server through
+their public headers only, under AddressSanitizer/UndefinedBehaviorSanitizer,
+with a virtual 1 ms clock (the `core/event` clock abstraction) so every
+timeout is a deterministic tick count.
+
+| Test id | Executable / artifact | Proves |
+|---|---|---|
+| `TP-RX-001` | `cancestry_conformance_tp_iso_tp_reassembly` | Single Frame (classic PCI) reassembles and is delivered as a borrowed pointer |
+| `TP-RX-002` | `cancestry_conformance_tp_iso_tp_reassembly` | FF + CF burst reassembles in order; the engine answers the FF with FC CTS |
+| `TP-RX-003` | `cancestry_conformance_tp_iso_tp_reassembly` | A CF sequence-number skip drops the session, clears the buffer and raises `TRANSPORT_PROTOCOL_FAULT`; the next frame starts fresh |
+| `TP-RX-004` | `cancestry_conformance_tp_iso_tp_reassembly` | N_Cr expiry at an exact tick count aborts with `TRANSPORT_TIMEOUT` and no partial delivery |
+| `TP-RX-005` | `cancestry_conformance_tp_iso_tp_reassembly` | An FF announcing more than the static buffer aborts before storing a byte, answers FC OVFLW and raises `TRANSPORT_BUFFER_OVERFLOW` |
+| `TP-RX-006` | `cancestry_conformance_tp_iso_tp_reassembly` | Invalid PCI nibbles, frame lengths that contradict the PCI, SF/FF mid-session and CF without a session are all refused fail-closed, no crash, no hang |
+| `TP-RX-007` | `cancestry_conformance_tp_iso_tp_reassembly` | Faults land in the queue as `FAULT_RAISED` in the FAULT priority class with the `(source_id << 16) \| fault` code and resolve through the name table |
+| `TP-RX-008` | `cancestry_conformance_tp_iso_tp_reassembly` | Bounds and helpers: SN wrap-around at 0x0, 120-byte message reassembly, contract edges |
+| `TP-TX-001` | `cancestry_conformance_tp_iso_tp_segmentation` | A payload of at most 7 bytes goes out as one Single Frame |
+| `TP-TX-002` | `cancestry_conformance_tp_iso_tp_segmentation` | FF + CF segmentation with the rolling SN from 1, bit-exact payload, up to 4095 bytes |
+| `TP-TX-003` | `cancestry_conformance_tp_iso_tp_segmentation` | Block Size: exactly BS CFs per Flow Control, BS = 0 unlimited |
+| `TP-TX-004` | `cancestry_conformance_tp_iso_tp_segmentation` | STmin pacing in the ms and 100-900 us encodings at 1 ms tick granularity; STmin 0 bursts in one tick |
+| `TP-TX-005` | `cancestry_conformance_tp_iso_tp_segmentation` | Flow Control statuses: CTS proceeds, WT is tolerated up to the configured maximum then aborts, OVFLW aborts the sender |
+| `TP-TX-006` | `cancestry_conformance_tp_iso_tp_segmentation` | N_Bs expiry (no FC after the FF) aborts with `TRANSPORT_TIMEOUT` at an exact tick |
+| `TP-TX-007` | `cancestry_conformance_tp_iso_tp_segmentation` | A sink-declined frame is retried on later ticks and never dropped; permanent decline hits the N_As bound and aborts |
+| `TP-TX-008` | `cancestry_conformance_tp_iso_tp_segmentation` | An unexpected FC (no TX session) is a protocol violation, not a crash |
+| `TP-TX-009` | `cancestry_conformance_tp_iso_tp_segmentation` | `send()` argument validation: NULL, zero, over-length, over-capacity, busy |
+| `UDS-SVC-001` | `cancestry_conformance_uds_services` | RDBI on a static DID returns `62 + DID + data`; malformed requests are 0x13, unknown DIDs 0x31 |
+| `UDS-SVC-002` | `cancestry_conformance_uds_services` | RDBI on a signal-mapped DID encodes the live signal value little-endian; no value falls back to stored bytes; unencodable values are 0x22 |
+| `UDS-SVC-003` | `cancestry_conformance_uds_services` | WDBI stores exactly the declared length, mirrors into the mapped signal, refuses wrong lengths (0x13) and unknown DIDs (0x31), and reports 0x72 when the signal store is full with no partial effect |
+| `UDS-SVC-004` | `cancestry_conformance_uds_services` | RoutineControl start/stop/results with configured records; unknown routine 0x31, unsupported/disallowed sub-function 0x12, malformed 0x13 |
+| `UDS-SVC-005` | `cancestry_conformance_uds_services` | Unsupported services (including a zero-length request) answer `7F SID 11` |
+| `UDS-SVC-006` | `cancestry_conformance_uds_services` | The UDS loader validates against `schemas/uds-0.1.0.schema.json`: unknown fields, bad versions, duplicates, out-of-range bytes and over-long signal DIDs are refused with located errors |
+| `UDS-SVC-007` | `cancestry_conformance_uds_services` | Resource bounds: server init fail-closes on an unresolvable signal mapping and NULL dependencies |
+| `UDS-GOV-001` | `cancestry_conformance_uds_governor_integration` | A WDBI for a read-only DID is denied by the governor: NRC 0x22, violation counter, no partial effect |
+| `UDS-GOV-002` | `cancestry_conformance_uds_governor_integration` | The FSM-style signal-write allowlist: outside denied with 0x22, inside approved and mirrored into the shared store |
+| `UDS-GOV-003` | `cancestry_conformance_uds_governor_integration` | A NULL governor denies every write and routine execution (fail-closed default) |
+| `UDS-GOV-004` | `cancestry_conformance_uds_governor_integration` | A routine execution denied by the governor reports NRC 0x22 without running it |
+| `UDS-GOV-005` | `cancestry_conformance_uds_governor_integration` | The full stack: a Single Frame WDBI to a read-only DID reassembles, is denied, and the 7F response is segmented back; a multi-frame WDBI (FF + CF) is approved and answered `6E DID` |
+| `cancestry_transport_no_malloc_symbols` | `ci/check_no_alloc.py` over `libcancestry_transport.a` | The transport runtime path contains no heap allocation symbol |
+| `cancestry_uds_no_malloc_symbols` | `ci/check_no_alloc.py` over `libcancestry_uds.a` | The UDS runtime path contains no heap allocation symbol (the loader is a separate, load-time-only library) |
+
 ## 5. Deferred ledger: requirements with no verified artifact yet
 
 Every requirement below is either absent from the CSV or present only with
@@ -169,7 +212,7 @@ requirement can only be "not verified" on purpose.
 ## 6. Reproduce and audit
 
 ```sh
-# Build the portable core and run every registered test (44 tests at Phase 7).
+# Build the portable core and run every registered test (52 tests at Phase 10).
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
@@ -209,6 +252,7 @@ the [smoke test record](../qa/smoke-test-v0.3.0-rc.1.md).
 
 | Version | Date | Change |
 |---|---|---|
+| 0.7.0-wip | 2026-09-18 | Phase 10 (issue #26): ISO-TP transport rows `SW-FR-TP-001..010` and UDS rows `SW-FR-UDS-001..008`, the Phase 10 test-id table in section 4.3, and coverage numbers refreshed to the Phase 10 state (195 defined, 153 traced, 239 rows). |
 | 0.6.0-wip | 2026-09-18 | Phase 9 (issue #24): formal-verification artifact ids, ACSL/WP contracts, KLEE harnesses, MISRA driver and safety-manual evidence map. |
 | 0.4.0-wip | 2026-09-17 | Phase 7 (issue #20): CAN FD requirement rows `SW-FR-CANFD-001..006`, the Phase 7 test-id table in section 4.1, and coverage numbers refreshed to the post-Phase-6/7 state (167 defined, 125 traced, 176 rows). |
 | 0.3.0-rc.1 | 2026-09-16 | Phase 5: gateway integration ids (`GATEWAY-*`), FSM schema finalization, coverage numbers, the deferred ledger in section 5, test-id resolution labels in the artifacts, and the CI gate. |
