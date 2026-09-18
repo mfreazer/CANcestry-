@@ -271,3 +271,37 @@ watchdog (IWDG) fail-safe recovery, and bounded sub-50µs real-time latency.
 | SW-FR-BM-006 | Upon MCU reset or watchdog reset, hardware GPIO and CAN transceiver pins shall be immediately latched into a safe "0 Torque / Contactor Open" state, and transmission authorization shall be revoked until explicitly authorized by the FSM. A safe-state broadcast frame (ID 0x100) shall be constructed and emitted upon recovery. | High |
 | SW-FR-BM-007 | The software shall achieve deterministically bounded latency of less than 50 microseconds from hardware CAN RX interrupt FIFO arrival to FSM event processing into the event queue. | High |
 | SW-FR-BM-008 | The bare-metal system shall execute without an external RTOS (`main() -> while(1)`), placing stack, vectors, static rings, and event queues into dedicated SRAM sections (`.cancestry_core`, `.cancestry_rings`, `.cancestry_ram`). | High |
+
+## 16. Phase 12 BMS, HIL, and final safety-case requirements (issue #30)
+
+### 16.1 BMS thermal and torque governor
+
+| ID | Requirement | Priority |
+|---|---|---|
+| SW-FR-BMS-001 | The BMS governor shall evaluate a complete VCU/BMS snapshot as a pure, stateless, deterministic function with no heap allocation or hidden threshold state. | High |
+| SW-FR-BMS-002 | The governor shall convert the BMS `MaxDischargeCurrent` and measured DC bus voltage into a conservative maximum electrical power using fixed-point integer arithmetic. | High |
+| SW-FR-BMS-003 | The governor shall never authorize a requested power whose calculated input current exceeds `MaxDischargeCurrent`; current rounding shall be conservative. | High |
+| SW-FR-BMS-004 | When a thermal limit derates a VCU request, the governor shall return the derated power/torque value and prevent the original value from being emitted by the UDS/CAN integration. | High |
+| SW-FR-BMS-005 | A derating or block caused by a BMS limit shall expose the deterministic `GOVERNOR_INTERVENTION` fault code for recording as a `FAULT_RAISED` event. | High |
+| SW-FR-BMS-006 | Missing, malformed, out-of-domain or faulted BMS data shall fail closed to a zero-output block; it shall never fall back to the VCU request. | High |
+
+### 16.2 Hardware-in-the-loop fault injection
+
+| ID | Requirement | Priority |
+|---|---|---|
+| SW-FR-HIL-001 | The HIL runner shall expose deterministic scenarios for CAN controller Bus-Off, corrupted-frame/CRC rejection, and power brownout. | High |
+| SW-FR-HIL-002 | The Bus-Off scenario shall prove the controller fault is observed before the FSM enters `SAFE_STATE`, transmission is revoked, and the bounded automatic recovery protocol is exercised. | High |
+| SW-FR-HIL-003 | The corrupted-frame scenario shall prove the hardware CRC boundary rejects the frame before software queue admission and the FSM does not process it. | High |
+| SW-FR-HIL-004 | The brownout scenario shall prove the BOR or IWDG hardware safe latch forces zero torque and open contactors before MCU power-down. | High |
+| SW-FR-HIL-005 | When target hardware is unavailable, the HIL simulation shall preserve hardware-first ordering, be deterministic, and state its target-validation limitation. | High |
+| SW-FR-HIL-006 | HIL evidence shall identify the scenario ids, backend, event order, metrics, reproduction command and unresolved target measurements. | High |
+
+### 16.3 Final software safety case and release evidence
+
+| ID | Requirement | Priority |
+|---|---|---|
+| SW-FR-SAFETY-001 | The final Safety Manual shall describe CANcestry system architecture, data flow, assumptions, hardware boundary and fail-closed safe behavior for an external safety assessor. | High |
+| SW-FR-SAFETY-002 | The Safety Manual shall include an FMEA summary covering malformed CAN/CRC, Bus-Off, brownout/watchdog, BMS derating, queue/resource faults and unauthorized transmission. | High |
+| SW-FR-SAFETY-003 | The Safety Manual shall map implemented IWDG/BOR, CAN CRC boundary, zero-allocation execution, SPSC ISR queue, bounded event processing and BMS/UDS governor evidence to ASIL-B-aligned technical safety requirements. | High |
+| SW-FR-SAFETY-004 | The final v1 traceability report shall identify all in-scope v1.0.0 requirements, passing evidence, and every deferred item with a justified v1.1.0 owner. | High |
+| SW-FR-SAFETY-005 | The v1.0.0 release artifacts shall include the completed Safety Manual, final traceability report, HIL report, changelog and version marker, with no failed release-gate row. | High |

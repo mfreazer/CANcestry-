@@ -1,214 +1,299 @@
-# CANcestry Safety Manual (Phase 9 draft)
+# CANcestry Safety Manual
 
 | Field | Value |
 |---|---|
 | Document | CANcestry Safety Manual |
-| Version | Phase 9 draft, 0.6.0 work in progress |
-| Intended safety integrity | ASIL-B alignment target; this document is not an ISO 26262 safety case or certification |
-| Scope | Portable CANcestry runtime (`core/`) and its platform boundary (`platform/`) |
+| Version | 1.0.0 safety-case baseline |
+| Status | Complete software safety-case evidence package; not an ISO 26262 certification |
+| Intended safety integrity | ASIL-B alignment target for a gateway software element |
+| Scope | `core/` execution archives, `core/governor/`, `platform/`, HIL verification and release evidence |
 | Owner | CANcestry safety and verification review |
 | Last review | 2026-09-18 |
+| Requirements | `SW-FR-BMS-001..006`, `SW-FR-HIL-001..006`, `SW-FR-SAFETY-001..005` plus the existing core/HAL/BM requirements |
 
 ## 1. Purpose and safety claim
 
-CANcestry is a declarative CAN codec, event, recipe and FSM runtime. The Phase
-9 objective is to make its safety argument reviewable for a safety-related
-automotive gateway at an ASIL-B alignment level. The claim is deliberately
-bounded:
+CANcestry is a declarative CAN codec, event, recipe and FSM runtime for a
+safety-related gateway. This manual defines the software safety argument for
+the v1.0.0 candidate and identifies the evidence that an external assessor
+must review.
 
-> For a configured, validated package, legal CAN input and a caller that
-> satisfies the documented API contracts, the portable runtime is deterministic,
-bounded, allocation-free on its execution path, and fails closed when a
-configuration, capability, arithmetic or transport assumption is violated.
+The bounded claim is:
 
-This is an engineering alignment target. It does not claim that a vehicle
-item, hardware platform, compiler, operating system or complete gateway has
-been safety-certified. A product safety case must add item definition, HARA,
-technical safety requirements, hardware metrics, freedom-from-interference
-analysis, tool qualification, production-process evidence and a qualified
-independent assessment.
+> For a validated package, a conforming caller, and a platform that implements
+the documented hardware contract, CANcestry execution is deterministic,
+bounded and allocation-free on the runtime path. Invalid input, unavailable
+policy, BMS derating and hardware fault indications fail closed: the affected
+side effect is blocked and the configured safe state is retained.
 
-## 2. Scope and assumptions
+This is an engineering alignment claim, not a claim that a vehicle item,
+MCU, transceiver, compiler, board, operating system or complete gateway has
+been certified. A product safety case still requires the item definition,
+HARA, safety goals, hardware metrics, dependent-failure analysis,
+freedom-from-interference evidence, tool confidence/qualification, production
+process evidence and independent assessment required by the applicable ISO
+26262 work products.
 
-### 2.1 In scope
+## 2. Item boundary, assumptions and exclusions
 
-* Event timestamps, priority and sequence ordering and the bounded min-heap.
-* CAN classic and CAN FD frame length and bit packing/unpacking.
-* Declarative FSM execution, bounded expression evaluation, action capability
-  checks and fault recording.
-* Caller-owned storage and zero-allocation runtime paths in `core/` and
-  `platform/`.
-* Static analysis, formal contracts, symbolic execution and host/conformance
-  tests described in section 7.
+### 2.1 Software boundary
 
-### 2.2 Assumptions that the integrator must provide
+The safety boundary contains:
 
-* The package loader validates schemas and retains definitions for the entire
-  lifetime of the runtime objects that borrow their strings and arrays.
-* The caller serializes access to a queue and supplies storage that remains
-  valid and correctly aligned. The runtime is single-threaded in this release.
-* A platform clock is monotonic, or its adapter provides the documented
-  monotonic timestamp semantics. A weak clock fallback is compile-only and is
-  not acceptable for production.
-* The target compiler uses the C99 fixed-width integer and IEEE-754 behavior
-  documented by the portability requirements, and its warnings are treated as
-  errors.
-* The HAL validates physical interface state and reports malformed, bus-off,
-  unsupported and transport-error conditions; core code never accesses a CAN
-  controller directly.
-* Package capabilities, TX allowlists, signal write allowlists and governor
-  callbacks are configured by the integrator. A missing callback denies the
-  action; it does not grant access.
+* the event, codec, recipe, FSM, transport and UDS runtime archives;
+* the stateless BMS thermal/torque governor in `core/governor/`;
+* the platform HAL, Cortex-M ISR/SPSC hand-off and watchdog integration;
+* the caller-owned storage, fault/event sinks and transmission authorization
+  supplied by the integrator; and
+* the host conformance, HIL simulation and traceability evidence.
 
-## 3. Safety architecture
+Load-time YAML parsing is deliberately separate from execution archives. A
+validated package must remain alive for all runtime objects that borrow its
+strings and arrays. No core execution path loads code, evaluates arbitrary
+programs, starts threads or allocates from the heap.
 
-The architecture is split into layers with one-way dependencies:
+### 2.2 Integrator assumptions
 
-1. **Platform/HAL boundary** translates hardware frames, timestamps and faults
-   into caller-owned CANcestry types. It never exposes a hardware pointer to
-   the declarative runtime.
-2. **Codec** validates the message definition and frame length, then performs
-   bounded bit operations. A short frame is dropped atomically; it is never
-   partially decoded. Encoding rejects values that cannot be represented and
-   never truncates a CAN FD payload.
-3. **Event bus** copies valid events into a fixed caller-owned min-heap. The
-   total order is timestamp, priority class, sequence. Fault events have
-   admission priority; non-fault overflow follows the documented drop-newest
-   policy. Drop, overflow and high-water counters remain observable.
-4. **Recipe/FSM runtime** processes one instance sequentially. State transitions,
-   deferred transitions, action count and generated event work are bounded.
-   Every side effect crosses a capability and governor checkpoint.
-5. **Trace and diagnostics** record errors and deterministic counters through
-   caller-owned sinks. Diagnostics do not change the safety decision or create
-   a hidden retry path.
+The integrator shall provide and verify:
 
-No layer in the runtime path starts a thread, loads code, evaluates a user
-program, allocates heap memory or silently repairs an invalid safety input.
-The loader is intentionally separate because package parsing may allocate;
-loaded runtime objects are not confused with the execution archive.
+1. a compiler/toolchain with C99 fixed-width integer behavior, warnings as
+   errors and the target's documented integer/FP rules;
+2. caller-owned buffers and queues with valid lifetime/alignment, serialized
+   queue access and the documented capacity bounds;
+3. a monotonic hardware clock and a target measurement of worst-case execution
+   time, interrupt latency and queue service time;
+4. CAN controller configuration, bit timing, hardware CRC/error handling,
+   transceiver behavior, Bus-Off state and recovery policy;
+5. external GPIO/contactor/torque safe-latch behavior on reset, BOR and IWDG;
+6. a governor callback or BMS integration that treats `DERATE` as a new hard
+   output limit, records `GOVERNOR_INTERVENTION`, and never emits the original
+   request; and
+7. package capabilities, TX allowlists, signal write allowlists and recovery
+   authorization. Missing policy is denial, not permission.
 
-## 4. Fault handling and safe behavior
+Out of scope for this manual are the vehicle HARA, the physical proof of a
+specific board's BOR threshold, motor-control plant dynamics, CAN wiring
+installation, and ISO 26262 certification of third-party tools.
 
-### 4.1 Fail-closed
+## 3. System Architecture & Data Flow
 
-The following conditions deny the operation and preserve a safe state:
+### 3.1 Layered architecture
 
-* NULL, malformed or out-of-domain API arguments;
-* invalid schema, duplicate/conflicting definition or unsupported CAN FD map;
-* unknown or unauthorized `sig.*`, `var.*` or `evt.*` name;
-* invalid expression syntax, excessive nesting, integer overflow, division or
-  modulo by zero, invalid float result, bad coercion or failed built-in domain;
-* a frame too short for any declared signal, an illegal wire length or a value
-  outside a strict declared range;
-* a capability/governor denial, absent sink or missing runtime hook;
-* queue capacity exhaustion under the documented overflow policy;
-* malformed HAL frame, unsupported protocol, bus error, bus-off or clock fault.
+The layers have one-way dependencies:
 
-An action failure is recorded and processing continues only in the safe,
-non-side-effecting direction specified by the FSM status model. In particular,
-a failed guard does not become true, an unauthorized send is not attempted,
-and a short frame does not update a partial signal set.
+1. **Hardware/platform boundary.** The CAN peripheral, CRC checker, Bus-Off
+   controller, BOR/IWDG and transceiver produce frames and fault indications.
+   The HAL validates frame length/capability, captures a monotonic timestamp,
+   and exposes caller-owned types. Core code never reads a peripheral register.
+2. **ISR hand-off.** `hal_stm32_can_rx_isr()` drains a bounded hardware FIFO,
+   captures the timestamp and pushes an event into the lock-free SPSC queue.
+   It performs no codec decode, UDS parsing, FSM evaluation or blocking call.
+3. **Event queue.** The main loop transfers valid ISR events into a bounded
+   deterministic min-heap ordered by timestamp, priority class and sequence.
+   Fault events have admission priority; a full queue never silently evicts a
+   fault for ordinary traffic.
+4. **Codec and transport.** The codec atomically rejects short/malformed
+   frames and out-of-range values. ISO-TP reassembly and UDS request handling
+   use fixed caller-owned buffers. Hardware CRC rejection is upstream of both.
+5. **Recipe/FSM.** Events are processed sequentially per instance. Guards,
+   capabilities, execution budgets and governor checkpoints precede every
+   observable side effect. A fault suspends or moves the configured instance
+   toward the safe state rather than retrying indefinitely.
+6. **BMS governor.** A complete VCU/BMS snapshot is evaluated by a pure fixed
+   point function. `MaxDischargeCurrent` and bus voltage produce a hard power
+   ceiling. `DERATE` returns the safe value and the explicit intervention fault;
+   `BLOCK` returns zero. The governor retains no previous request or threshold.
+7. **UDS/CAN response.** The integration emits only a value approved by the
+   governor and the transmission authorization gate. An intervention is
+   recorded before response emission. If the governor, HAL, BMS or sink is
+   unavailable, the response is withheld.
+8. **Diagnostics and trace.** Fault codes, counters and state transitions are
+   copied to caller-owned sinks. Diagnostics do not change the safety decision,
+   create a hidden retry or substitute for a hardware fault.
 
-### 4.2 Fault saturation
+### 3.2 Nominal and fault data flow
 
-Fault saturation refers to a full event queue, not an unbounded retry. Queue
-overflow has a consecutive-overflow threshold; persistence is exposed so an
-integrator can raise at least a warning or move to SAFE mode without relying
-on log parsing. The queue never evicts a fault event to admit a non-fault event.
-If a full queue contains only faults, the new fault is explicitly reported as
-undeliverable. The operation remains bounded and the drop is counted.
+```text
+CAN transceiver / BMS / VCU
+          |
+          v
+  CAN CRC + controller state  ---- Bus-Off / CRC / BOR / IWDG ---> safe latch
+          |
+          v
+  bounded RX FIFO -> Cortex-M ISR -> SPSC ISR queue
+                                      |
+                                      v
+                 HAL validation + monotonic timestamp
+                                      |
+                                      v
+              event min-heap (fault priority, bounded)
+                    |                         |
+                    v                         v
+             codec / ISO-TP / UDS       fault manager / FSM
+                    |                         |
+                    +----------+--------------+
+                               v
+                  BMS governor + capabilities + TX gate
+                               |
+                    approved derated response only
+                               v
+                    CAN TX ring / transceiver
+```
 
-The runtime counters are fixed-width observability values. Their maximum-value
-policy is part of the target integration's safety requirements and must be
-specified before a production safety case; a release must not interpret a
-wrapped diagnostic counter as proof that no faults occurred. Counter reads and
-fault-state decisions therefore use the explicit status/fault path, not log or
-counter absence.
+The arrows from CRC, Bus-Off and brownout to the safe latch are intentionally
+hardware-first. Software observes and records the safe condition; it does not
+rewrite a corrupted frame, clear a controller fault by fiat, or postpone the
+zero-torque latch until after MCU shutdown.
 
-### 4.3 Mode and transmission policy
+## 4. Safe-state policy and fail-closed rules
 
-The runtime must boot in a non-transmitting state until the integrator enables
-transmission. The governor rejects IDs and signals outside package capabilities.
-On a governor, HAL or expression fault, the decision is to block the affected
-side effect, record the fault and leave the FSM suspended or in the configured
-safe state. Recovery is an explicit, reviewed transition; there is no automatic
-resume after bus-off or storage failure.
+### 4.1 Safe state
 
-## 5. Resource and timing bounds
+`SAFE_STATE` means, at minimum:
 
-The principal bounds are compile-time constants and caller capacities:
+* torque command is zero;
+* battery contactors are open/de-energized;
+* CAN transmission authorization is revoked except for a reviewed safe-state
+  broadcast path; and
+* the FSM is suspended or follows the explicitly reviewed recovery transition.
+
+The Cortex-M watchdog recovery path constructs the canonical safe-state frame
+(ID `0x100`) with zero torque, open contactors and the active flag. Recovery
+requires explicit FSM authorization after boot checks; Bus-Off recovery also
+requires the bounded healthy-observation protocol in the HIL model.
+
+### 4.2 Fail-closed conditions
+
+The affected action is denied on NULL or malformed API input, invalid schema,
+unknown capability, invalid arithmetic, short/unsupported frame, queue
+saturation, missing sink/governor, BMS fault, Bus-Off, interface failure,
+clock fault, CRC rejection or watchdog/BOR reset. The system does not infer a
+safe value from stale BMS data or a partially decoded payload.
+
+For the BMS governor specifically:
+
+* current is rounded up when deriving requested current;
+* a request above the current-derived power ceiling returns `DERATE`, the
+  lower `allowed_power_w`, and `GOVERNOR_INTERVENTION`;
+* a faulted or invalid BMS snapshot returns `BLOCK`, zero power/torque and a
+  non-zero fault code; and
+* `cancestry_bms_governor_may_transmit()` is false for a blocked/invalid result.
+
+The integration must not turn a `DERATE` result into an approval for the
+original request. It shall log/raise the returned fault before it sends the
+safe response or moves the FSM.
+
+## 5. Failure Modes and Effects Analysis summary
+
+This is a software-level FMEA summary, not a replacement for the item HARA or
+hardware FMEA. Severity/occurrence/detection ratings must be reconciled with
+the vehicle program's rating scheme.
+
+| Failure mode | Local effect | Detection / evidence | Safe reaction | Relevant requirements |
+|---|---|---|---|---|
+| Corrupted CAN bits or invalid CRC | Physical frame is not trustworthy | Controller CRC/error counter; `HIL-CRC-001` | Hardware drops frame before software queue; no decode or FSM action | `SW-FR-HIL-003`, `SW-FR-CODEC-008` |
+| CAN controller Bus-Off | No trustworthy transmit path | Controller state, HAL fault, `HIL-BUSOFF-001` | Revoke TX, FSM `SAFE_STATE`; hardware recovery then bounded re-arm | `SW-FR-HIL-002`, `SW-FR-CAN-004..005`, `SW-FR-BM-006` |
+| RX/TX ring or event queue full | Traffic or diagnostics may be lost | Drop/overflow counters and fault-priority queue tests | Drop ordinary newest traffic; retain/raise fault; no unbounded retry | `SW-FR-EVENT-004..006`, `SW-FR-BM-003` |
+| Short, unsupported or out-of-range frame | Partial signal could be unsafe | HAL/codec validation and conformance tests | Atomic drop; no partial signal update | `SW-FR-CODEC-008`, `SW-FR-CANFD-002..003` |
+| ISR overrun or main-loop hang | Events are delayed; control deadline is missed | WCET/latency measurement and IWDG | IWDG reset; hardware zero torque/contactors open | `SW-FR-BM-003..007` |
+| Brownout / supply collapse | MCU may execute unpredictably during power loss | BOR reset cause, voltage capture, `HIL-BROWNOUT-001` | BOR hardware latch forces zero torque/open contactors before power-down | `SW-FR-HIL-004`, `SW-FR-BM-005..006` |
+| BMS thermal derating | VCU request exceeds available discharge current | Governor result and `GOVERNOR_INTERVENTION` fault; BMS vectors | Block original response; emit only returned derated value | `SW-FR-BMS-002..005` |
+| BMS snapshot invalid or unavailable | Current limit cannot be trusted | Input validation and BMS fault code | `BLOCK`, zero output, no stale-value fallback | `SW-FR-BMS-001`, `SW-FR-BMS-006` |
+| Unauthorized UDS/CAN side effect | A diagnostic or recipe could command unsafe output | Capability/governor denial counter and negative response | No partial store/effect; SAFE policy as configured | `SW-FR-GOV-005..006`, `SW-FR-UDS-007` |
+| Heap allocation or non-deterministic state | Timing and memory safety cannot be bounded | Archive symbol scan, ASan/UBSan, review | Build/release gate rejects artifact | `SYS-NF-001..002`, `SW-FR-BMS-001` |
+| Counter/trace saturation | Diagnostic evidence may wrap | Fixed-width policy, high-water/overflow flags and review | Safety decision uses explicit status, never counter absence | `SW-FR-EVENT-005`, `SW-FR-SAFETY-001..003` |
+
+## 6. ISO 26262 ASIL-B Technical Safety Requirement Mapping
+
+The following mapping is a software allocation of ASIL-B-aligned technical
+safety requirements (TSRs). It is evidence for assessor review; the vehicle
+program must approve the final TSR wording and allocation. The completed
+manual/release evidence requirements are `SW-FR-SAFETY-001`,
+`SW-FR-SAFETY-002`, `SW-FR-SAFETY-003`, `SW-FR-SAFETY-004` and
+`SW-FR-SAFETY-005`.
+
+| TSR | Safety intent | CANcestry implementation | Verification evidence |
+|---|---|---|---|
+| TSR-CAN-01 | Do not act on corrupted bus data | Hardware CAN CRC boundary; malformed/short-frame atomic rejection | `HIL-CRC-001`; codec/HAL conformance; `SW-FR-HIL-003` |
+| TSR-CAN-02 | Contain loss of CAN availability | Bus-Off fault event, TX revocation, SAFE_STATE and bounded recovery | `HIL-BUSOFF-001`; HAL fault tests; `SW-FR-HIL-002` |
+| TSR-PWR-01 | Reach zero torque before reset/power loss | Cortex-M BOR/IWDG and GPIO safe latch; watchdog safe frame | `BM-SAFE-001..004`; `HIL-BROWNOUT-001`; `SW-FR-BM-005..006` |
+| TSR-RT-01 | Keep interrupt hand-off bounded | O(1) ISR, static SPSC ring, main-loop processing only | `BM-LAT-001..004`; archive/no-alloc gate; `SW-FR-BM-003..007` |
+| TSR-MEM-01 | Exclude runtime heap failure | Caller-owned storage, static governor, linker/ archive checks | `BM-ALLOC-001`; `cancestry_governor_no_malloc_symbols`; `SYS-NF-002` |
+| TSR-DET-01 | Equal inputs yield equal outputs | Integer fixed-point governor, deterministic event ordering and no hidden state | `BMS-GOV-001..006`; golden/runtime tests; `SW-FR-BMS-001..003` |
+| TSR-BMS-01 | Limit power to available discharge current | `MaxDischargeCurrent` × bus voltage ceiling with conservative rounding | `BMS-GOV-001`, `BMS-GOV-005`; `SW-FR-BMS-002..003` |
+| TSR-BMS-02 | Prevent original request after derating | `DERATE` output and explicit intervention fault consumed by integration | `BMS-GOV-001`; governor README/integration contract; `SW-FR-BMS-004..005` |
+| TSR-BMS-03 | Fail safe when BMS data is invalid | Zero-output `BLOCK` for invalid/faulted snapshot | `BMS-GOV-003..004`; `SW-FR-BMS-006` |
+| TSR-UDS-01 | Gate diagnostic side effects | UDS governor checkpoint before any store/effect; NULL denies | `UDS-GOV-001..005`; `SW-FR-UDS-007` |
+| TSR-RES-01 | Bound resource use and fault saturation | Fixed capacities, priority fault admission, explicit drops/counters | event/FSM queue tests; `SW-FR-EVENT-004..006` |
+| TSR-TRACE-01 | Make safety evidence auditable | Traceability CSV, final v1 report, deterministic HIL JSON and release gates | `final_v1_report.md`; `ci/check_traceability.py`; `SW-FR-SAFETY-004..005` |
+
+## 7. Resource, timing and independence constraints
 
 | Resource | Bound / policy | Safety relevance |
 |---|---|---|
-| Event queue | 1..32767 caller-owned slots | No heap growth; heap operations are bounded and deterministic |
-| CAN payload | 1..8 classic; 1..8, 12, 16, 20, 24, 32, 48 or 64 FD bytes | Every bit access has a representable wire bound |
-| Expression text | 256 characters | Bounded scan and parser input |
-| Expression nesting | 32 parser depth units | Bounds evaluator stack use and work |
-| FSM transition chain | 4 transitions by default | Prevents uncontrolled generated recursion |
-| FSM actions per event | 128 by default | Limits side effects and activation time |
-| FSM generated events | 64 per activation by default | Limits internal work |
-| Runtime allocation | zero in core execution archives | Prevents allocator failure and unbounded latency |
+| Event queue | 1..32767 caller-owned slots | No heap growth; bounded heap operations |
+| ISR queue | Caller-owned fixed SPSC ring | O(1) interrupt hand-off; overflow is observable |
+| CAN payload | Classic 1..8; FD 1..8, 12, 16, 20, 24, 32, 48 or 64 bytes | No truncation or out-of-bounds bit access |
+| Expression text | 256 characters | Bounded parser/evaluator work |
+| FSM transition chain | Four transitions by default | Prevents uncontrolled generated recursion |
+| FSM actions/events | 128 actions / 64 generated events by default | Bounded activation time |
+| Governor arithmetic | 32-bit public values, 64-bit intermediates, fixed-point efficiency | Reviewable no-float safety decision |
+| Runtime allocation | Zero in core/governor/platform execution archives | Excludes allocator failure and unbounded latency |
+| Watchdog | Target-configured IWDG deadline | Resets a missed main-loop deadline |
 
-The integrator must measure worst-case execution time on the target and account
-for interrupt, driver and OS scheduling budgets. The table is a resource-safety
-bound, not a claim of a target WCET.
+The integrator shall measure target WCET, stack, ISR latency, queue high-water,
+watchdog margin and power-latch timing. The bounds above are not a target WCET
+claim.
 
-## 6. Verification strategy
+## 8. Verification and release gate
 
-Verification uses independent techniques so a passing unit test is not the
-sole basis for a safety claim:
+The independent evidence set is:
 
-| Evidence | Scope | Acceptance |
-|---|---|---|
-| CTest, GCC/Clang warnings and ASan/UBSan | Functional behavior, memory and undefined behavior on host | Existing CI gates remain green with no warning or sanitizer failure |
-| Frama-C/WP with `-wp-rte` | `event_queue_push`, `event_queue_pop`, codec encode/decode and bit helpers | [`formal/frama-c/verify_wp.sh`](../../formal/frama-c/verify_wp.sh) completes with all selected obligations discharged |
-| KLEE | Symbolic bounded expression text, symbolic resolver values, zero-divide/overflow paths and arbitrary event time ordering | [`formal/klee/run.sh`](../../formal/klee/run.sh) has no assertion, execution or solver error |
-| MISRA C:2012 cppcheck addon | `core/` and `platform/` coding-rule analysis | [`formal/misra/run_cppcheck.sh`](../../formal/misra/run_cppcheck.sh) exits zero; reviewed exceptions are in [`MISRA_Deviations.md`](MISRA_Deviations.md) |
-| No-allocation archive scan | Runtime archives and mock/platform paths | `ci/check_no_alloc.py` finds no allocator symbol |
-| Conformance and parity tests | CAN FD boundaries, opendbc bit parity, queue/fault policy and FSM behavior | CTest and integration workflow pass; output is deterministic |
-| Traceability review | Requirement-to-evidence completeness | `ci/check_traceability.py` passes and every formal artifact cites its requirement boundary |
+1. **Functional/conformance tests:** CTest suites for event, codec, FSM, HAL,
+   transport, UDS, bare-metal and BMS behavior under strict warnings.
+2. **Sanitizers:** host ASan/UBSan for memory and undefined arithmetic behavior.
+3. **Static allocation gate:** `ci/check_no_alloc.py` over runtime archives,
+   including `libcancestry_governor.a`.
+4. **HIL simulation:** `tests/hil/hil_fault_injection.py` and its host tests;
+   the report explicitly marks physical target measurements as outstanding.
+5. **Formal/static tools:** Frama-C/WP, KLEE and MISRA/cppcheck procedures
+   listed in `formal/` and the existing safety records.
+6. **Traceability:** `ci/check_traceability.py` resolves requirement ids and
+   refuses silently absent or failed rows.
+7. **Documentation review:** this manual, the FMEA/TSR mappings, BMS contract,
+   HIL report, final v1 trace report and release notes.
 
-Formal tools are verification tools, not runtime dependencies. Their versions,
-prover configuration, target compiler and report hashes must be recorded in the
-release verification record. A missing tool or skipped proof is a failed
-verification activity, not a passing result.
+A v1.0.0 tag is permitted only when the build/test/traceability/no-allocation
+commands pass, no CSV row has status `failed`, the HIL simulation is green,
+and the target limitations in the HIL report are accepted by the responsible
+safety owner. Target hardware confirmation is a prerequisite for a vehicle
+release even though the repository's host evidence is complete.
 
-## 7. Requirements and evidence map
+## 9. Change control
 
-The Phase 9 artifacts implement and verify the existing requirements rather
-than inventing a parallel safety API:
+Every safety-relevant change shall:
 
-* `SW-FR-EVENT-004..006` and `SYS-NF-001..002`: bounded event storage,
-  deterministic total ordering and resource bounds;
-* `SW-FR-CODEC-001..008`: checked bit packing, representability and atomic
-  short-frame behavior;
-* `SW-FR-FSM-035..038`: expression grammar, safe evaluator and fail-closed
-  expression faults;
-* `SW-FR-FSM-021`, `SW-FR-FSM-045..046`: bounded execution and determinism;
-* `SW-FR-FSM-023..025`, `SW-FR-FSM-039..042`: capability, hardware boundary and
-  governor checkpoints.
+* cite its requirement ids in code and in the traceability matrix;
+* add or update a test before changing a passing claim;
+* preserve determinism, fixed bounds, no-allocation and fail-closed behavior;
+* update the FMEA/TSR mapping and final report when the safety boundary
+  changes; and
+* receive maintainer and safety-owner review before release.
 
-The machine-readable requirement record remains
-[`docs/trace/traceability.csv`](../trace/traceability.csv). The formal scripts
-are deliberately explicit about their input source files so a new module
-cannot silently enter the proof boundary.
+A weaker precondition, hidden retry, stale-BMS fallback, software repair of a
+hardware fault or unreviewed allocator is a safety-case regression, even if a
+host test still passes.
 
-## 8. Change control and release gate
+## 10. Evidence index
 
-A safety-relevant change must identify affected requirements, update the
-contracts/tests/documentation, and be reviewed for determinism, resource
-bounds and fail-closed behavior. Changes to a formal precondition require the
-same review as a production behavior change; weakening a precondition to make a
-proof pass is not acceptable.
+* BMS implementation: [`core/governor/README.md`](../../core/governor/README.md)
+* BMS conformance: [`tests/conformance/governor/test_bms_governor.c`](../../tests/conformance/governor/test_bms_governor.c)
+* HIL runner: [`tests/hil/README.md`](../../tests/hil/README.md)
+* HIL report: [`docs/qa/hil-fault-injection-report.md`](../qa/hil-fault-injection-report.md)
+* Final traceability report: [`docs/trace/final_v1_report.md`](../trace/final_v1_report.md)
+* Machine-readable matrix: [`docs/trace/traceability.csv`](../trace/traceability.csv)
+* Existing bare-metal safe-state evidence: [`platform/cortex_m/watchdog.c`](../../platform/cortex_m/watchdog.c)
 
-Before an ASIL-B-aligned release candidate, the maintainer must attach:
-
-1. the clean CTest, sanitizer, traceability and no-allocation outputs;
-2. the Frama-C/WP and KLEE logs with tool versions and report hashes;
-3. the cppcheck/MISRA report and reviewer disposition for each deviation;
-4. target compiler flags, platform assumptions and WCET/resource measurements;
-5. an updated HARA/technical-safety review from the responsible system owner.
-
-This draft is complete as a software safety-manual baseline when those release
-artifacts are attached. It must not be used as evidence that the whole vehicle
-item has achieved ASIL-B certification.
+This manual is complete as the v1.0.0 software safety-manual baseline. It must
+not be represented as an ISO 26262 certificate or as evidence that a complete
+vehicle item has achieved ASIL-B.

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(cancestry
-    VERSION 0.3.0
+    VERSION 1.0.0
     DESCRIPTION "CAN codec, recipe and emulation runtime"
     LANGUAGES C)
 
@@ -83,6 +83,7 @@ add_subdirectory(core/fsm)
 add_subdirectory(core/hal)
 add_subdirectory(core/transport)
 add_subdirectory(core/uds)
+add_subdirectory(core/governor)
 add_subdirectory(platform)
 
 if(CANCESTRY_BUILD_TESTS)

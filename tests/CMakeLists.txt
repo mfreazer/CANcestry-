@@ -32,6 +32,8 @@ add_subdirectory(conformance/transport)
 add_subdirectory(conformance/uds)
 # Bare-metal and hard real-time conformance (issue #28, Phase 11).
 add_subdirectory(conformance/baremetal)
+# BMS thermal and torque governor conformance (issue #30, Phase 12).
+add_subdirectory(conformance/governor)
 
 # The runtime cores must not allocate. This is verified on the built archives,
 # which is a stronger and more portable check than intercepting malloc at
@@ -91,6 +93,16 @@ if(CANCESTRY_PYTHON AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME cancestry_platform_cortex_m_no_malloc_symbols
         COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_no_alloc.py"
                 $<TARGET_FILE:cancestry_platform_cortex_m>)
+    # The BMS governor is a safety-critical pure runtime path (issue #30).
+    add_test(NAME cancestry_governor_no_malloc_symbols
+        COMMAND ${CANCESTRY_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/../ci/check_no_alloc.py"
+                $<TARGET_FILE:cancestry_governor>)
+    # Hardware-first fault injection is registered without a third-party
+    # Python dependency; the optional pytest suite adds finer assertions.
+    add_test(NAME cancestry_hil_fault_injection
+        COMMAND ${CANCESTRY_PYTHON}
+                "${CMAKE_CURRENT_SOURCE_DIR}/hil/hil_fault_injection.py"
+                --scenario all)
 endif()
 
 # The Linux SocketCAN backend is only built on Linux; check it there.

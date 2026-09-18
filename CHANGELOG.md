@@ -1,7 +1,47 @@
 # Changelog
 
-All notable changes to CANcestry are documented here. The format is
-Keep a Changelog style; requirement IDs refer to `docs/software/SwRS.md` and
+All notable changes to CANcestry are documented here.
+
+## [1.0.0] - 2026-09-18
+
+Phase 12 (issue #30) completes the v1.0.0 software safety-case baseline for
+an EV Battery Replacement Gateway. The release is an ASIL-B alignment target,
+not an ISO 26262 certification.
+
+### Added
+
+- **Stateless BMS thermal/torque governor** (`core/governor`,
+  `SW-FR-BMS-001..006`): fixed-point, allocation-free evaluation of VCU power
+  requests against BMS `MaxDischargeCurrent` and bus voltage. A thermal
+  intervention returns the safe derated value and the deterministic
+  `GOVERNOR_INTERVENTION` fault; invalid or unavailable BMS data blocks to zero.
+- **Hardware-first HIL fault injection** (`tests/hil`, `SW-FR-HIL-001..006`):
+  deterministic Bus-Off recovery, hardware CRC rejection and BOR brownout
+  scenarios. The simulation proves that hardware rejects/latches first and
+  documents the target-board/QEMU evidence still required.
+- **Final safety evidence** (`docs/safety/SafetyManual.md`,
+  `docs/trace/final_v1_report.md`, `docs/qa/hil-fault-injection-report.md`):
+  architecture/data flow, software FMEA, ASIL-B-aligned TSR mapping, release
+  artifact checklist and a machine-audited v1 traceability report.
+- **Governor conformance and archive gate** (`BMS-GOV-001..008`,
+  `cancestry_governor_no_malloc_symbols`) covering thermal edge cases,
+  conservative rounding, BMS fault handling and NULL/invalid inputs.
+
+### Changed
+
+- `VERSION` is now `1.0.0`.
+- `docs/trace/traceability.csv` contains the Phase 12 evidence rows; the final
+  report records 164/164 implemented v1 requirements covered, 56 explicit
+  v1.1.0 deferrals, 275 rows, and no failed row.
+- The release gate now treats the physical HIL limitation as an explicit
+  acceptance item rather than silently claiming target hardware validation.
+
+All target hardware measurements (CAN controller CRC/error counters, Bus-Off
+recovery timing, BOR/IWDG reset cause and external safe-latch timing) remain a
+vehicle-program prerequisite before using this software in a production item.
+
+The format is Keep a Changelog style; requirement IDs refer to
+`docs/software/SwRS.md` and
 `docs/SyRS.md`, and the requirement-to-artifact mapping lives in
 `docs/trace/traceability.csv`.
 
