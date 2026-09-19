@@ -83,6 +83,32 @@
       "type": "string",
       "pattern": "^$|^sha256:[0-9a-f]{64}$",
       "description": "sha256 of the evidence artifact, recomputed by ci/check_hw_traceability.py; mandatory for passing rows, empty otherwise."
+    },
+    "validation_gap": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional oracle validation gap metadata; the authoritative value is carried in the oracle registry."
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "pattern": "^passing"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "oracle_id"
+        ],
+        "properties": {
+          "oracle_id": {
+            "pattern": "^OR-\\d{3}[a-z]?$"
+          }
+        }
+      }
+    }
+  ]
 }

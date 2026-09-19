@@ -300,10 +300,11 @@ def pipeline(sim_case, bom):
     i_mcu = params["I_mcu"]
     i_leak = params["I_leak"]
     c = params["C"]
+    esr = params["ESR"]
     tolerance = sim_case["tolerances"]["vb_max_abs_delta_v"]
     v_floor = params["V_floor"]
 
-    deltas = [abs(v - oracle.vbat(t, v0, i_mcu, i_leak, c))
+    deltas = [abs(v - oracle.vbat(t, v0, i_mcu, i_leak, c, esr))
               for t, v in zip(times, voltages)]
     max_delta = max(deltas)
     if max_delta > tolerance:
@@ -323,7 +324,7 @@ def pipeline(sim_case, bom):
         "min_v_v": min(voltages),
         "n_samples": len(times),
         "time_to_floor_s": oracle.time_to_floor(v0, v_floor, i_mcu, i_leak,
-                                                c),
+                                                c, esr),
         "tolerance_v": tolerance,
         "v_end_v": v_end,
         "v_floor_v": v_floor,

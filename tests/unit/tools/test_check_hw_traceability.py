@@ -52,9 +52,10 @@ HWRS_VALID = """# CANcestry HwRS (fixture)
 """
 
 REGISTRY_VALID = (
-    "oracle_id,oracle,class,serves\n"
-    "OR-001,RC hold-up / energy-balance closed form,(a),HW-SF-002\n"
-    "OR-002,ISO 7637-2 pulse parameters,(b),HW-FR-004\n"
+    "oracle_id,oracle,class,serves,validation_gap\n"
+    "OR-001,RC hold-up / energy-balance closed form,(a),HW-SF-002,"
+    "Idealized ODE gap; T2 SPICE or bench correlation\n"
+    "OR-002,ISO 7637-2 pulse parameters,(b),HW-FR-004,\n"
 )
 
 TRACE_HEADER = (
@@ -471,7 +472,7 @@ def test_gate_rejects_duplicate_pairs_and_bad_registry(tmp_path):
     assert result.returncode == 1
     assert "duplicate row" in result.stdout
 
-    bad_registry = "oracle_id,oracle,class,serves\nBAD-x,oracle,(a),x\n"
+    bad_registry = "oracle_id,oracle,class,serves,validation_gap\nBAD-x,oracle,(a),x,\n"
     make_repo(tmp_path, registry=bad_registry)
     trace = TRACE_HEADER + row("HW-SF-002", "sim", "sim-pending",
                                credibility="CL0", oracle="")
@@ -532,10 +533,10 @@ def test_gate_remaining_error_paths(tmp_path):
     """HW-TRACE-GATE-015: field-count, empty-field and digest error paths."""
     base_status = "passing(sim,CL2,provisional)"
     # (a) registry row with the wrong field count.
-    make_repo(tmp_path, registry="oracle_id,oracle,class,serves\nOR-001,two\n")
+    make_repo(tmp_path, registry="oracle_id,oracle,class,serves,validation_gap\nOR-001,two\n")
     result = run_checker(tmp_path)
     assert result.returncode == 1
-    assert "has 2 fields, expected 4" in result.stdout
+    assert "has 2 fields, expected 5" in result.stdout
 
     # (b) ledger row with the wrong field count.
     make_repo(tmp_path, trace=TRACE_HEADER + "HW-SF-002,sim\n")

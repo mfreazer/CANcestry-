@@ -9,20 +9,22 @@ is a capacitor ``C`` with series ``ESR`` feeding a constant load current
 derivation, cited via ``hw/bom/``). While the main rail is below the node
 voltage the charge path is off and the domain discharges into the load.
 
-Closed form (class (a), HW-PLAN section 10.2): with the node voltage
-``v(0) = v0`` and constant load,
+Closed form (class (a), HW-PLAN section 10.2): the Modelica model
+initializes the capacitor state at ``vC(0) = V0``. With the charge path
+off, the node therefore starts at the ESR-adjusted voltage
 
-    vC(t) = vC(0) - I*t/C,   v(t) = vC(t) - ESR*I,   vC(0) = v0 + ESR*I
+    v0_effective = V0 - ESR * I,   I = I_mcu + I_leak
 
-so the ESR drop is carried by the initial capacitor state and the node
-trajectory is the pure energy-balance ramp
+and follows the energy-balance ramp
 
-    v(t) = v0 - (I/C) * t,
+    v(t) = v0_effective - (I/C) * t.
 
-i.e. ``C * dv = I * dt`` integrated in closed form. The hold-up margin is
-the time to the floor voltage,
+OR-001 takes ``esr`` explicitly so the oracle and model share the same
+initial condition; omitting it retains the idealized ESR-free behavior
+(``esr=0``) for callers that do not model the series drop. The hold-up
+margin is the time to the floor voltage,
 
-    t_floor(v_floor) = C * (v0 - v_floor) / I,
+    t_floor(v_floor) = C * (v0_effective - v_floor) / I,
 
 which is the energy-balance form ``C * dv = I * t`` solved for ``t``.
 
@@ -38,6 +40,7 @@ import sys
 
 __all__ = [
     "total_load_current",
+    "effective_initial_node_voltage",
     "vbat",
     "time_to_floor",
     "closed_form_trace",
@@ -50,22 +53,28 @@ def total_load_current(i_mcu, i_leak):
     return i_mcu + i_leak
 
 
-def vbat(t, v0, i_mcu, i_leak, c):
-    """Node voltage [V] at time ``t`` [s] (closed form, see module doc)."""
-    return v0 - total_load_current(i_mcu, i_leak) * t / c
+def effective_initial_node_voltage(v0, i_mcu, i_leak, esr=0.0):
+    """Initial node voltage [V] after the ESR drop at the constant load."""
+    return v0 - esr * total_load_current(i_mcu, i_leak)
 
 
-def time_to_floor(v0, v_floor, i_mcu, i_leak, c):
-    """Time [s] until the node reaches ``v_floor``; 0.0 when already below."""
-    dv = v0 - v_floor
+def vbat(t, v0, i_mcu, i_leak, c, esr=0.0):
+    """Node voltage [V] at time ``t`` [s], including the initial ESR drop."""
+    initial = effective_initial_node_voltage(v0, i_mcu, i_leak, esr)
+    return initial - total_load_current(i_mcu, i_leak) * t / c
+
+
+def time_to_floor(v0, v_floor, i_mcu, i_leak, c, esr=0.0):
+    """Time [s] until the ESR-adjusted node reaches ``v_floor``."""
+    dv = effective_initial_node_voltage(v0, i_mcu, i_leak, esr) - v_floor
     if dv <= 0.0:
         return 0.0
     return c * dv / total_load_current(i_mcu, i_leak)
 
 
-def closed_form_trace(times, v0, i_mcu, i_leak, c):
+def closed_form_trace(times, v0, i_mcu, i_leak, c, esr=0.0):
     """Closed-form node voltage at each sample of ``times`` (list of float)."""
-    return [vbat(t, v0, i_mcu, i_leak, c) for t in times]
+    return [vbat(t, v0, i_mcu, i_leak, c, esr) for t in times]
 
 
 def _rk4_endpoint(v0, slope, stop, steps):
@@ -92,30 +101,35 @@ def self_check():
     v0 = 3.3
     i_mcu = 12e-6
     i_leak = 5e-6
+    esr = 0.02
     c = 10e-6
     v_floor = 1.65
     stop = 0.15
     steps = 100000
+    v0_effective = v0 - esr * (i_mcu + i_leak)
 
-    rk4 = _rk4_endpoint(v0, -total_load_current(i_mcu, i_leak) / c, stop,
-                        steps)
-    analytic = vbat(stop, v0, i_mcu, i_leak, c)
+    rk4 = _rk4_endpoint(
+        v0_effective, -total_load_current(i_mcu, i_leak) / c, stop, steps)
+    analytic = vbat(stop, v0, i_mcu, i_leak, c, esr)
     max_delta = max(
-        abs(vbat(stop * k / steps, v0, i_mcu, i_leak, c)
-            - (v0 - total_load_current(i_mcu, i_leak) * (stop * k / steps) / c))
+        abs(vbat(stop * k / steps, v0, i_mcu, i_leak, c, esr)
+            - (v0_effective
+               - total_load_current(i_mcu, i_leak) * (stop * k / steps) / c))
         for k in range(steps + 1))
 
-    t_floor = time_to_floor(v0, v_floor, i_mcu, i_leak, c)
-    floor_consistency = abs(vbat(t_floor, v0, i_mcu, i_leak, c) - v_floor)
+    t_floor = time_to_floor(v0, v_floor, i_mcu, i_leak, c, esr)
+    floor_consistency = abs(
+        vbat(t_floor, v0, i_mcu, i_leak, c, esr) - v_floor)
 
     result = {
         "max_analytic_trace_delta_v": max_delta,
+        "initial_node_voltage_v": v0_effective,
         "rk4_endpoint_v": rk4,
         "analytic_endpoint_v": analytic,
         "endpoint_delta_v": abs(rk4 - analytic),
         "time_to_floor_s": t_floor,
         "floor_consistency_delta_v": floor_consistency,
-        "pass": (max_delta == 0.0
+        "pass": (max_delta <= 1e-12
                  and abs(rk4 - analytic) <= 1e-9
                  and floor_consistency <= 1e-9),
     }

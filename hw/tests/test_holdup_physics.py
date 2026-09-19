@@ -74,9 +74,11 @@ def node_voltage(v_c, i_ch):
 
 def rk4_run(stop, steps):
     """Fixed-step RK4 over the model DAE; returns (times, node voltages)."""
-    v_c = P["V0"] + P["ESR"] * I_LOAD  # so that v(0) = V0
+    # Holdup.mo initializes vC(0)=V0. The node starts after the ESR drop,
+    # which is the OR-001 effective initial voltage.
+    v_c = P["V0"]
     h = stop / steps
-    times, voltages = [0.0], [P["V0"]]
+    times, voltages = [0.0], [node_voltage(v_c, 0.0)]
     t = 0.0
     for _ in range(steps):
         i1 = diode_current(t, v_c)
@@ -100,7 +102,8 @@ def test_model_ode_matches_oracle():
     stop = P["t_brownout"] + P["t_remove"]
     times, voltages = rk4_run(stop, 15000)
     max_delta = max(
-        abs(v - or_001.vbat(t, P["V0"], P["I_mcu"], P["I_leak"], P["C"]))
+        abs(v - or_001.vbat(t, P["V0"], P["I_mcu"], P["I_leak"], P["C"],
+                             P["ESR"]))
         for t, v in zip(times, voltages))
     assert max_delta <= 1e-9, "max |RK4 - OR-001| = %r V" % max_delta
 
@@ -113,7 +116,7 @@ def test_retention_margin():
     # Closed-form hold-up margin (C*dv = I*dt solved for t): the event ends
     # at 0.15 s while the closed-form floor time is ~0.97 s (10x margin).
     t_floor = or_001.time_to_floor(P["V0"], P["V_floor"], P["I_mcu"],
-                                   P["I_leak"], P["C"])
+                                   P["I_leak"], P["C"], P["ESR"])
     assert t_floor > 5 * stop, "insufficient hold-up margin: %r s" % t_floor
     # The charge path is off for the whole event (rail <= 2.8 V < node).
     assert all(diode_current(t, v_c) == 0.0

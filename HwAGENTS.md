@@ -42,6 +42,7 @@
 
 5. **Determinism.** Digest-pinned toolchain images, fixed seeds, hashed
    traces. Evidence format mirrors `docs/qa/hil-fault-injection-report.md`.
+   The digest re-verification step requires the docker buildx plugin, which is pre-installed on ubuntu-latest runners.
 
 6. **Fail-closed hardware.** Safe state must exist without firmware
    (HW-SF-001): the passive fail-safe topology — reset, supervisor and

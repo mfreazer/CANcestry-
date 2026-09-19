@@ -24,10 +24,12 @@ model Holdup
    holdup_001 event: rail 2.8 V or 0 V against an initial 3.3 V node) the
    charge path is off and the node discharges into the constant load:
 
-     v(t) = V0 - (I_mcu + I_leak) * t / C        (oracle OR-001 closed form)
+     vC(0) = V0 and v(0) = V0 - ESR*(I_mcu + I_leak)
+     v(t) = v(0) - (I_mcu + I_leak) * t / C  (OR-001 closed form)
 
-   i.e. C*dv = I*dt integrated in closed form; the hold-up margin is
-   t_floor = C*(V0 - V_floor)/(I_mcu + I_leak).
+   OR-001 uses that ESR-adjusted initial node voltage explicitly. I.e.
+   C*dv = I*dt integrated in closed form; the hold-up margin is
+   t_floor = C*(v(0) - V_floor)/(I_mcu + I_leak).
 
    Idealizations (documented, per HwAGENTS.md rule 2): ideal diode
    (forward drop negligible at uA-class load; H-02 WCCA), constant load at
@@ -88,11 +90,12 @@ equation
 annotation (
   Documentation(info = "<html>
 <h4>Scenario</h4>
-<p><code>holdup_001</code>: <code>v(0) = V0 = 3.3 V</code>, rail 2.8 V for
-50 ms then 0 V for 100 ms. The charge path stays off (2.8 V &lt; v(t) for
-the whole event), so the node follows the OR-001 closed form
-v(t) = V0 - (I_mcu + I_leak)*t/C and ends at 3.045 V, 1.395 V above the
-1.65 V retention floor.</p>
+<p><code>holdup_001</code>: <code>vC(0) = V0 = 3.3 V</code>, so the
+loaded node starts at <code>v(0) = V0 - ESR*(I_mcu + I_leak)</code>; the
+rail is 2.8 V for 50 ms then 0 V for 100 ms. The charge path stays off
+(2.8 V &lt; v(t) for the whole event), so the node follows OR-001's
+ESR-adjusted closed form and ends at approximately 3.045 V, 1.395 V above
+the 1.65 V retention floor.</p>
 </html>"
 ));
 end Holdup;

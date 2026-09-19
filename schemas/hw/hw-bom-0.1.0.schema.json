@@ -99,6 +99,13 @@
             "budget"
           ]
         },
+        "citation_type": {
+          "enum": [
+            "datasheet",
+            "budget"
+          ],
+          "description": "Whether a provisional parameter is grounded in a vendor datasheet or an engineering budget. Requirement-bound HwRS values use source=hwers and may omit this field."
+        },
         "citation": {
           "type": "string",
           "minLength": 1,

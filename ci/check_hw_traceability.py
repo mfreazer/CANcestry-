@@ -94,7 +94,8 @@ CSV_HEADER = (
     "evidence",
     "evidence_sha256",
 )
-REGISTRY_HEADER = ("oracle_id", "oracle", "class", "serves")
+REGISTRY_HEADER = ("oracle_id", "oracle", "class", "serves",
+                   "validation_gap")
 
 # H-01 has no Capella model to resolve yet. These explicit placeholders are
 # accepted and deliberately excluded from any future Capella orphan check;

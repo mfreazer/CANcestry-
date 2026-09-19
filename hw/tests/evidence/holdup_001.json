@@ -12,19 +12,20 @@
   "requirement_id": "HW-SF-002",
   "sim_case": "hw/tests/cases/holdup_001.simcase.json",
   "source_hashes": {
-    "hw/bom/bom.json": "sha256:8d77014bc1c2d2e305a1fd6c90d8614267438f44fd3f0f1adefa777a2f302595",
-    "hw/bom/datasheets/extract-holdup-cap.json": "sha256:39afca64b40b01d669183468fbb2cc1f5633000e1bb0d6b3161437382603cc8d",
+    "hw/bom/bom.json": "sha256:779a79e7cc6649f7c345fc70ff97ca0b5c0fe615e1475a9ff6f423e1dbf41311",
+    "hw/bom/datasheets/extract-holdup-cap.json": "sha256:757e89cd3dfdaa2a84fd5b9afcb0eddd200749d77cdc712cfea9341cc7f360a7",
     "hw/bom/datasheets/extract-mcu-vbat.json": "sha256:79692b46dfdddb3bd17ec2562f60521855b390cc8694deb0863a16bb4d121d3d",
-    "hw/model/CancestryLib/Power/Holdup.mo": "sha256:13cc3400db0ea0fedf1aaf2e0e52c0a6f32824514da5950354abc1072ea526a2",
+    "hw/model/CancestryLib/Power/Holdup.mo": "sha256:5234a1adb770adec37a5c3cc4a188107fa88302cd647e1f73306db9b8fb3228e",
     "hw/model/CancestryLib/Power/package.mo": "sha256:b764dcccf84d3660c855d2d9712ed63bf7ff3e617a7409fd72d4381a0d527c33",
     "hw/model/CancestryLib/package.mo": "sha256:53662fe968facb4cc3ca5d6ccb0ec8a7b7382224c0122ab5af19b748694e2372",
     "hw/tests/cases/holdup_001.simcase.json": "sha256:81cfefd37729c0e9b3a072a303e23e51bae7604675840144feb14add703b468d",
-    "hw/tests/oracles/or_001_holdup.py": "sha256:bc5af794b540e886668d469a5af67ad6a74601c73448159b6301f409b6e195c1",
-    "hw/tests/oracles/registry.csv": "sha256:9a99e188c0ab39350b42a122ad1dd42a438dbe79ed87012375af08eae84fe191",
-    "hw/tests/test_power_sim.py": "sha256:712777cc28163a0c1b71e482291acee61bbbd145bd44859b29d0ca00ca1413b5",
-    "schemas/hw/hw-bom-0.1.0.schema.json": "sha256:fde71d8b05bd722762effd7cb7f0512b2bd0f1444576e435cc934e913231972f",
+    "hw/tests/oracles/or_001_holdup.py": "sha256:ecfe6681a5be644ecc0e476b484b9c0fc3248a56dadd17524041c3c79d3a7fe7",
+    "hw/tests/oracles/registry.csv": "sha256:b5b8e329987a1345b3ee05bc3c153d5850b9b8270e309ce8132e1a286a64380f",
+    "hw/tests/test_evidence_determinism.py": "sha256:9a8ef209700e0ef9b6d52640a66e8000b0856d0bfe7294f86acc578002ee0649",
+    "hw/tests/test_power_sim.py": "sha256:db51bc8250f750704f6c0db1ddcf15e7b9bbb7a026e0da151cb1f0fd90eda1a4",
+    "schemas/hw/hw-bom-0.1.0.schema.json": "sha256:31aecdd71fb0a2e76750e42aa94d726311457c31b62d3582bd933a4e5b356f27",
     "schemas/hw/hw-sim-0.1.0.schema.json": "sha256:e08b1a7c6d112daac979f746636bca48ff5a98241b3f26252987e5ef546a62cf",
-    "schemas/hw/hw-traceability-0.1.0.schema.json": "sha256:6788ec523e898ac7e462422d5b4c43c91978cd58395281e8fc4544b40def69b6"
+    "schemas/hw/hw-traceability-0.1.0.schema.json": "sha256:ba495e4f3310e76464e22fb26f9b5b2c36f3baf88b338f194c8280528bab3ab4"
   },
   "tolerance_v": 0.001,
   "tool_pins": {

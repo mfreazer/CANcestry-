@@ -30,6 +30,7 @@
       "unit": "ohm",
       "condition": "Engineering budget (typical low-ESR 10 uF ceramic/polymer class). Sensitivity: in the covered constant-current discharge the ESR drop is I*ESR <= 3.4e-7 V, i.e. ~3 orders of magnitude below the declared 1e-3 V tolerance, so the budget cannot flip the acceptance verdict; pinned by the H-02 vendor datasheet.",
       "source": "budget",
+      "citation_type": "budget",
       "citation": "HwAGENTS.md rule 2 (no value without an extract); vendor datasheet table due at H-02 BOM selection"
     },
     {
@@ -38,6 +39,7 @@
       "unit": "ohm",
       "condition": "Budget for the VBAT charge path (idealized diode + trace/diode impedance). Not exercised by holdup_001 (the diode is off for the whole event); shapes charge dynamics in the H-02 transient cases. Pinned by H-02 WCCA/netlist.",
       "source": "budget",
+      "citation_type": "budget",
       "citation": "HwAGENTS.md rule 2 (no value without an extract); WCCA (wcca-derating.md) due at H-02"
     }
   ]

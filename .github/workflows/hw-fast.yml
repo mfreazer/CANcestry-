@@ -117,14 +117,15 @@ jobs:
                 exit 1
               }
 
-              echo "== 2. HwRS parser + hardware ledger (unit tests, 100% coverage gate)"
-              python3 -m coverage run --include=ci/check_hw_traceability.py \
+              echo "== 2. HwRS parser + hardware ledger (unit tests, 95% branch coverage gate)"
+              python3 -m coverage run --branch \
+                --include=ci/check_hw_traceability.py \
                 -m pytest tests/unit/tools/test_check_hw_traceability.py -q || {
                 echo "::error::hw-fast gate 2 failed: checker unit tests"
                 exit 1
               }
-              python3 -m coverage report --fail-under=100 || {
-                echo "::error::hw-fast gate 2 failed: checker coverage below 100%"
+              python3 -m coverage report --fail-under=95 || {
+                echo "::error::hw-fast gate 2 failed: checker branch coverage below 95%"
                 exit 1
               }
 

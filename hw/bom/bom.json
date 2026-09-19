@@ -98,6 +98,7 @@
           "unit": "ohm",
           "condition": "Engineering budget; sensitivity I*ESR <= 3.4e-7 V is ~3 orders below the 1e-3 V case tolerance; pinned by the H-02 vendor datasheet",
           "source": "budget",
+          "citation_type": "budget",
           "citation": "HwAGENTS.md rule 2; vendor datasheet table due at H-02"
         },
         {
@@ -106,6 +107,7 @@
           "unit": "ohm",
           "condition": "VBAT charge-path budget (idealized diode + trace); not exercised by holdup_001 (diode off); H-02 transient cases only",
           "source": "budget",
+          "citation_type": "budget",
           "citation": "HwAGENTS.md rule 2; WCCA due at H-02"
         }
       ]
