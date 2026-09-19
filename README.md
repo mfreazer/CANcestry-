@@ -40,7 +40,9 @@ local build is a clean CI build.
 | Path | Contents |
 |---|---|
 | `docs/` | System, software and package specifications, plus traceability. |
-| `schemas/` | JSON Schemas for package manifests, codec maps, recipes and FSMs (FSM finalized at v0.3.0). |
+| `docs/hw/` | Hardware plan of record (H-Phase 1): `HW-PLAN`, `HwRS`, `mbse-plan`, `virtual-bench-plan`. Governed by [`HwAGENTS.md`](HwAGENTS.md). |
+| `hw/` | Hardware engineering tree (H-Phase 1): Modelica `CancestryLib` (Power hold-up), BOM + cited datasheet extracts, virtual-bench oracle registry, sim cases, evidence and the hardware traceability ledger. Gated by `hw-fast` CI. |
+| `schemas/` | JSON Schemas for package manifests, codec maps, recipes and FSMs (FSM finalized at v0.3.0). `schemas/hw/` adds the hardware BOM/extract, sim-case and traceability-row schemas. |
 | `core/event/` | Portable event model: types, clock and bounded queue. See [`core/event/README.md`](core/event/README.md). |
 | `core/codec/` | Codec engine: decode/encode against codec-map schemas. See [`core/codec/README.md`](core/codec/README.md). |
 | `core/recipe/` | Recipe engine: event-triggered transformations, routing and filtering between the event bus and the codec engine. See [`core/recipe/README.md`](core/recipe/README.md). |
@@ -51,7 +53,7 @@ local build is a clean CI build.
 | `tests/conformance/` | C conformance suites, including the Phase 12 BMS governor tests. |
 | `tests/hil/` | Deterministic hardware-first Bus-Off, CRC and brownout fault-injection simulation. |
 | `tests/integration/` | Cross-implementation checks, including the opendbc parity harness. |
-| `ci/` | Repository checks run as CTest tests (`check_no_alloc.py`, `check_schemas_valid.py`, `check_traceability.py`). |
+| `ci/` | Repository checks run as CTest tests (`check_no_alloc.py`, `check_schemas_valid.py`, `check_traceability.py`). `check_hw_traceability.py` is the hardware honest-ledger gate (run by `hw-fast` CI, not CTest); `ci/docker/` holds the digest-pinned hardware toolchain image. |
 | `formal/` | Optional Phase 9 verification drivers for Frama-C/WP, KLEE and MISRA C:2012 cppcheck analysis. |
 | `docs/qa/` | QA records, including the Phase 12 HIL report and target procedure. |
 | `docs/releases/` | Release notes and community announcements. |
@@ -70,4 +72,8 @@ local build is a clean CI build.
 - [`docs/safety/MISRA_Deviations.md`](docs/safety/MISRA_Deviations.md) - MISRA C:2012 deviation record and static-analysis procedure.
 - [`docs/qa/test-strategy.md`](docs/qa/test-strategy.md) - the QA strategy the checks above implement.
 - [`docs/qa/closed-findings.md`](docs/qa/closed-findings.md) - candidate QA closure record and open QA-EV-01 decision.
-- [`docs/versions.md`](docs/versions.md) - release-candidate version and final-release gate policy.
+- [`docs/versions.md`](docs/versions.md) - release-candidate version and final-release gate policy, including the H-Phase 1 hardware document baseline.
+- [`docs/hw/HW-PLAN.md`](docs/hw/HW-PLAN.md) - hardware plan of record (H-Phase 1): constraints, toolchain, virtual-bench and credibility policy.
+- [`docs/hw/HwRS.md`](docs/hw/HwRS.md) - hardware requirements specification (HW-SF/HW-FR/HW-NF).
+- [`docs/hw/virtual-bench-plan.md`](docs/hw/virtual-bench-plan.md) - virtual bench: oracle registry, simulation-first policy and ledger.
+- [`HwAGENTS.md`](HwAGENTS.md) - hardware agent policy (load-bearing; `@cancestry-hw-agent` operates under it).

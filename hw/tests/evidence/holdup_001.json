@@ -1,0 +1,41 @@
+{
+  "case_id": "holdup_001",
+  "credibility_level": "CL2",
+  "evidence_of": "T1 block simulation of CancestryLib.Power.Holdup (FMU via omc, executed with FMPy) against oracle OR-001: HW-SF-002 sub-event (ii) brownout to BOR level 3 (2.8 V) for 50 ms, then sub-event (iii) removal to 0 V for 100 ms, worst-case durations. VBAT(t) asserted within the sim-case tolerance; retention floor 1.65 V held across the event.",
+  "not_covered": [
+    "HW-SF-002 sub-event (i) IWDG reset: firmware/reset-domain behavior, T2 virtual bench (H-02/H-03)",
+    "T4 physical correlation (real brownout shapes, golden measurement): bench-pending per HwRS section 5 seed list (oracle absence)"
+  ],
+  "oracle_id": "OR-001",
+  "pass": true,
+  "provisional": true,
+  "requirement_id": "HW-SF-002",
+  "sim_case": "hw/tests/cases/holdup_001.simcase.json",
+  "source_hashes": {
+    "hw/bom/bom.json": "sha256:8d77014bc1c2d2e305a1fd6c90d8614267438f44fd3f0f1adefa777a2f302595",
+    "hw/bom/datasheets/extract-holdup-cap.json": "sha256:39afca64b40b01d669183468fbb2cc1f5633000e1bb0d6b3161437382603cc8d",
+    "hw/bom/datasheets/extract-mcu-vbat.json": "sha256:79692b46dfdddb3bd17ec2562f60521855b390cc8694deb0863a16bb4d121d3d",
+    "hw/model/CancestryLib/Power/Holdup.mo": "sha256:f3ec323b52affa9db8eab950c7525104b8a65dc74971fe0299579d7e4f9a9e40",
+    "hw/model/CancestryLib/Power/package.mo": "sha256:b764dcccf84d3660c855d2d9712ed63bf7ff3e617a7409fd72d4381a0d527c33",
+    "hw/model/CancestryLib/package.mo": "sha256:53662fe968facb4cc3ca5d6ccb0ec8a7b7382224c0122ab5af19b748694e2372",
+    "hw/tests/cases/holdup_001.simcase.json": "sha256:81cfefd37729c0e9b3a072a303e23e51bae7604675840144feb14add703b468d",
+    "hw/tests/oracles/or_001_holdup.py": "sha256:bc5af794b540e886668d469a5af67ad6a74601c73448159b6301f409b6e195c1",
+    "hw/tests/oracles/registry.csv": "sha256:9a99e188c0ab39350b42a122ad1dd42a438dbe79ed87012375af08eae84fe191",
+    "hw/tests/test_power_sim.py": "sha256:cfb9f1ce937c553f411fe8530e1efb9cc12e10b2a73e4fd97675cd3aaab15117",
+    "schemas/hw/hw-bom-0.1.0.schema.json": "sha256:e924ad44f485fe168125397350725665529d06bd3fa1af3f91efe130c900afdb",
+    "schemas/hw/hw-sim-0.1.0.schema.json": "sha256:e08b1a7c6d112daac979f746636bca48ff5a98241b3f26252987e5ef546a62cf",
+    "schemas/hw/hw-traceability-0.1.0.schema.json": "sha256:eaeddfad86024f7eceaa2d584fe4cf9e05e1da23ef163a95f33d009ac4be7e85"
+  },
+  "tolerance_v": 0.001,
+  "tool_pins": {
+    "fmpy": "0.3.24",
+    "numpy": "2.1.3",
+    "openmodelica": "1.24",
+    "python": ">=3.10"
+  },
+  "trace": {
+    "artifact": "build/hw/holdup_001.trace.csv (per-run artifact, gitignored)",
+    "columns": "time_s,v_v",
+    "hashing": "sha256 of each run's trace recorded in build/hw/holdup_001.runlog.json (HwAGENTS.md rule 5: hashed traces, deterministic evidence)"
+  }
+}
