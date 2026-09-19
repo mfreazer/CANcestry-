@@ -1,12 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
 
-# CMake's project(VERSION ...) grammar accepts numeric components only. Keep
-# the release-candidate marker explicit here rather than silently advertising
-# final 1.0.0 metadata.
-set(CANCESTRY_RELEASE_VERSION "1.0.0-rc.1")
+# Final release version. QA-EV-01 is formally closed; see
+# docs/qa/closed-findings.md for the closure record.
+set(CANCESTRY_RELEASE_VERSION "1.0.0")
 # NOTE: The CMake project version is kept separate from project() due to CMake
 # grammar limitations with complex RC suffixes. The actual release version is
-# controlled via the CANCESTRY_RELEASE_VERSION variable (currently 1.0.0-rc.1).
+# controlled via the CANCESTRY_RELEASE_VERSION variable (currently 1.0.0).
 project(cancestry
     DESCRIPTION "CAN codec, recipe and emulation runtime"
     LANGUAGES C)

@@ -2,12 +2,18 @@
 
 All notable changes to CANcestry are documented here.
 
-## [1.0.0-rc.1] - 2026-09-18
+## [1.0.0] - 2026-09-19
 
-Phase 12 (issue #30) and the QA-EV-01 correction establish the v1.0.0-rc.1
-software safety-case candidate for an EV Battery Replacement Gateway. This is
-an ASIL-B alignment target, not an ISO 26262 certification; final `1.0.0`
-release, tagging and milestone closure remain deferred until QA-EV-01 is closed.
+Phase 12 (issue #30) and the QA-EV-01 correction establish the v1.0.0
+software safety case for an EV Battery Replacement Gateway. This is
+an ASIL-B alignment target, not an ISO 26262 certification. QA-EV-01 has been
+formally closed (see `docs/qa/closed-findings.md`), authorizing the final
+`1.0.0` release.
+
+### Fixed
+
+- Closed QA-EV-01: Hard-fault escalation now guarantees boot-surviving
+  persistence, terminal queue state, and fail-closed safe-spin.
 
 ### Added
 
@@ -35,8 +41,8 @@ release, tagging and milestone closure remain deferred until QA-EV-01 is closed.
 
 ### Changed
 
-- `VERSION` and root CMake metadata are `1.0.0-rc.1`; the final `1.0.0`
-  bump is explicitly deferred.
+- `VERSION` and root CMake metadata are `1.0.0` following formal QA closure
+  of QA-EV-01.
 - `docs/trace/traceability.csv` now uses six columns and contains the Phase 12
   and QA-EV-01 evidence rows; the candidate report records 166/166 implemented
   requirements covered, 56 explicit v1.1.0 deferrals, 288 rows, and no failed
