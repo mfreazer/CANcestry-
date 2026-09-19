@@ -37,13 +37,19 @@ Rules enforced
    failure). Non-passing rows carry no evidence.
 
 Usage:
-    python3 ci/check_hw_traceability.py <repo-root>
+    python3 ci/check_hw_traceability.py <repo-root> [--explain]
+
+``--explain`` is maintainer-only: it prints the expected HwRS Markdown table
+contract and returns exit code 2 when the fail-closed parser rejects a table.
+The normal CI invocation omits it and retains exit code 1 for parse failures.
 
 Exit codes:
     0  the hardware ledger is complete, honest and consistent
     1  at least one rule was violated (or the HwRS tables no longer parse)
+    2  the HwRS tables failed to parse and ``--explain`` was requested
 """
 
+import argparse
 import csv
 import json
 import os
@@ -90,6 +96,21 @@ CSV_HEADER = (
 )
 REGISTRY_HEADER = ("oracle_id", "oracle", "class", "serves")
 
+# H-01 has no Capella model to resolve yet. These explicit placeholders are
+# accepted and deliberately excluded from any future Capella orphan check;
+# H-02 will replace them with real model element identifiers.
+CAPELLA_PLACEHOLDERS = frozenset(("CAP_PENDING", "LA_PENDING"))
+
+EXPECTED_HWRS_TABLE_FORMAT = (
+    "HwRS requirement rows must be Markdown pipe tables with exactly seven "
+    "fields:\n"
+    "  | HW-SF-002 | requirement text | derivation | method / tier | CL3 | "
+    "oracle class | initial status |\n"
+    "The requirement-id cell must match %s; the Req. CL cell must be CL1, "
+    "CL2 or CL3. The leading row regex is:\n"
+    "  %s"
+) % (HW_ROW.pattern, HW_ROW.pattern)
+
 HWRs_TABLE_FIELDS = 7  # id, requirement, derivation, method, req cl, oracle, status
 
 
@@ -129,6 +150,14 @@ def sha256_file(path):
         for chunk in iter(lambda: handle.read(65536), b""):
             digest.update(chunk)
     return "sha256:%s" % digest.hexdigest()
+
+
+def print_hwrs_format_explanation():
+    """Explain the fail-closed HwRS table contract for maintainers."""
+    print("EXPECTED HwRS Markdown table format:")
+    print(EXPECTED_HWRS_TABLE_FORMAT)
+    print("Rows must use pipe separators; escaped pipes inside cells are not "
+          "supported by the H-01 parser.")
 
 
 def parse_hwrs(text):
@@ -234,8 +263,8 @@ def load_rows(root, report):
                          len(CSV_HEADER)))
             continue
         record = dict(zip(CSV_HEADER, (field.strip() for field in row)))
-        for field in ("requirement_id", "method", "credibility_level",
-                      "required_cl", "status"):
+        for field in ("requirement_id", "method", "capella_element_id",
+                      "credibility_level", "required_cl", "status"):
             if record[field] == "":
                 report.fail(1, "%s line %d: empty %r field" %
                             (TRACEABILITY_RELATIVE_PATH, number, field))
@@ -342,6 +371,12 @@ def validate_rows(records, hwrs, registry, root, report):
         credibility = row["credibility_level"]
         required_cl = row["required_cl"]
 
+        # CAP_PENDING/LA_PENDING are intentional H-01 placeholders. They
+        # pass the non-empty ledger check but are not resolved against a
+        # Capella model (there is no H-01 model to orphan-check yet).
+        if row["capella_element_id"] in CAPELLA_PLACEHOLDERS:
+            pass
+
         for violation in row_schema_violations(row, root):
             report.fail(2, "line %d: %s" % (number, violation))
 
@@ -426,16 +461,34 @@ def validate_rows(records, hwrs, registry, root, report):
         check_evidence(number, row, root, report)
 
 
-def main(argv):
-    if len(argv) != 2:
-        print("usage: check_hw_traceability.py <repo-root>")
+def argument_parser():
+    """Build the maintainer-facing command-line parser."""
+    parser = argparse.ArgumentParser(
+        description="Check the CANcestry hardware traceability record.")
+    parser.add_argument("repo_root", help="repository root to check")
+    parser.add_argument(
+        "--explain",
+        action="store_true",
+        help="explain the expected HwRS Markdown table after a parse failure")
+    return parser
+
+
+def main(argv=None):
+    """Run the gate; ``argv`` includes the program name for unit testing."""
+    if argv is None:
+        argv = sys.argv
+    parser = argument_parser()
+    if len(argv) < 2:
+        print("usage: check_hw_traceability.py <repo-root> [--explain]")
         return 1
-    root = argv[1]
+    args = parser.parse_args(argv[1:])
+    root = args.repo_root
     if not os.path.isdir(root):
         print("FAIL: %s is not a directory" % root)
         return 1
 
     report = Report()
+    hwrs_parse_failed = False
     hwrs_path = os.path.join(root, HWRs_RELATIVE_PATH)
     if not os.path.isfile(hwrs_path):
         report.fail(0, "%s is missing" % HWRs_RELATIVE_PATH)
@@ -444,6 +497,7 @@ def main(argv):
         try:
             hwrs = parse_hwrs(read_text(hwrs_path))
         except HwrsFormatError as error:
+            hwrs_parse_failed = True
             for issue in error.issues:
                 report.fail(0, "HwRS.md: %s" % issue)
             hwrs = {}
@@ -463,6 +517,9 @@ def main(argv):
               len(report.failures))
         for failure in report.failures:
             print("      %s" % failure)
+        if hwrs_parse_failed and args.explain:
+            print_hwrs_format_explanation()
+            return 2
         return 1
     print("PASS: the hardware ledger is consistent with HwRS.md, the oracle "
           "registry and the evidence artifacts")

@@ -53,13 +53,8 @@
 
 ## Change Log
 
-- **v1.1.0 (2026-09-19)** — H-Phase 1 operational baseline (issue #33):
-  rules 1–6 bind the committed hardware tree — `hw/` (Modelica
-  `CancestryLib`, BOM + datasheet extracts, oracle registry, sim cases,
-  ledger), `schemas/hw/`, `ci/check_hw_traceability.py` (honest-ledger
-  gate), and the `hw-fast` CI job on the digest-pinned `ci/docker` image.
-  The rule 4 status vocabulary (including `passing(sim,CLn,provisional)`
-  for T1/T2 safety rows) is enforced by the ledger gate; rule 6 names
-  HW-SF-001 as the fail-closed baseline.
-- **v1.0.0** — Initial hardware agent policy (approved with HW-PLAN v1.0.0).
+| Version | Date | Change |
+|---|---|---|
+| 1.1.0 | 2026-09-19 | QA findings HwA-F1..F4:<br>• Rule 1: HwRS IDs only.<br>• Rule 2: `hw/bom/datasheets/` extracts.<br>• Rule 3: Oracle registry CSV source of truth.<br>• Rule 4: `provisional` and `fully-verified(CL3)` statuses.<br>• Rule 10: ECAD gate named to H-Phase 3 start. |
+| 1.0.0 | — | Initial hardware agent policy (approved with HW-PLAN v1.0.0). |
 

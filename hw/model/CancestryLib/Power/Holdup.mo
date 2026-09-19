@@ -36,33 +36,40 @@ model Holdup
    hw/bom/datasheets/; hw/tests/test_power_sim.py verifies the simulated
    parameter set against that extract (credibility CL2 per virtual-bench-
    plan section 5)."
-  parameter Real C = 1.0e-5(unit = "F")
+  parameter Real C(unit = "F") = 1.0e-5
     "Hold-up capacitance (HW-FR-009: C >= 10 uF nominal 10 uF, PRT-002)";
-  parameter Real ESR = 0.02(unit = "Ohm")
+  parameter Real ESR(unit = "Ohm") = 0.02
     "Capacitor ESR budget (PRT-002; pinned by the H-02 vendor datasheet)";
-  parameter Real I_mcu = 1.2e-5(unit = "A")
+  parameter Real I_mcu(unit = "A") = 1.2e-5
     "MCU VBAT-domain load, worst-case bound = 10 x 1.2 uA typ (PRT-001, HwRS HW-FR-009)";
-  parameter Real I_leak = 5.0e-6(unit = "A")
+  parameter Real I_leak(unit = "A") = 5.0e-6
     "Capacitor leakage, worst case at 85 degC (PRT-002, HwRS HW-FR-009)";
-  parameter Real V0 = 3.3(unit = "V")
+  parameter Real V0(unit = "V") = 3.3
     "Initial VBAT node voltage = nominal 3V3 rail (PRT-001 V_main_nominal)";
-  parameter Real VIN_brownout = 2.8(unit = "V")
+  parameter Real VIN_brownout(unit = "V") = 2.8
     "Main-rail brownout floor = BOR level 3 (HW-SF-002; PRT-001 V_BOR3)";
-  parameter Real V_floor = 1.65(unit = "V")
+  parameter Real V_floor(unit = "V") = 1.65
     "Retention floor at worst case (PRT-001 V_VBAT_min, HwRS HW-FR-009)";
-  parameter Real R_path = 0.05(unit = "Ohm")
+  parameter Real R_path(unit = "Ohm") = 0.05
     "Charge-path impedance budget (idealized diode + trace; H-02 WCCA)";
-  parameter Real t_brownout = 0.05(unit = "s")
+  parameter Real t_brownout(unit = "s") = 0.05
     "Brownout duration at BOR level 3 (HW-SF-002 (ii), worst case 50 ms)";
-  parameter Real t_remove = 0.1(unit = "s")
+  parameter Real t_remove(unit = "s") = 0.1
     "Removal duration from BOR to 0 V (HW-SF-002 (iii), worst case 100 ms)";
 
-  Real v(fixed = true, start = V0)(unit = "V")
+  Real v(fixed = true, start = V0, unit = "V")
     "VBAT node voltage (retention domain)";
-  Real vC(unit = "V") "Ideal capacitor voltage (internal to the ESR branch)";
+  Real vC(start = V0, unit = "V")
+    "Ideal capacitor voltage (internal to the ESR branch)";
   Real iLoad(unit = "A") "Retention-domain load current (MCU + leakage)";
   Real iCh(unit = "A") "Charge-path current from the main rail (>= 0)";
   Real vin(unit = "V") "Main-rail voltage at the charge path";
+
+initial equation
+  // Explicitly align the capacitor state with the declared initial VBAT
+  // value. This prevents an underdetermined/inconsistent t=0 state when
+  // the ESR branch algebraic equation is initialized.
+  vC = V0;
 
 equation
   // Timeline: [0, t_brownout) the rail sits at the BOR level 3 floor;

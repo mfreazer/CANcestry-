@@ -18,6 +18,10 @@
 
 name: hw-fast
 
+concurrency:
+  group: hw-fast-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     paths:
@@ -51,10 +55,15 @@ jobs:
         id: pin
         run: |
           set -euo pipefail
-          REF="$(head -n1 ci/docker/base-image.digest | tr -d '[:space:]')"
-          PINNED="$(sed -n '2p' ci/docker/base-image.digest | tr -d '[:space:]')"
-          RESOLVED="$(docker manifest inspect "$REF" \
-            | jq -r 'if type=="array" then .[0].Descriptor.digest else .config.digest end')"
+          PIN_LINES="$(grep -Ev '^[[:space:]]*(#|$)' ci/docker/base-image.digest)"
+          REF="$(printf '%s\n' "$PIN_LINES" | sed -n '1p' | tr -d '[:space:]')"
+          PINNED="$(printf '%s\n' "$PIN_LINES" | sed -n '2p' | tr -d '[:space:]')"
+          RESOLVED="$(docker buildx imagetools inspect \
+            --format '{{json .Manifest}}' "$REF" | jq -r '.digest')"
+          test -n "$RESOLVED" && test "$RESOLVED" != "null" || {
+            echo "::error::could not resolve a manifest digest for $REF"
+            exit 1
+          }
           echo "base ref:   ${REF}"
           echo "pinned:     ${PINNED}"
           echo "resolved:   ${RESOLVED}"
@@ -70,9 +79,25 @@ jobs:
           docker build \
             -t "cancestry/hw-fast:${GITHUB_SHA}" \
             -t "cancestry/hw-fast:local" \
-            ci/docker/
+            ci/docker/ 2>&1 | tee /tmp/hw-fast-build.log
           docker inspect --format 'toolchain image: {{.Id}}' \
             "cancestry/hw-fast:${GITHUB_SHA}"
+
+      - name: Surface toolchain build diagnostics
+        if: failure()
+        run: |
+          set +e
+          if [ -f /tmp/hw-fast-build.log ]; then
+            {
+              echo "## hw-fast Docker build tail"
+              echo '```text'
+              tail -120 /tmp/hw-fast-build.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            while IFS= read -r line; do
+              echo "::error::${line}"
+            done < <(tail -40 /tmp/hw-fast-build.log)
+          fi
 
       - name: Run the hardware gates
         env:
@@ -80,32 +105,62 @@ jobs:
         run: |
           set -euo pipefail
           IMAGE="cancestry/hw-fast:${GITHUB_SHA}"
+          set +e
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/work" -w /work \
             -e CANCESTRY_HW_IMAGE \
             "$IMAGE" bash -lc '
               set -euo pipefail
               echo "== 1. Schema validation (software + hardware trees)"
-              python3 ci/check_schemas_valid.py schemas
+              python3 ci/check_schemas_valid.py schemas || {
+                echo "::error::hw-fast gate 1 failed: schema validation"
+                exit 1
+              }
 
               echo "== 2. HwRS parser + hardware ledger (unit tests, 100% coverage gate)"
               python3 -m coverage run --include=ci/check_hw_traceability.py \
-                -m pytest tests/unit/tools/test_check_hw_traceability.py -q
-              python3 -m coverage report --fail-under=100
+                -m pytest tests/unit/tools/test_check_hw_traceability.py -q || {
+                echo "::error::hw-fast gate 2 failed: checker unit tests"
+                exit 1
+              }
+              python3 -m coverage report --fail-under=100 || {
+                echo "::error::hw-fast gate 2 failed: checker coverage below 100%"
+                exit 1
+              }
 
               echo "== 3+4. Modelica compile -> FMU -> FMPy oracle test (OR-001)"
-              python3 -m pytest hw/tests -v
+              python3 -m pytest hw/tests -v || {
+                echo "::error::hw-fast gates 3+4 failed: Modelica/FMPy oracle test"
+                exit 1
+              }
 
               echo "== 5. Hardware traceability gate (honest ledger)"
-              python3 ci/check_hw_traceability.py .
+              python3 ci/check_hw_traceability.py . || {
+                echo "::error::hw-fast gate 5 failed: hardware traceability ledger"
+                exit 1
+              }
             ' 2>&1 | tee /tmp/hw-fast-output.log
+          DOCKER_STATUS="${PIPESTATUS[0]}"
+          if [ "$DOCKER_STATUS" -ne 0 ]; then
+            {
+              echo "## hw-fast gate output tail"
+              echo '```text'
+              tail -160 /tmp/hw-fast-output.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            DIAGNOSTIC="$(tail -80 /tmp/hw-fast-output.log | tr '\n' ' ' | tr -d '\r')"
+            echo "::error::${DIAGNOSTIC}"
+          fi
+          exit "$DOCKER_STATUS"
 
       - name: Upload run artifacts (evidence, trace, run log)
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: hw-fast-${{ github.sha }}
           path: |
             /tmp/hw-fast-output.log
+            /tmp/hw-fast-build.log
             build/hw/
           if-no-files-found: ignore

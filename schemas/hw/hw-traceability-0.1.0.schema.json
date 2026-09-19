@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://cancestry.dev/schemas/hw/hw-traceability-0.1.0.schema.json",
   "title": "CANcestry hardware traceability row (v0.1.0)",
-  "description": "Schema for one row of the hardware traceability record hw/tests/traceability.csv (issue #33, H-01; HW-PLAN §10.8, HwAGENTS.md rule 4). The record is a one-row-per-(requirement, method) ledger: the extension columns capella_element_id, credibility_level and oracle_id ride on top of the requirement/method/status core. capella_element_id is empty until the Capella model exists (H-02, HW-PLAN G2). The status vocabulary is exactly the honest-ledger set from HwAGENTS.md rule 4; passing rows additionally require a registry-listed oracle_id, credibility >= required CL (a T1/T2 safety row may close provisionally below the required CL, pending T4 correlation, per the HwRS closure policy), and an evidence artifact hash. required_cl is the requirement's credibility level parsed from HwRS.md (ci/check_hw_traceability.py fails closed if the HwRS table format changes).",
+  "description": "Schema for one row of the hardware traceability record hw/tests/traceability.csv (issue #33, H-01; HW-PLAN §10.8, HwAGENTS.md rule 4). The record is a one-row-per-(requirement, method) ledger: the extension columns capella_element_id, credibility_level and oracle_id ride on top of the requirement/method/status core. capella_element_id carries a non-empty Capella element identifier or the explicit H-01 placeholder CAP_PENDING/LA_PENDING until the Capella model exists (H-02, HW-PLAN G2). The status vocabulary is exactly the honest-ledger set from HwAGENTS.md rule 4; passing rows additionally require a registry-listed oracle_id, credibility >= required CL (a T1/T2 safety row may close provisionally below the required CL, pending T4 correlation, per the HwRS closure policy), and an evidence artifact hash. required_cl is the requirement's credibility level parsed from HwRS.md (ci/check_hw_traceability.py fails closed if the HwRS table format changes).",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -32,7 +32,8 @@
     },
     "capella_element_id": {
       "type": "string",
-      "description": "Capella element linking this row to the MBSE model; empty until the model exists (H-02)."
+      "minLength": 1,
+      "description": "Capella element linking this row to the MBSE model; CAP_PENDING or LA_PENDING is the explicit H-01 placeholder until the model exists (H-02)."
     },
     "credibility_level": {
       "enum": [

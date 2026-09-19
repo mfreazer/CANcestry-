@@ -145,7 +145,10 @@ def _require_toolchain():
 
 
 def _run_omc(omc, script, cwd):
-    command = [omc, "-q", 'runScript("%s")' % script]
+    # omc treats a .mos path as a script entry point. Passing the
+    # runScript("...") expression as the CLI argument makes omc look for a
+    # file literally named runScript("...") on OpenModelica 1.24.
+    command = [omc, "--showErrorMessages", str(script)]
     result = subprocess.run(
         command, cwd=str(cwd), stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT, universal_newlines=True, timeout=600)
@@ -169,11 +172,16 @@ def build_fmu(sim_case, build_dir):
     script = build_dir / "omc_build.mos"
     template = (
         "loadModel(Modelica);\n"
+        "getErrorString();\n"
         'loadFile("%s");\n'
+        "getErrorString();\n"
         'loadFile("%s");\n'
+        "getErrorString();\n"
         'loadFile("%s");\n'
+        "getErrorString();\n"
         'buildModelFMU(%s, version="2.0", fmuType="__FMU_TYPE__", '
-        'fileNamePrefix="cancestry_holdup");\n' % (
+        'fileNamePrefix="cancestry_holdup");\n'
+        "getErrorString();\n" % (
             package_dir / "package.mo",
             power_dir / "package.mo",
             power_dir / "Holdup.mo",
@@ -209,8 +217,11 @@ def simulate_fmu(fmu, sim_case):
         step_size=solver["step_s"],
         output=["v"],
         logger=None)
-    times = [float(value) for value in result[0]]
-    voltages = [float(value) for value in result[1]["v"]]
+    # FMPy 0.3.24 returns one structured ndarray, not a ``(time, data)``
+    # tuple: selecting result[0]/result[1] accidentally indexes samples and
+    # turns the scalar v field into a non-iterable numpy.float64.
+    times = [float(value) for value in result["time"]]
+    voltages = [float(value) for value in result["v"]]
     assert len(times) == len(voltages) and len(times) > 1, \
         "FMU trace is empty"
     assert abs(times[0]) <= 1e-12, "trace must start at t=0"

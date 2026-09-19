@@ -111,9 +111,9 @@ def make_evidence(sources=None, requirement="HW-SF-002", oracle="OR-001",
 
 
 def row(requirement, method, status, credibility="CL2", oracle="OR-001",
-        required_cl="CL3", evidence="", digest=""):
+        required_cl="CL3", evidence="", digest="", capella="CAP_PENDING"):
     """One ledger row; the status field is always quoted (it holds commas)."""
-    values = (requirement, method, "", credibility, oracle, required_cl,
+    values = (requirement, method, capella, credibility, oracle, required_cl,
               '"%s"' % status, evidence, digest)
     return ",".join(values) + "\n"
 
@@ -143,22 +143,23 @@ class _Result:
         self.stdout = stdout
 
 
-def run_checker(root, use_subprocess=False):
+def run_checker(root, use_subprocess=False, explain=False):
     """Run the gate in-process (coverage-visible) or as a real CLI call."""
+    args = [str(root)] + (["--explain"] if explain else [])
     if use_subprocess:
         return subprocess.run(
-            [sys.executable, str(CHECKER), str(root)],
+            [sys.executable, str(CHECKER)] + args,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             universal_newlines=True)
     buffer = io.StringIO()
     with contextlib.redirect_stdout(buffer):
-        returncode = check_hw.main(["checker", str(root)])
+        returncode = check_hw.main(["checker"] + args)
     return _Result(returncode, buffer.getvalue())
 
 
 def clean_row():
     return {"requirement_id": "HW-SF-002", "method": "sim",
-            "capella_element_id": "", "credibility_level": "CL2",
+            "capella_element_id": "CAP_PENDING", "credibility_level": "CL2",
             "oracle_id": "OR-001", "required_cl": "CL3",
             "status": "sim-pending", "evidence": "", "evidence_sha256": ""}
 
@@ -193,6 +194,19 @@ def test_parser_fails_closed_on_short_row(tmp_path):
     result = run_checker(tmp_path)
     assert result.returncode == 1
     assert "fields" in result.stdout and "format change" in result.stdout
+
+
+def test_parser_explain_flag_reports_table_contract(tmp_path):
+    """HW-TRACE-PARSER-005: --explain gives a repairable parse diagnostic."""
+    broken = "# HwRS with a changed table\n| ID | Requirement |\n|---|---|\n"
+    make_repo(tmp_path, hwrs=broken,
+              trace=TRACE_HEADER + row("HW-SF-002", "sim", "sim-pending",
+                                        credibility="CL0", oracle=""))
+    result = run_checker(tmp_path, explain=True)
+    assert result.returncode == 2
+    assert "EXPECTED HwRS Markdown table format" in result.stdout
+    assert "exactly seven fields" in result.stdout
+    assert "HW-(?:SF|FR|NF)-" in result.stdout
 
 
 def test_parser_fails_closed_on_bad_cl_and_duplicates(tmp_path):
@@ -611,8 +625,13 @@ def test_helper_semantics():
     assert not check_hw.is_passing("draft")
 
 
-def test_cli_on_repository_tree():
+def test_cli_on_repository_tree(monkeypatch):
     """The real H-01 ledger passes end-to-end as an actual CLI process."""
     result = run_checker(REPO_ROOT, use_subprocess=True)
     assert result.returncode == 0, result.stdout
     assert "PASS: the hardware ledger is consistent" in result.stdout
+
+    # Also cover the normal ``main()`` entry point, which reads sys.argv.
+    monkeypatch.setattr(sys, "argv", ["check_hw_traceability.py",
+                                       str(REPO_ROOT)])
+    assert check_hw.main() == 0
