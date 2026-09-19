@@ -89,6 +89,13 @@ int main(void)
     incomplete.context = NULL;
     assert_child_spins(&incomplete);
 
+    /* A bypassed partial configuration must still latch the available
+     * fail-safe action before it enters safe-spin. */
+    incomplete.write_retention_register = NULL;
+    incomplete.hal_fail_safe = unused_safe;
+    incomplete.iwdg_escalate = NULL;
+    assert_child_spins(&incomplete);
+
     incomplete.write_retention_register = unused_retention;
     incomplete.hal_fail_safe = unused_safe;
     incomplete.iwdg_escalate = NULL;

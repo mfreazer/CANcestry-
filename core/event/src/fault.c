@@ -28,8 +28,16 @@ static void cancestry_event_safe_spin(void)
 bool cancestry_event_hard_fault_escalate(
     const cancestry_event_hard_fault_hooks_t *hooks)
 {
-    if (hooks == NULL || hooks->write_retention_register == NULL ||
-        hooks->hal_fail_safe == NULL || hooks->iwdg_escalate == NULL) {
+    if (hooks == NULL) {
+        cancestry_event_safe_spin();
+    }
+
+    /* If retention is unavailable, latch any available fail-safe action before
+     * entering the terminal safe-spin path. */
+    if (hooks->write_retention_register == NULL) {
+        if (hooks->hal_fail_safe != NULL) {
+            hooks->hal_fail_safe(hooks->context);
+        }
         cancestry_event_safe_spin();
     }
 
@@ -37,9 +45,17 @@ bool cancestry_event_hard_fault_escalate(
     hooks->write_retention_register(CANCESTRY_FAULT_CODE_QUEUE_SATURATION,
                                     hooks->context);
 
-    /* Safe outputs first; the watchdog reset is the second independent line
-     * of defense and must not delay the immediate safe-state transition. */
-    hooks->hal_fail_safe(hooks->context);
-    hooks->iwdg_escalate(hooks->context);
+    /* Invoke every available escalation action before the final fail-closed
+     * check. Complete production hooks normally do not return from IWDG. */
+    if (hooks->hal_fail_safe != NULL) {
+        hooks->hal_fail_safe(hooks->context);
+    }
+    if (hooks->iwdg_escalate != NULL) {
+        hooks->iwdg_escalate(hooks->context);
+    }
+
+    if (hooks->hal_fail_safe == NULL || hooks->iwdg_escalate == NULL) {
+        cancestry_event_safe_spin();
+    }
     return true;
 }

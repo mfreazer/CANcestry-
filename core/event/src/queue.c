@@ -226,11 +226,11 @@ bool cancestry_event_queue_set_hard_fault_hooks(
     if (!cancestry_event_queue_is_valid(queue) || hooks == NULL) {
         return false;
     }
-    /* Hook binding is the queue's configuration-constructor boundary. Reject
-     * a configuration with neither terminal action here; the escalation
-     * function still performs the final non-returning fail-closed check for
-     * partially configured or bypassed callers. */
-    if (hooks->hal_fail_safe == NULL && hooks->iwdg_escalate == NULL) {
+    /* All three actions are required for a configured escalation path. The
+     * runtime boundary still handles bypassed or partially configured callers
+     * fail-closed. */
+    if (hooks->write_retention_register == NULL ||
+        hooks->hal_fail_safe == NULL || hooks->iwdg_escalate == NULL) {
         return false;
     }
     queue->hard_fault_hooks = *hooks;
