@@ -225,6 +225,7 @@ static void test_explicit_reserve_boundary_values(void)
     cancestry_event_t storage[TEST_CAPACITY];
     cancestry_event_t one_slot[1u];
     cancestry_event_t event;
+    cancestry_event_hard_fault_hooks_t invalid_hooks = {0};
     hook_probe_t probe = {0u, 0u, 0u, 0u, {0u, 0u, 0u}, 0u};
     cancestry_event_hard_fault_hooks_t hooks = make_hooks(&probe);
 
@@ -236,6 +237,8 @@ static void test_explicit_reserve_boundary_values(void)
      * ordinary traffic is refused, while one fault is still retained. */
     CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(
         &queue, one_slot, 1u, 1u));
+    CANCESSTRY_TEST_CHECK(!cancestry_event_queue_set_hard_fault_hooks(
+        &queue, &invalid_hooks));
     CANCESSTRY_TEST_CHECK(cancestry_event_queue_set_hard_fault_hooks(&queue, &hooks));
     event = make_event(CANCESTRY_EVENT_TYPE_CAN_RX, CANCESTRY_PRIORITY_CLASS_CAN_RX, 1u, 1u);
     CANCESSTRY_TEST_CHECK(cancestry_event_queue_push(&queue, &event) ==

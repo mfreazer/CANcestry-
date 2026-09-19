@@ -4,6 +4,9 @@ cmake_minimum_required(VERSION 3.16)
 # the release-candidate marker explicit here rather than silently advertising
 # final 1.0.0 metadata.
 set(CANCESTRY_RELEASE_VERSION "1.0.0-rc.1")
+# NOTE: The CMake project version is kept separate from project() due to CMake
+# grammar limitations with complex RC suffixes. The actual release version is
+# controlled via the CANCESTRY_RELEASE_VERSION variable (currently 1.0.0-rc.1).
 project(cancestry
     DESCRIPTION "CAN codec, recipe and emulation runtime"
     LANGUAGES C)

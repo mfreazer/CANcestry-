@@ -185,6 +185,9 @@ uint16_t cancestry_event_queue_reserved_fault_slots(
 /**
  * Bind the platform fail-safe and IWDG actions used for unrecoverable fault
  * saturation. The hooks are copied; the caller retains ownership of context.
+ * A configuration with neither HAL nor IWDG action is rejected at this
+ * constructor boundary; the runtime escalation path remains fail-closed for
+ * partial or bypassed configurations.
  */
 bool cancestry_event_queue_set_hard_fault_hooks(
     cancestry_event_queue_t *queue,

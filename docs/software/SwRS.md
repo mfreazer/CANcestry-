@@ -108,6 +108,11 @@ The software includes:
 | SW-FR-LOG-004 | The software shall log faults. | High |
 | SW-FR-LOG-005 | The software shall support log retrieval via host interface. | Medium |
 
+**Platform-Dependent Strength:**
+
+- *Targets with retention registers:* The specific fault code shall be persisted and reported on next boot.
+- *Targets without retention registers:* A generic "Hard Fault Escalation" reset reason shall be recorded on next boot.
+
 ## 9. Simulation Requirements
 
 | ID | Requirement | Priority |
