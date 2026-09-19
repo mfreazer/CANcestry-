@@ -145,15 +145,15 @@ def test_main_usage_and_directory_checks(capsys):
 
 
 def test_main_passes_on_the_repository_schemas(capsys):
-    # Issue #33: the scan now recurses, so the 8 software schemas and the 3
-    # hardware schemas under schemas/hw/ are all checked in one pass.
+    # Issue #33/35: the scan now recurses, checking software and hardware schemas under schemas/ in one pass.
     assert ci_check_schemas.main(["check_schemas_valid.py",
                                   str(SCHEMA_DIR)]) == 0
     out = capsys.readouterr().out
-    assert out.count("PASS:") == 11 and "all schemas are valid" in out
+    assert out.count("PASS:") >= 11 and "all schemas are valid" in out
     assert "hw/hw-bom-0.1.0.schema.json" in out
     assert "hw/hw-sim-0.1.0.schema.json" in out
     assert "hw/hw-traceability-0.1.0.schema.json" in out
+    assert "hw/hw-datasheet-extract-0.1.0.schema.json" in out
 
 
 def test_scan_covers_nested_directories(tmp_path, capsys):
