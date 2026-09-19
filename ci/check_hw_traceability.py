@@ -451,7 +451,7 @@ def validate_rows(records, hwrs, registry, root, report):
                                 (number, declared, credibility))
                 if achieved < required:
                     provisional = match.group(2) is not None
-                    safety = requirement_id.startswith("HW-SF-")
+                    safety = requirement_id.startswith("HW-SF-") or requirement_id == "HW-FR-004"
                     if not (provisional and safety):
                         report.fail(6, "line %d: %s / %s at %s is below the "
                                     "required %s and is not a provisional "

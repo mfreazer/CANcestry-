@@ -1,0 +1,41 @@
+{
+  "case_id": "pulse_7637_001",
+  "credibility_level": "CL2",
+  "evidence_of": "T1 block simulation of CancestryLib.Power.PulseISO7637_2 (ISO 7637-2 / ISO 16750-2 transient generator) against oracle OR-002: supply line pulses 1, 2a, 2b, 3a, 3b, 4, 5b verified for peak voltage amplitude, pulse duration, and rise/fall time parameters.",
+  "not_covered": [
+    "Physical EMC lab pulse generator impedance coupling: covered at T4 bench verification",
+    "Continuous multi-pulse burst train repetition rate thermal stress: covered at T1/T4 thermal sweep"
+  ],
+  "oracle_id": "OR-002",
+  "pass": true,
+  "provisional": false,
+  "requirement_id": "HW-FR-004",
+  "sim_case": "hw/tests/cases/pulse_7637_001.simcase.json",
+  "source_hashes": {
+    "hw/bom/bom.json": "sha256:779a79e7cc6649f7c345fc70ff97ca0b5c0fe615e1475a9ff6f423e1dbf41311",
+    "hw/bom/datasheets/extract-holdup-cap.json": "sha256:757e89cd3dfdaa2a84fd5b9afcb0eddd200749d77cdc712cfea9341cc7f360a7",
+    "hw/bom/datasheets/extract-mcu-vbat.json": "sha256:79692b46dfdddb3bd17ec2562f60521855b390cc8694deb0863a16bb4d121d3d",
+    "hw/model/CancestryLib/Power/PulseISO7637_2.mo": "sha256:97b5dd8f6ef73715e24c025e1cc2dc604141485d631470fd95f8b7b7b13b2610",
+    "hw/model/CancestryLib/Power/package.mo": "sha256:b764dcccf84d3660c855d2d9712ed63bf7ff3e617a7409fd72d4381a0d527c33",
+    "hw/model/CancestryLib/package.mo": "sha256:53662fe968facb4cc3ca5d6ccb0ec8a7b7382224c0122ab5af19b748694e2372",
+    "hw/tests/cases/pulse_7637_001.simcase.json": "sha256:959b45e8adef19a19821753f4b462b9d6479c049f7fd0ac171dcd0df1ed53e04",
+    "hw/tests/oracles/or_002_pulse7637.py": "sha256:37d90204de7841ac84c1910fbac39f77a68251314823a051d36c7ef865b18a09",
+    "hw/tests/oracles/registry.csv": "sha256:b5b8e329987a1345b3ee05bc3c153d5850b9b8270e309ce8132e1a286a64380f",
+    "hw/tests/test_evidence_determinism.py": "sha256:a4f41abf27a7486faebf504446d73a81b5c1be1e403bf7fb64dbceb189801706",
+    "schemas/hw/hw-bom-0.1.0.schema.json": "sha256:31aecdd71fb0a2e76750e42aa94d726311457c31b62d3582bd933a4e5b356f27",
+    "schemas/hw/hw-sim-0.1.0.schema.json": "sha256:e08b1a7c6d112daac979f746636bca48ff5a98241b3f26252987e5ef546a62cf",
+    "schemas/hw/hw-traceability-0.1.0.schema.json": "sha256:ba495e4f3310e76464e22fb26f9b5b2c36f3baf88b338f194c8280528bab3ab4"
+  },
+  "tolerance_v": 0.01,
+  "tool_pins": {
+    "fmpy": "0.3.24",
+    "numpy": "2.1.3",
+    "openmodelica": "1.24",
+    "python": ">=3.10"
+  },
+  "trace": {
+    "artifact": "build/hw/pulse_7637_001.trace.csv (per-run artifact, gitignored)",
+    "columns": "time_s,v_v",
+    "hashing": "sha256 of each run trace recorded in build/hw/pulse_7637_001.runlog.json (HwAGENTS.md rule 5: hashed traces, deterministic evidence)"
+  }
+}

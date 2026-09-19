@@ -22,7 +22,7 @@
     "hw/tests/cases/holdup_001.simcase.json": "sha256:6c1da1b50d8d3486c17f06a96cf49a5663e1486cc4344e67ab44282b176f0ae1",
     "hw/tests/oracles/or_001_holdup.py": "sha256:31d31e2b7aadb732694e3277bade2c0cb217fbcfabda82d8b2e4ca4337d401dc",
     "hw/tests/oracles/registry.csv": "sha256:b5b8e329987a1345b3ee05bc3c153d5850b9b8270e309ce8132e1a286a64380f",
-    "hw/tests/test_evidence_determinism.py": "sha256:db613ef65347f257ef074825dec75467a14adfd748e483ea28c7eaadbe8699e3",
+    "hw/tests/test_evidence_determinism.py": "sha256:a4f41abf27a7486faebf504446d73a81b5c1be1e403bf7fb64dbceb189801706",
     "hw/tests/test_power_sim.py": "sha256:db51bc8250f750704f6c0db1ddcf15e7b9bbb7a026e0da151cb1f0fd90eda1a4",
     "schemas/hw/hw-bom-0.1.0.schema.json": "sha256:31aecdd71fb0a2e76750e42aa94d726311457c31b62d3582bd933a4e5b356f27",
     "schemas/hw/hw-sim-0.1.0.schema.json": "sha256:e08b1a7c6d112daac979f746636bca48ff5a98241b3f26252987e5ef546a62cf",
