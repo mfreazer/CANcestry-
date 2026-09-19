@@ -1,9 +1,9 @@
 # CANcestry-
 CAN bus  open CAN codec maps, recipes, and emulation state machines.describe the bus, teach the machine, emulate the module
 
-**Current release candidate: v1.0.0-rc.1** — the portable cores, stateless
-BMS governor, hardware-first HIL evidence and QA-EV-01 correction are recorded,
-but final release remains deferred. See the [changelog](CHANGELOG.md), the
+**Current release: v1.0.0** — the portable cores, stateless
+BMS governor, hardware-first HIL evidence and QA-EV-01 closure are recorded.
+See the [changelog](CHANGELOG.md), the
 [Safety Manual](docs/safety/SafetyManual.md), the
 [HIL report](docs/qa/hil-fault-injection-report.md), the
 [version policy](docs/versions.md) and the [candidate traceability report](docs/trace/final_v1_report.md).

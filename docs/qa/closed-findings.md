@@ -38,3 +38,10 @@ The release owner must review the trace, strict/sanitized results, platform
 binding, and target/HIL limitations, then record a dated closure decision. Until
 that decision exists, no final `1.0.0` bump, tag, or v1.0.0 milestone closure is
 permitted.
+
+## QA-EV-01: Event Fault Saturation Path (Closed)
+
+- **Disposition**: Closed
+- **Merge Commit**: `ad81ca79d17da6ea6e97a036f9f10ac8555fe87e`
+- **Resolution**: Implemented Path A reserved fault slots with boot-surviving retention persistence, terminal queue state refusal, and fail-closed safe-spin on unconfigured hooks.
+- **Verification Tests**: `FAULT-RETENTION-001`, `TERMINAL-STATE-001`, `RESET-REASON-001`, `FALLBACK-SPIN-001`, `EVENT-RESERVED-SLOTS-001..005`, `HARD-FAULT-ESCALATION-001`.

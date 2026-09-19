@@ -2,19 +2,19 @@
 
 | Field | Value |
 |---|---|
-| Current candidate | `1.0.0-rc.1` |
+| Current release | `1.0.0` |
 | Source of truth | [`VERSION`](../VERSION) and root [`CMakeLists.txt`](../CMakeLists.txt) |
-| Candidate review date | 2026-09-18 |
-| Release gate | QA-EV-01 reserved fault-slot and hard-fault escalation correction |
-| Final release | Deferred; no final `1.0.0` tag or milestone closure is authorized |
+| Release date | 2026-09-19 |
+| Release gate | QA-EV-01 formally closed; see [`docs/qa/closed-findings.md`](qa/closed-findings.md) |
+| Final release | Authorized; `v1.0.0` tag on the release commit |
 
 ## Version history
 
 | Version | State | Evidence / decision |
 |---|---|---|
 | `0.3.0-rc.1` | Previous candidate | Portable runtime, FSM, HAL, transport and UDS baseline. |
-| `1.0.0-rc.1` | Current candidate | Phase 12 BMS, HIL, safety and traceability evidence is present; QA-EV-01 is corrected in `core/event/` but remains open for formal QA closure. |
-| `1.0.0` | Deferred | May be written to `VERSION` and CMake, tagged, and used to close the v1.0.0 milestone only after QA-EV-01 is formally closed. |
+| `1.0.0-rc.1` | Superseded candidate | Phase 12 BMS, HIL, safety and traceability evidence present; QA-EV-01 corrected in `core/event/` pending formal QA closure. |
+| `1.0.0` | Current release | QA-EV-01 formally closed (merge `ad81ca79d17da6ea6e97a036f9f10ac8555fe87e`, closure record in `docs/qa/closed-findings.md`); final version bump and `v1.0.0` tag executed. |
 
 ## Release-candidate rules
 
