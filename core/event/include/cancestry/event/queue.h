@@ -83,6 +83,8 @@ typedef enum cancestry_event_queue_status {
     CANCESTRY_EVENT_QUEUE_ERR_FULL_FAULT = -5,
     /** Queue has reached its non-fault admission limit; a slot is reserved. */
     CANCESTRY_EVENT_QUEUE_ERR_RESERVED_FAULT_SLOTS = -7,
+    /** Terminal hard-fault state; no further event admission is permitted. */
+    CANCESTRY_EVENT_QUEUE_ERR_TERMINAL = -8,
     /** Queue empty; there is nothing to pop or peek. */
     CANCESTRY_EVENT_QUEUE_ERR_EMPTY = -6
 } cancestry_event_queue_status_t;
@@ -131,6 +133,8 @@ typedef struct cancestry_event_queue {
     uint16_t reserved_fault_slots;
     /** Actions used if all physical slots already contain faults. */
     cancestry_event_hard_fault_hooks_t hard_fault_hooks;
+    /** Set after escalation; terminal queues reject every later push. */
+    bool hard_fault_terminal;
     /** Next sequence number to assign; sequences start at 1. */
     uint32_t next_sequence;
     /** Next event id to assign; ids start at 1. */
@@ -203,6 +207,9 @@ bool cancestry_event_queue_is_empty(const cancestry_event_queue_t *queue);
 
 /** @return true when the queue is valid and holds @c capacity events. */
 bool cancestry_event_queue_is_full(const cancestry_event_queue_t *queue);
+
+/** @return true after all-fault saturation has entered terminal safe handling. */
+bool cancestry_event_queue_is_terminal(const cancestry_event_queue_t *queue);
 
 /**
  * Enqueue an event.

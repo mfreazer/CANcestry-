@@ -34,6 +34,28 @@
 
 #define TEST_CAPACITY 4u
 
+static void no_op_retention(uint32_t code, void *context)
+{
+    (void)code;
+    (void)context;
+}
+
+static void no_op_action(void *context)
+{
+    (void)context;
+}
+
+static bool install_no_op_hooks(cancestry_event_queue_t *queue)
+{
+    cancestry_event_hard_fault_hooks_t hooks;
+
+    hooks.write_retention_register = no_op_retention;
+    hooks.hal_fail_safe = no_op_action;
+    hooks.iwdg_escalate = no_op_action;
+    hooks.context = NULL;
+    return cancestry_event_queue_set_hard_fault_hooks(queue, &hooks);
+}
+
 static cancestry_event_t make_event(cancestry_event_type_t type,
                                     cancestry_priority_class_t priority_class,
                                     cancestry_time_us_t timestamp_us)
@@ -74,6 +96,7 @@ static void test_non_fault_events_drop_newest(void)
     uint32_t index;
 
     CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
+    CANCESSTRY_TEST_CHECK(install_no_op_hooks(&queue));
 
     for (index = 0u; index < TEST_CAPACITY; ++index) {
         event = make_rx_event((cancestry_time_us_t)(index + 1u), 0x100u + index);
@@ -110,6 +133,7 @@ static void test_fault_is_admitted_and_evicts_the_newest_non_fault(void)
     uint32_t index;
 
     CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
+    CANCESSTRY_TEST_CHECK(install_no_op_hooks(&queue));
 
     /* Fill with non-fault events at t=10, 20, 30, 40. */
     for (index = 0u; index < TEST_CAPACITY; ++index) {
@@ -152,6 +176,7 @@ static void test_victim_is_newest_by_ordering_key(void)
     cancestry_event_t out;
 
     CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
+    CANCESSTRY_TEST_CHECK(install_no_op_hooks(&queue));
 
     /* Insertion order deliberately differs from ordering order: the victim is
      * the event with the highest key (t=30, HOST), not the last pushed. */
@@ -189,6 +214,7 @@ static void test_faults_fill_the_queue_then_drop_newest_fault(void)
     uint32_t index;
 
     CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
+    CANCESSTRY_TEST_CHECK(install_no_op_hooks(&queue));
 
     for (index = 0u; index < TEST_CAPACITY; ++index) {
         event = make_fault_event((cancestry_time_us_t)(index + 1u), 0x300u + index);
@@ -226,6 +252,7 @@ static void test_repeated_faults_evict_one_victim_each(void)
     uint32_t index;
 
     CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
+    CANCESSTRY_TEST_CHECK(install_no_op_hooks(&queue));
 
     for (index = 0u; index < TEST_CAPACITY; ++index) {
         event = make_rx_event((cancestry_time_us_t)(index + 1u), 0x400u + index);
@@ -259,6 +286,7 @@ static void test_persistent_overflow_is_reported(void)
     uint32_t index;
 
     CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
+    CANCESSTRY_TEST_CHECK(install_no_op_hooks(&queue));
 
     for (index = 0u; index < TEST_CAPACITY; ++index) {
         event = make_rx_event((cancestry_time_us_t)(index + 1u), 0x600u + index);
@@ -307,6 +335,7 @@ typedef struct overflow_model {
     uint32_t next_sequence;
     uint32_t next_event_id;
     uint32_t random_state;
+    bool terminal;
 } overflow_model_t;
 
 static uint32_t model_random(overflow_model_t *model)
@@ -334,6 +363,9 @@ static cancestry_event_queue_status_t model_push(overflow_model_t *model,
 {
     cancestry_event_t stored = *event;
 
+    if (model->terminal) {
+        return CANCESTRY_EVENT_QUEUE_ERR_TERMINAL;
+    }
     if (model->size < MODEL_CAPACITY) {
         stored.sequence = ++model->next_sequence;
         stored.event_id = ++model->next_event_id;
@@ -359,6 +391,7 @@ static cancestry_event_queue_status_t model_push(overflow_model_t *model,
             }
         }
         if (victim == MODEL_CAPACITY) {
+            model->terminal = true;
             return CANCESTRY_EVENT_QUEUE_ERR_FULL_FAULT;
         }
         model->events[victim] = model->events[model->size - 1u];
@@ -414,6 +447,7 @@ static void test_overflow_policy_matches_reference_model(void)
     model.random_state = 0x5EEDu;
 
     CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, MODEL_CAPACITY, 0u));
+    CANCESSTRY_TEST_CHECK(install_no_op_hooks(&queue));
 
     /* Few distinct timestamps and all seven priority classes: lots of ties,
      * lots of overflow, and a fault about one time in seven. */
@@ -462,6 +496,7 @@ static void test_rejections_are_not_counted_as_drops(void)
     const cancestry_event_queue_counters_t *counters;
 
     CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
+    CANCESSTRY_TEST_CHECK(install_no_op_hooks(&queue));
 
     event = make_event(CANCESTRY_EVENT_TYPE_INVALID, CANCESTRY_PRIORITY_CLASS_FAULT, 1u);
     CANCESSTRY_TEST_CHECK(cancestry_event_queue_push(&queue, &event) ==

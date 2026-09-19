@@ -35,6 +35,16 @@ cancestry_add_bm_conformance_test(cancestry_conformance_bm_watchdog
     test_watchdog_fail_safe.c)
 cancestry_add_bm_conformance_test(cancestry_conformance_bm_hard_fault_escalation
     test_hard_fault_escalation.c)
+cancestry_add_bm_conformance_test(cancestry_conformance_bm_persist_before_latch
+    test_persist_before_latch.c)
+cancestry_add_bm_conformance_test(cancestry_conformance_bm_terminal_state_refusal
+    test_terminal_state_refusal.c)
+cancestry_add_bm_conformance_test(cancestry_conformance_bm_reset_reason_readability
+    test_reset_reason_readability.c)
+if(UNIX)
+    cancestry_add_bm_conformance_test(cancestry_conformance_bm_fallback_spin
+        test_fallback_spin.c)
+endif()
 cancestry_add_bm_conformance_test(cancestry_conformance_bm_zero_alloc
     test_baremetal_zero_alloc.c)
 target_compile_definitions(cancestry_conformance_bm_zero_alloc

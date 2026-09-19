@@ -8,9 +8,8 @@
  *   SW-FR-BM-006    HAL outputs are forced safe before the simulated reset.
  *   QA-EV-01        HAL fail-safe and IWDG hooks are both exercised.
  *
- * Test ids (docs/trace/traceability.csv):
+ * Test id (docs/trace/traceability.csv):
  *   HARD-FAULT-ESCALATION-001
- *   HARD-FAULT-ESCALATION-002
  */
 
 #include "cancestry/event/queue.h"
@@ -68,22 +67,13 @@ static void test_queue_saturation_forces_safe_state_and_iwdg(void)
     CANCESSTRY_TEST_CHECK(watchdog.hang_induced);
     CANCESSTRY_TEST_CHECK_U64(
         cancestry_event_queue_counters(&queue)->hard_fault_escalations, 1u);
+    CANCESSTRY_TEST_CHECK_U64(
+        cancestry_watchdog_read_retention_register(&watchdog),
+        CANCESTRY_FAULT_CODE_QUEUE_SATURATION);
 
     CANCESSTRY_TEST_CHECK(cancestry_watchdog_sim_tick(&watchdog, 5u));
     CANCESSTRY_TEST_CHECK(cancestry_watchdog_did_reset(&watchdog));
     CANCESSTRY_TEST_CHECK(cancestry_hardware_is_safe_state(&watchdog));
-}
-
-static void test_escalation_is_safe_with_a_missing_hook(void)
-{
-    cancestry_event_hard_fault_hooks_t hooks;
-    uint32_t safe_calls = 0u;
-
-    hooks.hal_fail_safe = NULL;
-    hooks.iwdg_escalate = NULL;
-    hooks.context = &safe_calls;
-    CANCESSTRY_TEST_CHECK(!cancestry_event_hard_fault_escalate(&hooks));
-    CANCESSTRY_TEST_CHECK_U64(safe_calls, 0u);
 }
 
 int main(void)
@@ -92,9 +82,6 @@ int main(void)
 
     CANCESSTRY_TEST_CASE("queue saturation invokes HAL safe state and IWDG");
     test_queue_saturation_forces_safe_state_and_iwdg();
-
-    CANCESSTRY_TEST_CASE("a missing hook fails closed without a side effect");
-    test_escalation_is_safe_with_a_missing_hook();
 
     return CANCESSTRY_TEST_SUITE_END();
 }

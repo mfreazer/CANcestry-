@@ -27,9 +27,11 @@
 #define TEST_CAPACITY 4u
 
 typedef struct hook_probe {
+    uint32_t retention_calls;
     uint32_t safe_calls;
     uint32_t watchdog_calls;
-    uint8_t order[2u];
+    uint32_t last_retention_code;
+    uint8_t order[3u];
     uint8_t order_count;
 } hook_probe_t;
 
@@ -53,12 +55,22 @@ static cancestry_event_t make_event(cancestry_event_type_t type,
     return event;
 }
 
+static void hook_retention(uint32_t code, void *context)
+{
+    hook_probe_t *probe = (hook_probe_t *)context;
+    probe->retention_calls++;
+    probe->last_retention_code = code;
+    if (probe->order_count < 3u) {
+        probe->order[probe->order_count++] = 1u;
+    }
+}
+
 static void hook_safe(void *context)
 {
     hook_probe_t *probe = (hook_probe_t *)context;
     probe->safe_calls++;
-    if (probe->order_count < 2u) {
-        probe->order[probe->order_count++] = 1u;
+    if (probe->order_count < 3u) {
+        probe->order[probe->order_count++] = 2u;
     }
 }
 
@@ -66,8 +78,8 @@ static void hook_watchdog(void *context)
 {
     hook_probe_t *probe = (hook_probe_t *)context;
     probe->watchdog_calls++;
-    if (probe->order_count < 2u) {
-        probe->order[probe->order_count++] = 2u;
+    if (probe->order_count < 3u) {
+        probe->order[probe->order_count++] = 3u;
     }
 }
 
@@ -75,6 +87,7 @@ static cancestry_event_hard_fault_hooks_t make_hooks(hook_probe_t *probe)
 {
     cancestry_event_hard_fault_hooks_t hooks;
 
+    hooks.write_retention_register = hook_retention;
     hooks.hal_fail_safe = hook_safe;
     hooks.iwdg_escalate = hook_watchdog;
     hooks.context = probe;
@@ -116,7 +129,7 @@ static void test_faults_use_reserved_slots_and_saturate_deterministically(void)
     cancestry_event_queue_t queue;
     cancestry_event_t storage[TEST_CAPACITY];
     cancestry_event_t event;
-    hook_probe_t probe = {0u, 0u, {0u, 0u}, 0u};
+    hook_probe_t probe = {0u, 0u, 0u, 0u, {0u, 0u, 0u}, 0u};
     cancestry_event_hard_fault_hooks_t hooks = make_hooks(&probe);
     const cancestry_event_queue_counters_t *counters;
 
@@ -151,11 +164,15 @@ static void test_faults_use_reserved_slots_and_saturate_deterministically(void)
 
     CANCESSTRY_TEST_CHECK_U64(cancestry_event_queue_size(&queue), TEST_CAPACITY);
     CANCESSTRY_TEST_CHECK_U64(cancestry_event_queue_fault_depth(&queue), TEST_CAPACITY);
+    CANCESSTRY_TEST_CHECK_U64(probe.retention_calls, 1u);
+    CANCESSTRY_TEST_CHECK_U64(probe.last_retention_code,
+                              CANCESTRY_FAULT_CODE_QUEUE_SATURATION);
     CANCESSTRY_TEST_CHECK_U64(probe.safe_calls, 1u);
     CANCESSTRY_TEST_CHECK_U64(probe.watchdog_calls, 1u);
-    CANCESSTRY_TEST_CHECK_U64(probe.order_count, 2u);
+    CANCESSTRY_TEST_CHECK_U64(probe.order_count, 3u);
     CANCESSTRY_TEST_CHECK_U64(probe.order[0], 1u);
     CANCESSTRY_TEST_CHECK_U64(probe.order[1], 2u);
+    CANCESSTRY_TEST_CHECK_U64(probe.order[2], 3u);
     counters = cancestry_event_queue_counters(&queue);
     CANCESSTRY_TEST_CHECK_U64(counters->hard_fault_escalations, 1u);
     CANCESSTRY_TEST_CHECK_U64(counters->dropped, 1u);
@@ -208,6 +225,8 @@ static void test_explicit_reserve_boundary_values(void)
     cancestry_event_t storage[TEST_CAPACITY];
     cancestry_event_t one_slot[1u];
     cancestry_event_t event;
+    hook_probe_t probe = {0u, 0u, 0u, 0u, {0u, 0u, 0u}, 0u};
+    cancestry_event_hard_fault_hooks_t hooks = make_hooks(&probe);
 
     CANCESSTRY_TEST_CHECK(!cancestry_event_queue_init_with_reserved_fault_slots(
         &queue, storage, TEST_CAPACITY, (uint16_t)(TEST_CAPACITY + 1u)));
@@ -217,6 +236,7 @@ static void test_explicit_reserve_boundary_values(void)
      * ordinary traffic is refused, while one fault is still retained. */
     CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(
         &queue, one_slot, 1u, 1u));
+    CANCESSTRY_TEST_CHECK(cancestry_event_queue_set_hard_fault_hooks(&queue, &hooks));
     event = make_event(CANCESTRY_EVENT_TYPE_CAN_RX, CANCESTRY_PRIORITY_CLASS_CAN_RX, 1u, 1u);
     CANCESSTRY_TEST_CHECK(cancestry_event_queue_push(&queue, &event) ==
                           CANCESTRY_EVENT_QUEUE_ERR_RESERVED_FAULT_SLOTS);

@@ -89,6 +89,28 @@ void free(void *ptr)
  * The exercise deliberately drives the queue past its capacity, so overflow
  * results are expected as well. Anything else is a failure.
  */
+static void no_op_retention(uint32_t code, void *context)
+{
+    (void)code;
+    (void)context;
+}
+
+static void no_op_action(void *context)
+{
+    (void)context;
+}
+
+static bool install_no_op_hooks(cancestry_event_queue_t *queue)
+{
+    cancestry_event_hard_fault_hooks_t hooks;
+
+    hooks.write_retention_register = no_op_retention;
+    hooks.hal_fail_safe = no_op_action;
+    hooks.iwdg_escalate = no_op_action;
+    hooks.context = NULL;
+    return cancestry_event_queue_set_hard_fault_hooks(queue, &hooks);
+}
+
 static bool status_is_acceptable(cancestry_event_queue_status_t status)
 {
     switch (status) {
@@ -97,6 +119,7 @@ static bool status_is_acceptable(cancestry_event_queue_status_t status)
     case CANCESTRY_EVENT_QUEUE_ERR_FULL:
     case CANCESTRY_EVENT_QUEUE_ERR_FULL_FAULT:
     case CANCESTRY_EVENT_QUEUE_ERR_RESERVED_FAULT_SLOTS:
+    case CANCESTRY_EVENT_QUEUE_ERR_TERMINAL:
         return true;
     case CANCESTRY_EVENT_QUEUE_ERR_NULL:
     case CANCESTRY_EVENT_QUEUE_ERR_CAPACITY:
@@ -131,7 +154,9 @@ static void exercise_queue(bool *ok)
     clock = cancestry_clock_from_virtual(&vclock);
 
     *ok = cancestry_event_queue_init(&queue, storage, EXERCISE_CAPACITY) && *ok;
+    *ok = install_no_op_hooks(&queue) && *ok;
     *ok = cancestry_event_queue_init(&other, fallback_storage, 2u) && *ok;
+    *ok = install_no_op_hooks(&other) && *ok;
 
     memset(&payload, 0, sizeof(payload));
     payload.can_rx.can_id = 0x321u;
@@ -189,6 +214,7 @@ static void exercise_queue(bool *ok)
     cancestry_event_init(&event);
     *ok = (cancestry_event_queue_push(&queue, &event) == CANCESTRY_EVENT_QUEUE_ERR_EVENT) && *ok;
     *ok = (cancestry_event_queue_init(&queue, storage, 1u)) && *ok;
+    *ok = install_no_op_hooks(&queue) && *ok;
     *ok = (cancestry_event_queue_emit(&queue, &clock, CANCESTRY_EVENT_TYPE_CAN_RX,
                                       CANCESTRY_PRIORITY_CLASS_CAN_RX, CANCESTRY_SEQUENCE_NONE,
                                       NULL) == CANCESTRY_EVENT_QUEUE_OK) &&

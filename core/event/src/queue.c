@@ -264,6 +264,11 @@ bool cancestry_event_queue_is_full(const cancestry_event_queue_t *queue)
     return cancestry_event_queue_is_valid(queue) && (queue->size >= queue->capacity);
 }
 
+bool cancestry_event_queue_is_terminal(const cancestry_event_queue_t *queue)
+{
+    return cancestry_event_queue_is_valid(queue) && queue->hard_fault_terminal;
+}
+
 /* ------------------------------------------------------------------------- */
 /* Producer side                                                             */
 /* ------------------------------------------------------------------------- */
@@ -298,6 +303,12 @@ cancestry_event_queue_status_t cancestry_event_queue_push(cancestry_event_queue_
     }
     if (!cancestry_event_queue_is_valid(queue)) {
         return CANCESTRY_EVENT_QUEUE_ERR_NULL;
+    }
+    if (queue->hard_fault_terminal) {
+        queue->counters.overflow_events++;
+        queue->counters.consecutive_overflows++;
+        queue->counters.dropped++;
+        return CANCESTRY_EVENT_QUEUE_ERR_TERMINAL;
     }
     if (!cancestry_event_is_valid(event)) {
         queue->counters.rejected++;
@@ -337,9 +348,12 @@ cancestry_event_queue_status_t cancestry_event_queue_push(cancestry_event_queue_
 
     victim = queue_find_newest_non_fault(queue);
     if (victim == CANCESTRY_QUEUE_NO_INDEX) {
-        /* The queue holds nothing but faults; do not evict a diagnostic fault. */
+        /* The queue holds nothing but faults; do not evict a diagnostic fault.
+         * Terminal state prevents any later producer from treating this queue
+         * as usable after the escalation boundary has been crossed. */
         queue->counters.dropped++;
         queue->counters.hard_fault_escalations++;
+        queue->hard_fault_terminal = true;
         (void)cancestry_event_hard_fault_escalate(&queue->hard_fault_hooks);
         return CANCESTRY_EVENT_QUEUE_ERR_FULL_FAULT;
     }
@@ -521,6 +535,8 @@ const char *cancestry_event_queue_status_name(cancestry_event_queue_status_t sta
         return "ERR_FULL_FAULT";
     case CANCESTRY_EVENT_QUEUE_ERR_RESERVED_FAULT_SLOTS:
         return "ERR_RESERVED_FAULT_SLOTS";
+    case CANCESTRY_EVENT_QUEUE_ERR_TERMINAL:
+        return "ERR_TERMINAL";
     case CANCESTRY_EVENT_QUEUE_ERR_EMPTY:
         return "ERR_EMPTY";
     default:

@@ -287,3 +287,15 @@ QA-EV-01,test,tests/unit/core/event/test_reserved_fault_slots.c,test,EVENT-RESER
 QA-EV-01,test,tests/conformance/baremetal/test_hard_fault_escalation.c,test,HARD-FAULT-ESCALATION-001,passing
 SW-FR-EVENT-007,test,tests/unit/core/event/test_reserved_fault_slots.c,test,EVENT-RESERVED-SLOTS-004,passing
 SW-FR-EVENT-007,test,tests/unit/core/event/test_reserved_fault_slots.c,test,EVENT-RESERVED-SLOTS-005,passing
+SW-FR-LOG-004,source,core/event/src/fault.c,test,FAULT-RETENTION-001,passing
+SW-FR-LOG-004,source,platform/cortex_m/watchdog.c,test,RESET-REASON-001,passing
+SW-FR-LOG-004,test,tests/conformance/baremetal/test_persist_before_latch.c,test,FAULT-RETENTION-001,passing
+SW-FR-LOG-004,test,tests/conformance/baremetal/test_reset_reason_readability.c,test,RESET-REASON-001,passing
+SYS-FR-016,source,core/event/src/fault.c,test,FAULT-RETENTION-001,passing
+SYS-FR-016,source,platform/cortex_m/watchdog.c,test,RESET-REASON-001,passing
+SYS-FR-016,test,tests/conformance/baremetal/test_terminal_state_refusal.c,test,TERMINAL-STATE-001,passing
+SYS-FR-016,test,tests/conformance/baremetal/test_fallback_spin.c,test,FALLBACK-SPIN-001,passing
+SYS-SF-004,source,core/event/src/fault.c,test,FALLBACK-SPIN-001,passing
+SYS-SF-004,test,tests/conformance/baremetal/test_persist_before_latch.c,test,FAULT-RETENTION-001,passing
+SYS-SF-004,test,tests/conformance/baremetal/test_terminal_state_refusal.c,test,TERMINAL-STATE-001,passing
+SYS-SF-004,test,tests/conformance/baremetal/test_fallback_spin.c,test,FALLBACK-SPIN-001,passing

@@ -134,6 +134,28 @@ void cancestry_watchdog_get_hard_fault_hooks(
 bool cancestry_watchdog_bind_event_queue(cancestry_watchdog_t *wdg,
                                          cancestry_event_queue_t *queue);
 
+/**
+ * Write a terminal event fault to STM32 RTC backup retention storage. The
+ * callback signature matches cancestry_event_hard_fault_hooks_t and performs
+ * only a bounded register write; it never uses Flash, EEPROM or heap memory.
+ */
+void cancestry_watchdog_write_retention_register(uint32_t code, void *context);
+
+/** Read the retained terminal fault code captured before an IWDG reset. */
+uint32_t cancestry_watchdog_read_retention_register(
+    const cancestry_watchdog_t *wdg);
+
+/** Clear the retained terminal fault after it has been copied to the log. */
+void cancestry_watchdog_clear_retention_register(cancestry_watchdog_t *wdg);
+
+/**
+ * Copy a retained terminal fault into a caller-owned persistent fault log.
+ * The retention value is cleared only after successful event admission.
+ */
+bool cancestry_watchdog_restore_retained_fault(
+    cancestry_watchdog_t *wdg,
+    cancestry_event_queue_t *persistent_fault_log);
+
 /* ------------------------------------------------------------------------- */
 /* Hardware Safe-State Pin Control (SW-FR-BM-006)                           */
 /* ------------------------------------------------------------------------- */
