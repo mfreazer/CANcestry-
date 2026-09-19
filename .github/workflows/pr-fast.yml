@@ -76,7 +76,7 @@ jobs:
         run: |
           python3 ci/check_schemas_valid.py schemas 2>&1 | tee /tmp/schema-output.log
 
-      - name: Traceability record (Test strategy.md section 10)
+      - name: Traceability record (docs/qa/test-strategy.md section 10)
         run: |
           python3 ci/check_traceability.py . 2>&1 | tee /tmp/traceability-output.log
 

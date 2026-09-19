@@ -329,7 +329,8 @@ static void case_critical_fault_action(void)
     /*
      * Everything published on the shared bus is accounted for: one state_entered per
      * started instance plus an exited/entered pair per transition, and exactly one
-     * fault per watchdog - all retained, because fault events are never dropped.
+     * fault per watchdog; the queue's reserved fault capacity retains them in
+     * this bounded fixture (all-fault saturation is a separate QA-EV-01 case).
      */
     {
         size_t faults = 0u;

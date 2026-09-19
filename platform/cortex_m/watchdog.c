@@ -26,10 +26,17 @@
 #define GPIOA_MODER      (*(volatile uint32_t *)(GPIOA_BASE + 0x00u))
 #define GPIOA_ODR        (*(volatile uint32_t *)(GPIOA_BASE + 0x14u))
 #define GPIOA_BSRR       (*(volatile uint32_t *)(GPIOA_BASE + 0x18u))
+
+/* RTC backup register: retention RAM/register storage survives IWDG reset. */
+#define RTC_BASE         (0x40002800UL)
+#define RTC_BKP0R        (*(volatile uint32_t *)(RTC_BASE + 0x50u))
 #endif
 
-/* Simulated hardware registers for testing & host verification */
+/* Simulated hardware registers for testing & host verification. */
+#if !defined(__arm__) && !defined(__thumb__)
 static uint32_t s_sim_rcc_csr = 0u;
+static volatile uint32_t s_sim_retention_register = 0u;
+#endif
 static bool s_sim_gpio_safe = true;
 
 bool cancestry_watchdog_init(cancestry_watchdog_t *wdg,
@@ -113,6 +120,128 @@ void cancestry_watchdog_induce_hang(cancestry_watchdog_t *wdg)
     if (wdg != NULL) {
         wdg->hang_induced = true;
     }
+}
+
+void cancestry_watchdog_escalate(cancestry_watchdog_t *wdg)
+{
+    if (wdg == NULL) {
+        return;
+    }
+
+    /* The outputs are safe before the watchdog reset is allowed to take its
+     * bounded course. This is deliberately duplicated in the hook adapter so
+     * a direct caller also gets the fail-safe invariant. */
+    cancestry_hardware_set_safe_state(wdg);
+    wdg->hang_induced = true;
+    wdg->remaining_time_ms = 0;
+
+#if defined(__arm__) || defined(__thumb__)
+    /* Leave the IWDG running but reduce the remaining period to the smallest
+     * useful reload. No feed can occur after escalation. */
+    IWDG_KR = 0x5555u;
+    IWDG_RLR = 1u;
+    IWDG_KR = 0xAAAAu;
+#endif
+}
+
+static void watchdog_hard_fault_fail_safe(void *context)
+{
+    cancestry_watchdog_t *wdg = (cancestry_watchdog_t *)context;
+    cancestry_hardware_set_safe_state(wdg);
+}
+
+static void watchdog_hard_fault_iwdg(void *context)
+{
+    cancestry_watchdog_t *wdg = (cancestry_watchdog_t *)context;
+    cancestry_watchdog_escalate(wdg);
+}
+
+void cancestry_watchdog_get_hard_fault_hooks(
+    cancestry_event_hard_fault_hooks_t *hooks,
+    cancestry_watchdog_t *wdg)
+{
+    if (hooks == NULL) {
+        return;
+    }
+    hooks->write_retention_register = cancestry_watchdog_write_retention_register;
+    hooks->hal_fail_safe = watchdog_hard_fault_fail_safe;
+    hooks->iwdg_escalate = watchdog_hard_fault_iwdg;
+    hooks->context = wdg;
+}
+
+bool cancestry_watchdog_bind_event_queue(cancestry_watchdog_t *wdg,
+                                         cancestry_event_queue_t *queue)
+{
+    cancestry_event_hard_fault_hooks_t hooks;
+
+    if (wdg == NULL || queue == NULL) {
+        return false;
+    }
+    cancestry_watchdog_get_hard_fault_hooks(&hooks, wdg);
+    return cancestry_event_queue_set_hard_fault_hooks(queue, &hooks);
+}
+
+void cancestry_watchdog_write_retention_register(uint32_t code, void *context)
+{
+    (void)context;
+#if defined(__arm__) || defined(__thumb__)
+    /* RTC backup registers are register-level retention storage. */
+    RTC_BKP0R = code;
+    __asm volatile("dmb" ::: "memory");
+#else
+    s_sim_retention_register = code;
+#endif
+}
+
+uint32_t cancestry_watchdog_read_retention_register(
+    const cancestry_watchdog_t *wdg)
+{
+    (void)wdg;
+#if defined(__arm__) || defined(__thumb__)
+    return RTC_BKP0R;
+#else
+    return s_sim_retention_register;
+#endif
+}
+
+void cancestry_watchdog_clear_retention_register(cancestry_watchdog_t *wdg)
+{
+    cancestry_watchdog_write_retention_register(0u, wdg);
+}
+
+bool cancestry_watchdog_restore_retained_fault(
+    cancestry_watchdog_t *wdg,
+    cancestry_event_queue_t *persistent_fault_log)
+{
+    cancestry_event_t event;
+    cancestry_event_queue_status_t status;
+    uint32_t retained_code;
+
+    if (wdg == NULL || persistent_fault_log == NULL ||
+        !cancestry_event_queue_is_valid(persistent_fault_log)) {
+        return false;
+    }
+
+    retained_code = cancestry_watchdog_read_retention_register(wdg);
+    if (retained_code == 0u) {
+        return false;
+    }
+
+    cancestry_event_init(&event);
+    event.type = CANCESTRY_EVENT_TYPE_FAULT_RAISED;
+    event.priority_class = CANCESTRY_PRIORITY_CLASS_FAULT;
+    event.timestamp_us = 0u;
+    event.payload.fault.fault_code = retained_code;
+    event.payload.fault.severity = CANCESTRY_FAULT_SEVERITY_CRITICAL;
+    event.payload.fault.source_id =
+        CANCESTRY_FAULT_SOURCE_HARD_FAULT_ESCALATION;
+
+    status = cancestry_event_queue_push(persistent_fault_log, &event);
+    if (!cancestry_event_queue_status_is_ok(status)) {
+        return false;
+    }
+    cancestry_watchdog_clear_retention_register(wdg);
+    return true;
 }
 
 bool cancestry_watchdog_sim_tick(cancestry_watchdog_t *wdg, uint32_t delta_ms)

@@ -6,6 +6,7 @@
 
 add_library(cancestry_platform_cortex_m STATIC
     hal_stm32.c
+    startup.c
     watchdog.c
     alloc_stubs.c)
 

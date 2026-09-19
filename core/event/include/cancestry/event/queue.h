@@ -3,7 +3,7 @@
  *
  * Normative references:
  *   docs/system/event-ordering.md  sections 3, 4, 8, 9
- *   docs/software/SwRS.md          SW-FR-EVENT-004, SW-FR-EVENT-005, SW-FR-EVENT-006
+ *   docs/software/SwRS.md          SW-FR-EVENT-004 .. SW-FR-EVENT-008, QA-EV-01
  *   docs/system/SyRS.md            SYS-NF-001 (determinism), SYS-NF-002 (bounded resources)
  *
  * Design notes:
@@ -15,21 +15,19 @@
  *     priority_class, then sequence, all ascending. The queue implements it
  *     with a binary min-heap, so pushes and pops are O(log n) with no
  *     allocation and no worst-case pathological behavior.
- *   - Overflow policy (see section 9 of the ordering spec):
- *       * non-fault event pushed into a full queue: the *new* event is dropped
- *         (drop-newest) and counters.dropped is incremented;
- *       * fault event pushed into a full queue: the queue admits the fault and
- *         evicts the newest non-fault event (the non-fault event with the
- *         highest ordering key), so faults are never dropped;
- *       * fault event pushed into a queue that holds only fault events: the new
- *         fault is dropped, because there is nothing else to evict.
- *     Every drop increments counters.dropped and counters.overflow_events.
+ *   - Path A overflow policy (see section 9 of the ordering spec): ordinary
+ *     events stop at capacity - reserved_fault_slots; faults may use any free
+ *     slot and may evict only the newest non-fault event when physical storage
+ *     is full. A physically full all-fault queue retains its bounded fault set,
+ *     increments hard_fault_escalations and invokes the configured HAL/IWDG
+ *     hooks. Every drop increments counters.dropped and counters.overflow_events.
  */
 
 #ifndef CANCESTRY_EVENT_QUEUE_H
 #define CANCESTRY_EVENT_QUEUE_H
 
 #include "cancestry/event/clock.h"
+#include "cancestry/event/fault.h"
 #include "cancestry/event/types.h"
 
 #include <stdbool.h>
@@ -41,6 +39,15 @@ extern "C" {
 
 /** Default queue depth, matching the FSM default of SW-FR-FSM-019. */
 #define CANCESTRY_EVENT_QUEUE_DEFAULT_CAPACITY ((uint16_t)64u)
+
+/**
+ * Default number of physical slots reserved for fault admission (QA-EV-01).
+ *
+ * The initializer clamps this value to capacity - 1 for tiny queues so a
+ * one-slot queue remains useful for an ordinary event. Callers that need a
+ * fault-only queue or a different safety margin use the explicit initializer.
+ */
+#define CANCESTRY_EVENT_QUEUE_DEFAULT_RESERVED_FAULT_SLOTS ((uint16_t)2u)
 
 /**
  * Largest capacity accepted by cancestry_event_queue_init().
@@ -72,8 +79,12 @@ typedef enum cancestry_event_queue_status {
     CANCESTRY_EVENT_QUEUE_ERR_EVENT = -3,
     /** Queue full; the new non-fault event was dropped (drop-newest). */
     CANCESTRY_EVENT_QUEUE_ERR_FULL = -4,
-    /** Queue full of fault events; the new fault event was dropped. */
+    /** Queue full of fault events; the new fault event was not admitted. */
     CANCESTRY_EVENT_QUEUE_ERR_FULL_FAULT = -5,
+    /** Queue has reached its non-fault admission limit; a slot is reserved. */
+    CANCESTRY_EVENT_QUEUE_ERR_RESERVED_FAULT_SLOTS = -7,
+    /** Terminal hard-fault state; no further event admission is permitted. */
+    CANCESTRY_EVENT_QUEUE_ERR_TERMINAL = -8,
     /** Queue empty; there is nothing to pop or peek. */
     CANCESTRY_EVENT_QUEUE_ERR_EMPTY = -6
 } cancestry_event_queue_status_t;
@@ -99,6 +110,8 @@ typedef struct cancestry_event_queue_counters {
     uint32_t consecutive_overflows;
     /** Highest occupancy observed since initialization. */
     uint32_t high_water;
+    /** Times an all-fault queue forced the hard-fault escalation path. */
+    uint32_t hard_fault_escalations;
 } cancestry_event_queue_counters_t;
 
 /**
@@ -116,6 +129,12 @@ typedef struct cancestry_event_queue {
     uint16_t size;
     /** Number of queued events in the FAULT priority class. */
     uint16_t fault_count;
+    /** Physical slots protected from ordinary (non-fault) admission. */
+    uint16_t reserved_fault_slots;
+    /** Actions used if all physical slots already contain faults. */
+    cancestry_event_hard_fault_hooks_t hard_fault_hooks;
+    /** Set after escalation; terminal queues reject every later push. */
+    bool hard_fault_terminal;
     /** Next sequence number to assign; sequences start at 1. */
     uint32_t next_sequence;
     /** Next event id to assign; ids start at 1. */
@@ -133,7 +152,9 @@ typedef struct cancestry_event_queue {
  * @param storage   Event array that backs the queue. It shall outlive the queue
  *                  and shall not move.
  * @param capacity  Number of events in @p storage, in
- *                  [1, CANCESTRY_EVENT_QUEUE_MAX_CAPACITY].
+ *                  [1, CANCESTRY_EVENT_QUEUE_MAX_CAPACITY]. The default
+ *                  initializer reserves CANCESTRY_EVENT_QUEUE_DEFAULT_RESERVED_FAULT_SLOTS
+ *                  physical slots for fault events (clamped for tiny queues).
  * @return true when the queue is ready for use, false when @p queue is NULL,
  *         @p storage is NULL, or @p capacity is out of range. On failure the
  *         queue is left in a safely unusable state.
@@ -141,6 +162,36 @@ typedef struct cancestry_event_queue {
 bool cancestry_event_queue_init(cancestry_event_queue_t *queue,
                                 cancestry_event_t *storage,
                                 uint16_t capacity);
+
+/**
+ * Initialize a queue with an explicit reserved fault-slot count.
+ *
+ * @param reserved_fault_slots Number of physical slots that non-fault events
+ *                             may never consume. It may be zero for a legacy
+ *                             best-effort queue, or equal to @p capacity for a
+ *                             fault-only queue. No heap allocation occurs.
+ * @return true when all arguments are valid.
+ */
+bool cancestry_event_queue_init_with_reserved_fault_slots(
+    cancestry_event_queue_t *queue,
+    cancestry_event_t *storage,
+    uint16_t capacity,
+    uint16_t reserved_fault_slots);
+
+/** @return Number of physical slots protected for faults, or 0 if invalid. */
+uint16_t cancestry_event_queue_reserved_fault_slots(
+    const cancestry_event_queue_t *queue);
+
+/**
+ * Bind the platform fail-safe and IWDG actions used for unrecoverable fault
+ * saturation. The hooks are copied; the caller retains ownership of context.
+ * A configuration missing any of the retention, HAL, or IWDG actions is
+ * rejected at this constructor boundary; the runtime escalation path remains
+ * fail-closed for partial or bypassed configurations.
+ */
+bool cancestry_event_queue_set_hard_fault_hooks(
+    cancestry_event_queue_t *queue,
+    const cancestry_event_hard_fault_hooks_t *hooks);
 
 /** @return true when @p queue is non-NULL and initialized. */
 bool cancestry_event_queue_is_valid(const cancestry_event_queue_t *queue);
@@ -159,6 +210,9 @@ bool cancestry_event_queue_is_empty(const cancestry_event_queue_t *queue);
 
 /** @return true when the queue is valid and holds @c capacity events. */
 bool cancestry_event_queue_is_full(const cancestry_event_queue_t *queue);
+
+/** @return true after all-fault saturation has entered terminal safe handling. */
+bool cancestry_event_queue_is_terminal(const cancestry_event_queue_t *queue);
 
 /**
  * Enqueue an event.

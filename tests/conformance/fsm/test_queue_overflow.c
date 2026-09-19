@@ -8,8 +8,9 @@
  *   - each instance owns a bounded incoming queue whose default depth is 64;
  *   - on overflow a non-fault event is dropped - the *newest* one, so an already
  *     queued event is never displaced by a later arrival;
- *   - fault events are never dropped for admission reasons: admitting one evicts
- *     a non-fault event instead;
+ *   - fault events use the reserved physical slots and, when physical capacity
+ *     is full with a non-fault present, admitting one evicts that non-fault;
+ *     an all-fault full queue retains its bounded set and escalates;
  *   - every drop is counted (and persistent overflow is therefore visible to the
  *     fault manager, which owns the WARNING reaction);
  *   - one instance's overflow cannot disturb another's;
@@ -227,9 +228,10 @@ static void case_self_reactive_bounded(void)
     fsm_test_destroy(&fx);
 }
 
-/* FSM-QUEUE-004: a fault is admitted to a full queue by evicting a non-fault
- * event, and it is served ahead of everything else (event-ordering.md sections
- * 9 and 11.1). */
+/* FSM-QUEUE-004: a fault is admitted to a physically full queue by evicting a
+ * non-fault and is served ahead of everything else (event-ordering.md sections
+ * 9 and 11.1). The default reserve prevents ordinary traffic from consuming
+ * fault capacity before this case. */
 static void case_faults_never_dropped(void)
 {
     static fsm_test_fixture_t fx;
@@ -250,8 +252,8 @@ static void case_faults_never_dropped(void)
         cancestry_event_queue_fault_depth(&fx.instances[0].incoming), 0u);
     dropped_before = fsm_test_counters(&fx, "lab.one")->events_dropped;
 
-    /* A fault now arrives at a full queue. It is admitted - never dropped for
-     * admission reasons - and the event it displaces is an older non-fault one. */
+    /* A fault now arrives at a full queue. It is admitted by evicting the
+     * non-fault victim; all-fault saturation is covered by QA-EV-01 tests. */
     cancestry_event_init(&event);
     fsm_test_event_fault(&event, 2000u, 4242u, CANCESTRY_FAULT_SEVERITY_CRITICAL);
     CANCESSTRY_TEST_CHECK_U64(fsm_test_process(&fx, &event), CANCESTRY_FSM_OK);

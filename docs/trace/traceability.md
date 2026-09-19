@@ -3,27 +3,28 @@
 | Field | Value |
 |---|---|
 | Document | CANcestry Traceability Record |
-| Version | 0.3.0-rc.1 + Phase 6/7 rows |
-| Status | Finalized for the v0.3.0 Release Candidate ([issue #13](https://github.com/mfreazer/CANcestry-/issues/13)); Phase 6 ([issue #17](https://github.com/mfreazer/CANcestry-/issues/17)) and Phase 7 ([issue #20](https://github.com/mfreazer/CANcestry-/issues/20)) rows added on the way to v0.4.0 |
+| Version | 1.0.0-rc.1 candidate traceability + Phase 12/QA-EV-01 rows |
+| Status | Candidate evidence is recorded; QA-EV-01 remains open and final 1.0.0 release is deferred |
 | Owner | QA |
-| Last Review | 2026-09-17 |
+| Last Review | 2026-09-18 |
 | Checked in CI | `cancestry_traceability_consistent` (`ci/check_traceability.py`) |
 
 This document accompanies [`traceability.csv`](traceability.csv). The CSV maps
 requirements to verification artifacts; this record defines the release scope so
 "coverage" is auditable, states the numbers that back the claim, and lists every
-requirement that is **not** verified at v0.3.0-rc.1 with the phase that owns it.
+requirement that is **not** verified in the 1.0.0-rc.1 candidate software scope with the v1.1.0 owner that accepts it.
 Both statements are machine-checked (`ci/check_traceability.py`, section 6).
 
 ## 1. CSV format
 
 ```csv
-requirement_id,artifact_id,verification_method,test_id,status
+requirement_id,artifact_type,artifact_id,verification_method,test_id,status
 ```
 
 | Field | Meaning |
 |---|---|
 | `requirement_id` | A requirement from `docs/software/SwRS.md` (`SW-FR-*`), `docs/SyRS.md` (`SYS-*`), or a QA review item (`QA-*`). |
+| `artifact_type` | Controlled kind: `source`, `component`, `test`, `document`, `schema`, `tool`, `ci`, `release`, or `requirement`. |
 | `artifact_id` | The code artifact, schema, document or logical component that realizes the requirement — e.g. `GATEWAY-LOOP`, `schemas/fsm-0.3.0.schema.json`, `tests/integration/opendbc-parity`. |
 | `verification_method` | `test`, `inspection` or `demonstration`. |
 | `test_id` | The named test case that verifies the row. For a `passing` row this id must appear **literally** in a source artifact under `tests/`, `examples/`, `tools/` or `ci/`, so a reviewer can open the thing that verifies the claim (enforced, section 6). Ids on `planned` rows are reserved names for work not yet realized. |
@@ -34,16 +35,14 @@ verification path (26 requirements have more than one). Requirement ids also
 appear as `artifact_id`s where a system-level requirement is realized by a
 software requirement (for example `SYS-FR-003` realized by `SW-FR-CODEC-001`).
 
-> **Format note.** `Test strategy.md` section 10 sketches a six-column form with
-> a separate `artifact_type`. The shipped record keeps the five columns above
-> and expresses the artifact kind inside `artifact_id` (a logical name such as
-> `EVENT-QUEUE-COUNTERS`, or a path). The CI check treats the header above as
-> normative; if the strategy is reworded for v0.4.0, the two should be
-> reconciled in one change.
+> **Format note.** `docs/qa/test-strategy.md` section 10 and this record use the
+> same six-column form. `artifact_type` is explicit so a logical component,
+> source file, test, document and release marker cannot be confused. The CI
+> check treats the header and vocabulary above as normative.
 
-## 2. v0.3.0-rc.1 release scope
+## 2. Historical v0.3.0-rc.1 release scope
 
-The v0.3.0 Release Candidate delivers the **portable core runtime** and proves
+The v0.3.0 Release Candidate delivered the **portable core runtime** and proved
 it end to end in the gateway integration harness ([issue
 #13](https://github.com/mfreazer/CANcestry-/issues/13)):
 
@@ -63,35 +62,42 @@ it end to end in the gateway integration harness ([issue
 | System integration | `SYS-FR-003..006, 009..010, 014, 019`; `SYS-SF-002` | `examples/gateway/` (`GATEWAY-*` tests) |
 | FSM schema finalization | `SW-FR-FSM-001..003` | `schemas/fsm-0.3.0.schema.json`, `FSM-LOAD-*` |
 
-## 3. Coverage at Phase 11 ([issue #28](https://github.com/mfreazer/CANcestry-/issues/28))
+## 3. Coverage at Phase 12 / v1.0.0-rc.1 ([issue #30](https://github.com/mfreazer/CANcestry-/issues/30))
 
-`docs/software/SwRS.md` and `docs/SyRS.md` define **203** requirement ids. Of
-those, **161 have at least one `passing` row in the CSV** and **56 are named in
-the deferred ledger** (section 5); 24 rows remain `planned`, every one of them
-for a requirement that is also listed in the ledger.
+`docs/software/SwRS.md` and `docs/SyRS.md` define **222** requirement ids. Of
+those, **166 are in the implemented 1.0.0-rc.1 candidate scope and all 166 have at least one
+`passing` row in the CSV**. The remaining **56 are named in the v1.1.0 deferred
+ledger** (section 5). The CSV contains **288 rows**: 264 passing, 24 planned and
+zero failed; the planned rows are explicit forward-looking verification paths.
 
 | Area | `passing` | `planned` | rows |
 |---|---:|---:|---:|
-| `SW-FR-EVENT` | 8 | 0 | 8 |
+| `SW-FR-EVENT` (including reserved slots/escalation) | 14 | 0 | 14 |
 | `SW-FR-CODEC` | 8 | 0 | 8 |
 | `SW-FR-RECIPE` | 6 | 0 | 6 |
-| `SW-FR-FSM` (all 55 requirements) | 59 | 0 | 59 |
+| `SW-FR-FSM` (all 55 requirements) | 60 | 0 | 60 |
 | `SW-FR-GOV` (stub level, 005/006) | 5 | 0 | 5 |
 | `SW-FR-HAL` (Phase 6) | 11 | 1 | 12 |
 | `SW-FR-CANFD` (Phase 7) | 12 | 1 | 13 |
 | `SW-FR-TOOL` (Phases 5-7) | 24 | 0 | 24 |
 | `SW-FR-TP` (Phase 10) | 22 | 0 | 22 |
 | `SW-FR-UDS` (Phase 10) | 17 | 0 | 17 |
-| `SW-FR-BM` (Phase 11) | 15 | 0 | 15 |
+| `SW-FR-BM` (Phase 11) | 19 | 0 | 19 |
+| `SW-FR-BMS` (Phase 12) | 8 | 0 | 8 |
+| `SW-FR-HIL` (Phase 12) | 8 | 0 | 8 |
+| `SW-FR-SAFETY` (Phase 12) | 5 | 0 | 5 |
 | `SYS-FR` | 14 | 9 | 23 |
 | `SYS-NF` | 18 | 0 | 18 |
 | `SYS-IR` | 1 | 0 | 1 |
 | `SYS-SF` | 2 | 4 | 6 |
 | `SYS-SEC` | 0 | 2 | 2 |
-| `QA-*` review items | 8 | 7 | 15 |
-| **Total** | **230** | **24** | **254** |
+| `QA-*` review items | 10 | 7 | 17 |
+| **Total** | **264** | **24** | **288** |
 
-By method: 240 `test`, 11 `inspection`, 3 `demonstration`.
+By method: 274 `test`, 11 `inspection`, 3 `demonstration`.
+
+The distinct implemented candidate requirement count is 166/166 (100%); the row
+count is larger because independent verification paths are retained.
 
 There are **no `failed` rows**: a failing row would mean a released claim is not
 met, and the release gate (section 6) refuses that state.
@@ -209,31 +215,66 @@ linker-level zero-allocation enforcement.
 | `BM-ALLOC-001` | `cancestry_conformance_bm_zero_alloc` | Linker script `cancestry_baremetal.ld` strips allocator functions and rejects dynamic allocation calls with undefined reference errors |
 | `cancestry_platform_cortex_m_no_malloc_symbols` | `ci/check_no_alloc.py` over `libcancestry_platform_cortex_m.a` | Bare-metal Cortex-M platform archive contains zero heap allocation symbols |
 
-## 5. Deferred ledger: requirements with no verified artifact yet
+## 4.5 Phase 12 BMS, HIL & final safety-case test ids ([issue #30](https://github.com/mfreazer/CANcestry-/issues/30))
+
+| Test id | Executable / artifact | Proves |
+|---|---|---|
+| `BMS-GOV-001` | `cancestry_conformance_bms_governor` | 100 kW thermal request is reduced to the 95 kW current/voltage ceiling and exposes `GOVERNOR_INTERVENTION` |
+| `BMS-GOV-002` | `cancestry_conformance_bms_governor` | In-budget normal request is returned unchanged without an intervention |
+| `BMS-GOV-003` | `cancestry_conformance_bms_governor` | Faulted BMS snapshot blocks with zero power/torque |
+| `BMS-GOV-004` | `cancestry_conformance_bms_governor` | Invalid voltage/efficiency inputs fail closed |
+| `BMS-GOV-005` | `cancestry_conformance_bms_governor` | Conservative current rounding and exact current boundary |
+| `BMS-GOV-006` | `cancestry_conformance_bms_governor` | Zero demand, saturation and bounded integer arithmetic |
+| `BMS-GOV-007` | `cancestry_conformance_bms_governor` | NULL API behavior and stable diagnostic names |
+| `BMS-GOV-008` | `cancestry_conformance_bms_governor` | Unknown BMS state fails closed |
+| `cancestry_governor_no_malloc_symbols` | `ci/check_no_alloc.py` over `libcancestry_governor.a` | The BMS governor runtime archive contains no allocator symbol |
+| `HIL-BUSOFF-001` | `tests/hil/hil_fault_injection.py` | Hardware Bus-Off precedes FSM SAFE_STATE, TX is revoked, and bounded recovery is observed |
+| `HIL-CRC-001` | `tests/hil/hil_fault_injection.py` | Hardware CRC rejects a corrupted frame before software queue/FSM processing |
+| `HIL-BROWNOUT-001` | `tests/hil/hil_fault_injection.py` | BOR safe latch forces zero torque/open contactors before simulated power-down |
+| `HIL-REPORT-001` | `tests/hil/test_phase12_artifacts.py` | HIL backend, limitations, scenario ids and reproduction evidence are documented |
+| `SAFETY-MANUAL-001` | `tests/hil/test_phase12_artifacts.py` | Candidate manual contains architecture/data flow and external-assessor scope |
+| `SAFETY-FMEA-001` | `tests/hil/test_phase12_artifacts.py` | Manual contains the FMEA summary |
+| `SAFETY-TSR-001` | `tests/hil/test_phase12_artifacts.py` | Manual maps implemented features to ASIL-B-aligned TSRs |
+| `TRACE-V1-001` | `tests/hil/test_phase12_artifacts.py` | Candidate report has 100% in-scope coverage and v1.1.0 deferrals |
+| `SAFETY-RELEASE-001` | `tests/hil/test_phase12_artifacts.py` | VERSION, CHANGELOG and matrix have consistent release-candidate markers and no failed row |
+| `EVENT-RESERVED-SLOTS-001` | `cancestry_test_reserved_fault_slots` | Ordinary events cannot consume the configured fault reserve |
+| `EVENT-RESERVED-SLOTS-002` | `cancestry_test_reserved_fault_slots` | Faults use reserved capacity and all-fault saturation is counted |
+| `EVENT-RESERVED-SLOTS-003` | `cancestry_test_reserved_fault_slots` | Reserved-slot admission and newest-non-fault eviction are deterministic |
+| `EVENT-RESERVED-SLOTS-004` | `cancestry_test_reserved_fault_slots` | Explicit zero/one-slot reserve boundaries fail closed and remain bounded |
+| `EVENT-RESERVED-SLOTS-005` | `cancestry_test_reserved_fault_slots` | Fault occupancy does not reduce the remaining bounded ordinary share |
+| `HARD-FAULT-ESCALATION-001` | `cancestry_conformance_bm_hard_fault_escalation` | HAL safe-state action precedes the IWDG reset path on all-fault saturation |
+| `HARD-FAULT-ESCALATION-002` | `cancestry_conformance_bm_hard_fault_escalation` | Missing hook configuration fails closed |
+
+## 5. Deferred ledger: v1.1.0 requirements with no complete verified artifact yet
+
+This ledger is embedded here intentionally. It is part of the machine-checked
+candidate record, not an external spreadsheet. It does not close QA-EV-01 or
+authorize the final 1.0.0 release.
 
 Every requirement below is either absent from the CSV or present only with
 `planned` rows. None of them is a portable-core requirement, and each is owned
-by a later phase. `ci/check_traceability.py` reads the **first column** of this
+by a later phase. The complete v1.1.0 expansion and rationale are also
+reproduced in [`final_v1_report.md`](final_v1_report.md). `ci/check_traceability.py` reads the **first column** of this
 table (the rationale column is prose and never counts): ids and inclusive ranges
 written there are what the coverage rules treat as deliberately deferred, so a
 requirement can only be "not verified" on purpose.
 
-| Deferred requirements | Phase that owns them | Why they are not verified at v0.3.0-rc.1 |
+| Deferred requirements | Phase that owns them | Why they are not verified in the 1.0.0-rc.1 candidate |
 |---|---|---|
-| `SW-FR-PKG-001..007`, `SYS-FR-001`, `SYS-FR-002`, `SYS-FR-017`, `SYS-SF-006`, `SYS-SEC-001`, `SYS-SEC-002`, `SYS-IR-004` | Package loader, integrity and versioning | v0.3.0-rc.1 loads codec maps, recipes and FSMs as individual declarative files with per-file schema validation. The package manifest, semantic-version compatibility, hash/signature verification, debug-interface policy and the stable-format guarantee for the combined package belong to the package layer. |
+| `SW-FR-PKG-001..007`, `SYS-FR-001`, `SYS-FR-002`, `SYS-FR-017`, `SYS-SF-006`, `SYS-SEC-001`, `SYS-SEC-002`, `SYS-IR-004` | Package loader, integrity and versioning | v1.0.0 loads codec maps, recipes and FSMs as individual declarative files with per-file schema validation. The package manifest, semantic-version compatibility, hash/signature verification, debug-interface policy and the stable-format guarantee for the combined package belong to the package layer. |
 | `SW-FR-CAN-001..006`, `SYS-FR-008`, `SYS-IR-001`, `SYS-IR-002`, `SYS-IR-003`, `SYS-IR-006`, `SYS-NF-004`, `SYS-SF-005`, `SYS-SF-007` | CAN integration and platform layer | These need hardware access the core deliberately does not have: bit rates up to 1 Mbps, named physical interfaces, host transport, bus-off recovery, watchdog, error counters and persistent storage. The gateway harness is a logic harness with no bus backend ([smoke test record](../qa/smoke-test-v0.3.0-rc.1.md) section 5.1). |
 | `SW-FR-LOG-001..005`, `SYS-FR-011`, `SYS-FR-020`, `SYS-SEC-003` | Logger, log lifecycle and replay | Log formats, retrieval, local clearing, privacy expectations and replay of logged traffic. |
 | `SW-FR-SIM-001..004`, `SYS-FR-012`, `SYS-FR-013` | Host simulator and host interface | Package execution against virtual CAN inputs, plus the status/package-management/mode-control interface. `SYS-FR-014` determinism is already claimed by the gateway harness, but its simulator row stays `planned` until the simulator exists. |
-| `SW-FR-GOV-001..004`, `SYS-SF-001`, `SYS-SF-003` | Full safety governor | Token buckets, ID-level rate limits and an enforced non-transmitting boot state. v0.3.0-rc.1 ships the fail-closed stub, verified at stub level by `SW-FR-GOV-005`/`SW-FR-GOV-006` and `SW-FR-FSM-023/039..042`. |
+| `SW-FR-GOV-001..004`, `SYS-SF-001`, `SYS-SF-003` | Full safety governor | Token buckets, ID-level rate limits and an enforced non-transmitting boot state. the candidate ships the fail-closed stub, verified at stub level by `SW-FR-GOV-005`/`SW-FR-GOV-006` and `SW-FR-FSM-023/039..042`. |
 | `SYS-FR-015`, `SYS-FR-016`, `SYS-SF-004` | Mode and fault state machine (SAFE mode) | Boot-into-safe-state, the complete fault-class table and SAFE-mode transitions. The fail-closed half of `SYS-FR-016` is demonstrated today (`GATEWAY-FAILCLOSED-001`); bus-off recovery and storage failure are not. |
 | `SW-FR-RECIPE-004` | Recipe engine (timeout watches) | The stub engine has no runtime clock, so a timeout trigger refuses to match (fail closed); documented in [`core/recipe/README.md`](../../core/recipe/README.md). |
-| `SYS-FR-007`, `SYS-SF-008`, `SYS-NF-003` | Emulation profile tests, static analysis, performance tooling | The v0.3.0 profile test for `SYS-FR-007`, the "no user code execution" inspection for `SYS-SF-008`, and event-to-action latency measurement for `SYS-NF-003` need later-phase tooling. |
+| `SYS-FR-007`, `SYS-SF-008`, `SYS-NF-003` | Emulation profile tests, static analysis, performance tooling | The candidate profile test for `SYS-FR-007`, the "no user code execution" inspection for `SYS-SF-008`, and event-to-action latency measurement for `SYS-NF-003` need later-phase tooling. |
 | `SW-FR-HAL-010` | Phase 6 hardware integration | The Linux SocketCAN backend is compiled and linked, but verification against a live `vcan0`/`vcan1` pair requires elevated privileges and kernel modules not present in the CI sandbox; the conformance suite covers behaviour against the mock HAL, and the source is reviewable. See `examples/gateway_real/README.md`. |
 
 ## 6. Reproduce and audit
 
 ```sh
-# Build the portable core and run every registered test (52 tests at Phase 10).
+# Build the portable core and run every registered test, including Phase 12.
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
@@ -244,8 +285,8 @@ python3 ci/check_traceability.py .
 
 The gate enforces, and reports the numbers for:
 
-1. the documented CSV header, no empty or duplicated rows;
-2. the `verification_method` and `status` vocabularies;
+1. the documented six-column CSV header, explicit artifact-type vocabulary, and no empty or duplicated rows;
+2. the `artifact_type`, `verification_method` and `status` vocabularies;
 3. requirement-id shape (`SW-FR-*`, `SYS-*`, `QA-*`);
 4. no invented ids: every `SW-FR-*`/`SYS-*` id used in the CSV is defined in the SwRS or the SyRS;
 5. no silently absent requirement: every defined requirement is in the CSV or in the deferred ledger (section 5);
@@ -265,15 +306,18 @@ id appears in the artifact that verifies it, then run the gate. To defer a
 requirement on purpose, name it in the ledger in section 5 with its owning
 phase — the gate fails otherwise, which is the point.
 
-Release gate: **no `failed` row and a green gate** are prerequisites for tagging
-a release candidate; the executed evidence for the v0.3.0-rc.1 candidate is in
-the [smoke test record](../qa/smoke-test-v0.3.0-rc.1.md).
+Release-candidate gate: **no `failed` row, passing coverage of the implemented
+candidate scope, a green gate and accepted target limitations** are prerequisites
+for QA review. QA-EV-01 remains open, so the final version bump, tag and
+v1.0.0 milestone closure are explicitly deferred. The candidate counts and
+v1.1.0 ledger are in [`final_v1_report.md`](final_v1_report.md).
 
 ## 7. Change history
 
 | Version | Date | Change |
 |---|---|---|
-| 0.8.0-wip | 2026-09-18 | Phase 11 (issue #28): Bare-metal ARM Cortex-M port and hard real-time HAL. Added `SW-FR-BM-001..008`, the Phase 11 test-id table in section 4.4, and coverage numbers refreshed to Phase 11 state (203 defined, 161 traced, 254 rows). |
+| 1.0.0-rc.1 | 2026-09-18 | Phase 12 evidence plus QA-EV-01 correction: reserved fault slots, ordered HAL/IWDG escalation, six-column CSV and candidate release controls. Final 1.0.0 bump/tag/milestone closure remain deferred. |
+| 0.8.0-wip | 2026-09-18 | Phase 11 (issue #28): Bare-metal ARM Cortex-M port and hard real-time HAL. |
 | 0.7.0-wip | 2026-09-18 | Phase 10 (issue #26): ISO-TP transport rows `SW-FR-TP-001..010` and UDS rows `SW-FR-UDS-001..008`, the Phase 10 test-id table in section 4.3, and coverage numbers refreshed to the Phase 10 state (195 defined, 153 traced, 239 rows). |
 | 0.6.0-wip | 2026-09-18 | Phase 9 (issue #24): formal-verification artifact ids, ACSL/WP contracts, KLEE harnesses, MISRA driver and safety-manual evidence map. |
 | 0.4.0-wip | 2026-09-17 | Phase 7 (issue #20): CAN FD requirement rows `SW-FR-CANFD-001..006`, the Phase 7 test-id table in section 4.1, and coverage numbers refreshed to the post-Phase-6/7 state (167 defined, 125 traced, 176 rows). |

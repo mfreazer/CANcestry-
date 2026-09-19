@@ -1,0 +1,61 @@
+/*
+ * CANcestry - terminal hard-fault persistence and escalation sequence.
+ *
+ * Implements QA-P31-01 and QA-P31-03, SW-FR-LOG-004 and the hard-fault
+ * boundary for SW-FR-EVENT-008, SYS-SF-004 and SYS-FR-016.
+ */
+
+#include "cancestry/event/fault.h"
+
+#include <stddef.h>
+
+#if defined(__arm__) || defined(__thumb__)
+#define CANCESTRY_EVENT_NOP() __asm volatile("nop")
+#else
+/* Keep host tests and the portable core deterministic without depending on a
+ * libc sleep primitive. The memory clobber prevents the loop from being
+ * treated as a removable empty loop by optimizing compilers. */
+#define CANCESTRY_EVENT_NOP() __asm volatile("" ::: "memory")
+#endif
+
+static void cancestry_event_safe_spin(void)
+{
+    for (;;) {
+        CANCESTRY_EVENT_NOP();
+    }
+}
+
+bool cancestry_event_hard_fault_escalate(
+    const cancestry_event_hard_fault_hooks_t *hooks)
+{
+    if (hooks == NULL) {
+        cancestry_event_safe_spin();
+    }
+
+    /* If retention is unavailable, latch any available fail-safe action before
+     * entering the terminal safe-spin path. */
+    if (hooks->write_retention_register == NULL) {
+        if (hooks->hal_fail_safe != NULL) {
+            hooks->hal_fail_safe(hooks->context);
+        }
+        cancestry_event_safe_spin();
+    }
+
+    /* Retention must be committed before the reset path can run. */
+    hooks->write_retention_register(CANCESTRY_FAULT_CODE_QUEUE_SATURATION,
+                                    hooks->context);
+
+    /* Invoke every available escalation action before the final fail-closed
+     * check. Complete production hooks normally do not return from IWDG. */
+    if (hooks->hal_fail_safe != NULL) {
+        hooks->hal_fail_safe(hooks->context);
+    }
+    if (hooks->iwdg_escalate != NULL) {
+        hooks->iwdg_escalate(hooks->context);
+    }
+
+    if (hooks->hal_fail_safe == NULL || hooks->iwdg_escalate == NULL) {
+        cancestry_event_safe_spin();
+    }
+    return true;
+}

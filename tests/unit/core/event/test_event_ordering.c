@@ -73,7 +73,7 @@ static void test_timestamp_ordering(void)
     const cancestry_time_us_t timestamps[] = {300u, 100u, 200u};
     size_t index;
 
-    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init(&queue, storage, TEST_CAPACITY));
+    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
     for (index = 0u; index < sizeof(timestamps) / sizeof(timestamps[0]); ++index) {
         event = make_event(CANCESTRY_EVENT_TYPE_CAN_RX, CANCESTRY_PRIORITY_CLASS_CAN_RX,
                            timestamps[index]);
@@ -107,7 +107,7 @@ static void test_priority_ordering(void)
         CANCESTRY_PRIORITY_CLASS_TRACE};
     size_t index;
 
-    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init(&queue, storage, TEST_CAPACITY));
+    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
     /* Every event shares one timestamp, so priority decides. */
     for (index = 0u; index < sizeof(classes) / sizeof(classes[0]); ++index) {
         event = make_event(CANCESTRY_EVENT_TYPE_CAN_RX, classes[index], 500u);
@@ -129,7 +129,7 @@ static void test_sequence_ordering(void)
     uint32_t index;
     cancestry_sequence_t previous = 0u;
 
-    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init(&queue, storage, TEST_CAPACITY));
+    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
     /* Identical timestamps and priorities: insertion order decides. */
     for (index = 0u; index < 5u; ++index) {
         event = make_event(CANCESTRY_EVENT_TYPE_CAN_RX, CANCESTRY_PRIORITY_CLASS_CAN_RX, 77u);
@@ -152,7 +152,7 @@ static void test_generated_event_ordering(void)
     cancestry_event_t cause;
     cancestry_event_t out;
 
-    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init(&queue, storage, TEST_CAPACITY));
+    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
 
     /* Cause at t=100, an unrelated CAN_RX at t=120, and a generated event with
      * a 50 us delay at t=150. */
@@ -206,7 +206,7 @@ static void run_script(uint32_t seed, event_record_t *records, size_t *record_co
     uint32_t step;
     uint32_t push_count = 0u;
 
-    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init(&queue, storage, TEST_CAPACITY));
+    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
     *record_count = 0u;
 
     for (step = 0u; step < SCRIPT_LENGTH; ++step) {
@@ -290,7 +290,7 @@ static void test_heap_matches_the_reference_order(void)
     uint32_t push_count = 0u;
     uint32_t step;
 
-    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init(&queue, storage, TEST_CAPACITY));
+    CANCESSTRY_TEST_CHECK(cancestry_event_queue_init_with_reserved_fault_slots(&queue, storage, TEST_CAPACITY, 0u));
 
     for (step = 0u; step < 500u; ++step) {
         const uint32_t roll = next_random(&seed);

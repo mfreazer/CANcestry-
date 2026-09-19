@@ -1,9 +1,17 @@
 cmake_minimum_required(VERSION 3.16)
 
+# CMake's project(VERSION ...) grammar accepts numeric components only. Keep
+# the release-candidate marker explicit here rather than silently advertising
+# final 1.0.0 metadata.
+set(CANCESTRY_RELEASE_VERSION "1.0.0-rc.1")
+# NOTE: The CMake project version is kept separate from project() due to CMake
+# grammar limitations with complex RC suffixes. The actual release version is
+# controlled via the CANCESTRY_RELEASE_VERSION variable (currently 1.0.0-rc.1).
 project(cancestry
-    VERSION 0.3.0
     DESCRIPTION "CAN codec, recipe and emulation runtime"
     LANGUAGES C)
+set(PROJECT_VERSION "${CANCESTRY_RELEASE_VERSION}")
+set(CMAKE_PROJECT_VERSION "${CANCESTRY_RELEASE_VERSION}")
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -83,6 +91,7 @@ add_subdirectory(core/fsm)
 add_subdirectory(core/hal)
 add_subdirectory(core/transport)
 add_subdirectory(core/uds)
+add_subdirectory(core/governor)
 add_subdirectory(platform)
 
 if(CANCESTRY_BUILD_TESTS)

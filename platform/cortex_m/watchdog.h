@@ -23,6 +23,8 @@
 #define CANCESTRY_PLATFORM_CORTEX_M_WATCHDOG_H
 
 #include "cancestry/event/clock.h"
+#include "cancestry/event/fault.h"
+#include "cancestry/event/queue.h"
 #include "cancestry/hal/types.h"
 
 #include <stdbool.h>
@@ -106,6 +108,53 @@ bool cancestry_watchdog_sim_tick(cancestry_watchdog_t *wdg, uint32_t delta_ms);
  * Induce an intentional hang to verify fail-safe reset recovery.
  */
 void cancestry_watchdog_induce_hang(cancestry_watchdog_t *wdg);
+
+/**
+ * Request the independent-watchdog escalation used after an unrecoverable
+ * event fault. On host builds this marks the simulated counter expired; on
+ * Cortex-M the running IWDG is deliberately left without a feed and its
+ * reload is minimized. The call is bounded and does not allocate.
+ */
+void cancestry_watchdog_escalate(cancestry_watchdog_t *wdg);
+
+/**
+ * Fill portable event-core hooks with the hardware safe-state and IWDG
+ * actions for this watchdog instance. The queue copies the resulting struct.
+ */
+void cancestry_watchdog_get_hard_fault_hooks(
+    cancestry_event_hard_fault_hooks_t *hooks,
+    cancestry_watchdog_t *wdg);
+
+/**
+ * Bind the watchdog's ordered HAL/IWDG escalation actions to an event queue.
+ *
+ * This is the integration call used by a Cortex-M safety queue. It performs
+ * no allocation and does not take ownership of either object.
+ */
+bool cancestry_watchdog_bind_event_queue(cancestry_watchdog_t *wdg,
+                                         cancestry_event_queue_t *queue);
+
+/**
+ * Write a terminal event fault to STM32 RTC backup retention storage. The
+ * callback signature matches cancestry_event_hard_fault_hooks_t and performs
+ * only a bounded register write; it never uses Flash, EEPROM or heap memory.
+ */
+void cancestry_watchdog_write_retention_register(uint32_t code, void *context);
+
+/** Read the retained terminal fault code captured before an IWDG reset. */
+uint32_t cancestry_watchdog_read_retention_register(
+    const cancestry_watchdog_t *wdg);
+
+/** Clear the retained terminal fault after it has been copied to the log. */
+void cancestry_watchdog_clear_retention_register(cancestry_watchdog_t *wdg);
+
+/**
+ * Copy a retained terminal fault into a caller-owned persistent fault log.
+ * The retention value is cleared only after successful event admission.
+ */
+bool cancestry_watchdog_restore_retained_fault(
+    cancestry_watchdog_t *wdg,
+    cancestry_event_queue_t *persistent_fault_log);
 
 /* ------------------------------------------------------------------------- */
 /* Hardware Safe-State Pin Control (SW-FR-BM-006)                           */

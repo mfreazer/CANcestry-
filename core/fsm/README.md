@@ -244,24 +244,15 @@ stale inputs.
 
 Each instance owns a bounded incoming queue (default depth 64,
 `CANCESTRY_FSM_INCOMING_QUEUE_DEFAULT_CAPACITY`; SW-FR-FSM-019). It is
-`cancestry_event_queue_t` from `core/event`, so the policy is the shared one:
-drop-newest for non-fault events, and a fault admitted by evicting the newest
-non-fault event (SW-FR-FSM-020, `event-ordering.md` sections 9 and 11.1). Every
-drop is counted on both the queue and the instance.
-
-> **Flagged for the maintainer.** `docs/system/event-ordering.md` section 11.2
-> describes fault-on-fault saturation as *evicting the oldest queued fault* and
-> admitting the new one. The event core that shipped in Phase 2 documents and tests
-> the opposite for that case: the incoming fault is dropped (`ERR_FULL_FAULT`,
-> `core/event/README.md` policy table). `docs/qa`'s "Queue Policy Instantiation"
-> note (section 12) says one primitive implements one policy. The FSM runtime uses
-> the shipped primitive unmodified, so the FSM inherits its behaviour, and
-> `tests/conformance/fsm/test_queue_overflow.c` asserts what the runtime actually
-> guarantees (a fault is never dropped *for admission* reasons while a non-fault
-> victim exists; saturation stays bounded and counted). Reconciling section 11.2
-> with the event core is a spec/queue decision outside issue #11's scope —
-> changing it belongs in `core/event`, where the codec, recipe and FSM layers all
-> pick it up at once.
+`cancestry_event_queue_t` from `core/event`, so the shared Path A policy applies:
+the default initializer reserves two physical slots for faults, ordinary events
+are drop-newest at the non-fault limit, and faults may use the reserve or evict
+the newest non-fault event when the physical queue is full. If every physical
+slot contains a fault, the queue retains the bounded fault set and invokes the
+configured HAL fail-safe/IWDG escalation hooks rather than evicting a fault
+(SW-FR-FSM-020, `event-ordering.md` sections 9 and 11). Every drop, eviction and
+escalation is counted on the queue; ordinary drops are also reflected in the
+instance counters.
 
 Recursion and runaway work are bounded three ways: the chain depth, the per-event
 action budget (`max_actions_per_event`, default 128) and the per-activation event
