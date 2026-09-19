@@ -1,0 +1,11 @@
+# Pinned base image for ci/docker/Dockerfile (issue #33, H-01).
+#
+# Line 1: the image reference. Line 2: the multi-arch manifest *index*
+# digest of that reference (the value the Dockerfile pins with @sha256:).
+#
+# .github/workflows/hw-fast.yml re-resolves the reference against the
+# registry on every run and fails if the served digest differs from this
+# pin: a re-pushed base image breaks the pipeline instead of silently
+# changing the verification evidence (HwAGENTS.md rule 5: determinism).
+openmodelica/openmodelica:v1.24.0-minimal
+sha256:ab60ed68b4ba3aafa3cddb6319b31ead0346416fb0f2b62bdd7a9e19b486227b

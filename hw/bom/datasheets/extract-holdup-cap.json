@@ -1,0 +1,44 @@
+{
+  "kind": "datasheet_extract",
+  "schema_version": "0.1.0",
+  "source": {
+    "manufacturer": "TBD (vendor part selection at H-02)",
+    "document_id": "HW-FR-009 retention hold-up capacitor specification, HwRS.md v0.2.0 (section 3)",
+    "retrieval_date": "2026-09-19"
+  },
+  "note": "H-01 fixes the requirement bounds and one engineering budget; the vendor datasheet (with table and page) replaces the budget entries at H-02 BOM selection. No value in this extract is an un-cited number (HwAGENTS.md rule 2).",
+  "entries": [
+    {
+      "name": "C_nominal",
+      "value": 1.0e-05,
+      "unit": "F",
+      "condition": "Nominal hold-up capacitance; requirement is C >= 10 uF",
+      "source": "hwers",
+      "citation": "HwRS.md HW-FR-009 (v0.2.0): 'hold-up capacitor of value C >= 10 uF ... standard value 10 uF'"
+    },
+    {
+      "name": "I_leak_max",
+      "value": 5.0e-06,
+      "unit": "A",
+      "condition": "Maximum capacitor leakage at 85 degC (requirement bound)",
+      "source": "hwers",
+      "citation": "HwRS.md HW-FR-009 (v0.2.0): 'leakage <= 5 uA at 85 degC'"
+    },
+    {
+      "name": "ESR_budget",
+      "value": 0.02,
+      "unit": "ohm",
+      "condition": "Engineering budget (typical low-ESR 10 uF ceramic/polymer class). Sensitivity: in the covered constant-current discharge the ESR drop is I*ESR <= 3.4e-7 V, i.e. ~3 orders of magnitude below the declared 1e-3 V tolerance, so the budget cannot flip the acceptance verdict; pinned by the H-02 vendor datasheet.",
+      "source": "budget",
+      "citation": "HwAGENTS.md rule 2 (no value without an extract); vendor datasheet table due at H-02 BOM selection"
+    },
+    {
+      "name": "R_path",
+      "value": 0.05,
+      "unit": "ohm",
+      "condition": "Budget for the VBAT charge path (idealized diode + trace/diode impedance). Not exercised by holdup_001 (the diode is off for the whole event); shapes charge dynamics in the H-02 transient cases. Pinned by H-02 WCCA/netlist.",
+      "source": "budget",
+      "citation": "HwAGENTS.md rule 2 (no value without an extract); WCCA (wcca-derating.md) due at H-02"
+    }
+  ]
+}

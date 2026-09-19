@@ -1,0 +1,111 @@
+# H-Phase 1 hardware PR gate (issue #33; HW-PLAN §7/§8.2, virtual-bench-plan §7).
+#
+# A single self-contained job (hosted-runner budget, HW-PLAN C5) that runs
+# the whole H-01 evidence chain inside one digest-pinned container built
+# from ci/docker/ (OpenModelica + FMPy + Python):
+#
+#   1. schema validation        (software + hardware schema trees)
+#   2. HwRS parser + ledger     (unit tests, 100% coverage gate)
+#   3. Modelica compile -> FMU  (omc, headless)
+#   4. FMU oracle test          (FMPy vs OR-001, schema-declared tolerance)
+#   5. traceability gate        (ci/check_hw_traceability.py)
+#
+# The base image digest pin is re-verified against the registry before any
+# build (HwAGENTS.md rule 5: determinism) — a re-pushed base image fails
+# this pipeline instead of silently changing the verification evidence.
+#
+# Heavy sweeps deliberately do not run here: hw-nightly.yml (H-02).
+
+name: hw-fast
+
+on:
+  pull_request:
+    paths:
+      - "hw/**"
+      - "docs/hw/**"
+      - "schemas/hw/**"
+      - "ci/**"
+      - "HwAGENTS.md"
+      - "agents.md"
+      - ".github/workflows/hw-fast.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "hw/**"
+      - "docs/hw/**"
+      - "schemas/hw/**"
+      - "ci/**"
+      - "HwAGENTS.md"
+      - "agents.md"
+      - ".github/workflows/hw-fast.yml"
+
+jobs:
+  hw-fast:
+    name: hardware gates (schemas, FMU oracle, traceability)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the base-image digest pin (ci/docker/base-image.digest)
+        id: pin
+        run: |
+          set -euo pipefail
+          REF="$(head -n1 ci/docker/base-image.digest | tr -d '[:space:]')"
+          PINNED="$(sed -n '2p' ci/docker/base-image.digest | tr -d '[:space:]')"
+          RESOLVED="$(docker manifest inspect "$REF" \
+            | jq -r 'if type=="array" then .[0].Descriptor.digest else .config.digest end')"
+          echo "base ref:   ${REF}"
+          echo "pinned:     ${PINNED}"
+          echo "resolved:   ${RESOLVED}"
+          if [ "$PINNED" != "$RESOLVED" ]; then
+            echo "::error::${REF} no longer resolves to the pinned digest ${PINNED}; the registry now serves ${RESOLVED}. Re-pin ci/docker/base-image.digest through a documented, QA-visible change instead."
+            exit 1
+          fi
+          echo "image-digest=${RESOLVED}" >> "$GITHUB_OUTPUT"
+
+      - name: Build the toolchain image (ci/docker)
+        run: |
+          set -euo pipefail
+          docker build \
+            -t "cancestry/hw-fast:${GITHUB_SHA}" \
+            -t "cancestry/hw-fast:local" \
+            ci/docker/
+          docker inspect --format 'toolchain image: {{.Id}}' \
+            "cancestry/hw-fast:${GITHUB_SHA}"
+
+      - name: Run the hardware gates
+        env:
+          CANCESTRY_HW_IMAGE: ${{ steps.pin.outputs.image-digest }}
+        run: |
+          set -euo pipefail
+          IMAGE="cancestry/hw-fast:${GITHUB_SHA}"
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/work" -w /work \
+            -e CANCESTRY_HW_IMAGE \
+            "$IMAGE" bash -lc '
+              set -euo pipefail
+              echo "== 1. Schema validation (software + hardware trees)"
+              python3 ci/check_schemas_valid.py schemas
+
+              echo "== 2. HwRS parser + hardware ledger (unit tests, 100% coverage gate)"
+              python3 -m coverage run --include=ci/check_hw_traceability.py \
+                -m pytest tests/unit/tools/test_check_hw_traceability.py -q
+              python3 -m coverage report --fail-under=100
+
+              echo "== 3+4. Modelica compile -> FMU -> FMPy oracle test (OR-001)"
+              python3 -m pytest hw/tests -v
+
+              echo "== 5. Hardware traceability gate (honest ledger)"
+              python3 ci/check_hw_traceability.py .
+            ' 2>&1 | tee /tmp/hw-fast-output.log
+
+      - name: Upload run artifacts (evidence, trace, run log)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hw-fast-${{ github.sha }}
+          path: |
+            /tmp/hw-fast-output.log
+            build/hw/
+          if-no-files-found: ignore

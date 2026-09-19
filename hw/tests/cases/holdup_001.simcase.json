@@ -1,0 +1,32 @@
+{
+  "schema_version": "0.1.0",
+  "case_id": "holdup_001",
+  "requirement_id": "HW-SF-002",
+  "scenario": "Retention-domain (VBAT) hold-up across HW-SF-002 sub-event (ii) main-rail brownout to BOR level 3 (2.8 V) for 50 ms, followed by sub-event (iii) main-rail removal from BOR to 0 V for 100 ms (worst-case durations). Initial VBAT = 3.3 V (nominal 3V3 rail). Acceptance: VBAT(t) stays at or above the 1.65 V retention floor for the full 150 ms, and the trace matches oracle OR-001 within the declared tolerance.",
+  "not_covered": [
+    "HW-SF-002 sub-event (i) IWDG reset: firmware/reset-domain behavior, covered by the T2 virtual bench (H-02/H-03)",
+    "T4 physical correlation (real brownout shapes, golden measurement): bench-pending per HwRS section 5 seed list (oracle absence)"
+  ],
+  "model": "CancestryLib.Power.Holdup",
+  "parameters": {
+    "C": 1.0e-05,
+    "ESR": 0.02,
+    "I_mcu": 1.2e-05,
+    "I_leak": 5.0e-06,
+    "V0": 3.3,
+    "VIN_brownout": 2.8,
+    "V_floor": 1.65,
+    "R_path": 0.05,
+    "t_brownout": 0.05,
+    "t_remove": 0.1
+  },
+  "tolerances": {
+    "vb_max_abs_delta_v": 0.001
+  },
+  "oracle_id": "OR-001",
+  "seeds": [],
+  "solver": {
+    "step_s": 1.0e-05,
+    "stop_s": 0.15
+  }
+}

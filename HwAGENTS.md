@@ -44,4 +44,22 @@
    traces. Evidence format mirrors `docs/qa/hil-fault-injection-report.md`.
 
 6. **Fail-closed hardware.** Safe state must exist without firmware
-   (HW-SF-
+   (HW-SF-001): the passive fail-safe topology — reset, supervisor and
+   fail-safe latch paths — is a requirement, not an implementation detail.
+   Any change touching those paths is safety-relevant (HW-PLAN §11.1) and
+   requires Human Reviewer sign-off, not just an agent merge.
+
+---
+
+## Change Log
+
+- **v1.1.0 (2026-09-19)** — H-Phase 1 operational baseline (issue #33):
+  rules 1–6 bind the committed hardware tree — `hw/` (Modelica
+  `CancestryLib`, BOM + datasheet extracts, oracle registry, sim cases,
+  ledger), `schemas/hw/`, `ci/check_hw_traceability.py` (honest-ledger
+  gate), and the `hw-fast` CI job on the digest-pinned `ci/docker` image.
+  The rule 4 status vocabulary (including `passing(sim,CLn,provisional)`
+  for T1/T2 safety rows) is enforced by the ledger gate; rule 6 names
+  HW-SF-001 as the fail-closed baseline.
+- **v1.0.0** — Initial hardware agent policy (approved with HW-PLAN v1.0.0).
+

@@ -1,0 +1,114 @@
+{
+  "kind": "bom",
+  "schema_version": "0.1.0",
+  "baseline": "H-Phase 1 candidate parameter baseline (H-01): requirement bounds and budgets for the retention domain, per HwRS v0.2.0. No vendor parts are selected yet; vendor part numbers, FIT data and lifecycle claims are finalized at H-02 (hw/bom/bom.csv, hw/bom/fit-database.csv).",
+  "parts": [
+    {
+      "part_id": "PRT-001",
+      "part_number": "STM32G474 (candidate per HW-FR-001/HW-PLAN 6.1 PA; vendor part selected at H-02)",
+      "manufacturer": "STMicroelectronics",
+      "description": "Application MCU; retention domain (VBAT) supply for RTC and backup registers",
+      "category": "mcu",
+      "aec_q_status": "AEC-Q100 qualified automotive line (ST product data); re-verified at H-02 BOM curation",
+      "lifecycle": "active",
+      "fit_source": {
+        "status": "tbd",
+        "citation": "H-02: curated FIT database hw/bom/fit-database.csv; no FIT data at H-01 (HW-NF-004 still draft)"
+      },
+      "datasheet_ref": {
+        "manufacturer": "STMicroelectronics",
+        "document_id": "DS12787, STM32G474 datasheet",
+        "url": "https://www.st.com/resource/en/datasheet/stm32g474rc.pdf",
+        "extract": "hw/bom/datasheets/extract-mcu-vbat.json",
+        "retrieval_date": "2026-09-19"
+      },
+      "parameters": [
+        {
+          "name": "I_VBAT_bound",
+          "value": 1.2e-05,
+          "unit": "A",
+          "condition": "Worst-case retention-domain (VBAT) load bound = 10 x 1.2 uA typical, at VBAT minimum operating voltage",
+          "source": "hwers",
+          "citation": "HwRS.md HW-FR-009 (v0.2.0)"
+        },
+        {
+          "name": "V_VBAT_min",
+          "value": 1.65,
+          "unit": "V",
+          "condition": "Retention floor at worst case (10% above the 1.55 V datasheet minimum VBAT operating voltage)",
+          "source": "hwers",
+          "citation": "HwRS.md HW-FR-009 (v0.2.0); DS12787 VBAT range 1.55 to 3.6 V"
+        },
+        {
+          "name": "V_BOR3",
+          "value": 2.8,
+          "unit": "V",
+          "condition": "BOR level 3 (falling) threshold, brownout floor of HW-SF-002 (ii)",
+          "source": "hwers",
+          "citation": "HwRS.md HW-SF-002 (v0.2.0); STM32G4 BOR level table (OR-008)"
+        },
+        {
+          "name": "V_main_nominal",
+          "value": 3.3,
+          "unit": "V",
+          "condition": "Nominal 3V3 rail / VBAT charge level at nominal vehicle supply",
+          "source": "hwers",
+          "citation": "HwRS.md HW-FR-009 (v0.2.0) derivation (3.3 V nominal)"
+        }
+      ]
+    },
+    {
+      "part_id": "PRT-002",
+      "part_number": "SPEC-HF009-10UF (internal specification ID, not a vendor part number; selection at H-02)",
+      "manufacturer": "TBD",
+      "description": "Retention domain hold-up capacitor on VBAT",
+      "category": "capacitor",
+      "aec_q_status": "AEC-Q200 grade 1 required (HW-NF-004); candidate specification pending H-02 selection",
+      "lifecycle": "candidate",
+      "fit_source": {
+        "status": "tbd",
+        "citation": "H-02: curated FIT database hw/bom/fit-database.csv; no FIT data at H-01 (HW-NF-004 still draft)"
+      },
+      "datasheet_ref": {
+        "manufacturer": "TBD",
+        "document_id": "HW-FR-009 retention hold-up capacitor specification, HwRS.md v0.2.0",
+        "extract": "hw/bom/datasheets/extract-holdup-cap.json",
+        "retrieval_date": "2026-09-19"
+      },
+      "parameters": [
+        {
+          "name": "C_nominal",
+          "value": 1.0e-05,
+          "unit": "F",
+          "condition": "Nominal hold-up capacitance; requirement C >= 10 uF",
+          "source": "hwers",
+          "citation": "HwRS.md HW-FR-009 (v0.2.0)"
+        },
+        {
+          "name": "I_leak_max",
+          "value": 5.0e-06,
+          "unit": "A",
+          "condition": "Maximum leakage at 85 degC (requirement bound)",
+          "source": "hwers",
+          "citation": "HwRS.md HW-FR-009 (v0.2.0)"
+        },
+        {
+          "name": "ESR_budget",
+          "value": 0.02,
+          "unit": "ohm",
+          "condition": "Engineering budget; sensitivity I*ESR <= 3.4e-7 V is ~3 orders below the 1e-3 V case tolerance; pinned by the H-02 vendor datasheet",
+          "source": "budget",
+          "citation": "HwAGENTS.md rule 2; vendor datasheet table due at H-02"
+        },
+        {
+          "name": "R_path",
+          "value": 0.05,
+          "unit": "ohm",
+          "condition": "VBAT charge-path budget (idealized diode + trace); not exercised by holdup_001 (diode off); H-02 transient cases only",
+          "source": "budget",
+          "citation": "HwAGENTS.md rule 2; WCCA due at H-02"
+        }
+      ]
+    }
+  ]
+}

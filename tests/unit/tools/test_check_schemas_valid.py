@@ -145,10 +145,42 @@ def test_main_usage_and_directory_checks(capsys):
 
 
 def test_main_passes_on_the_repository_schemas(capsys):
+    # Issue #33: the scan now recurses, so the 8 software schemas and the 3
+    # hardware schemas under schemas/hw/ are all checked in one pass.
     assert ci_check_schemas.main(["check_schemas_valid.py",
                                   str(SCHEMA_DIR)]) == 0
     out = capsys.readouterr().out
-    assert out.count("PASS:") == 8 and "all schemas are valid" in out
+    assert out.count("PASS:") == 11 and "all schemas are valid" in out
+    assert "hw/hw-bom-0.1.0.schema.json" in out
+    assert "hw/hw-sim-0.1.0.schema.json" in out
+    assert "hw/hw-traceability-0.1.0.schema.json" in out
+
+
+def test_scan_covers_nested_directories(tmp_path, capsys):
+    """Issue #33: schemas in subdirectories are found and checked."""
+    nested = tmp_path / "hw"
+    nested.mkdir()
+    good = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://cancestry.dev/schemas/hw/hw-nested-0.1.0.schema.json",
+        "type": "object",
+    }
+    (nested / "hw-nested-0.1.0.schema.json").write_text(
+        json.dumps(good), encoding="utf-8")
+    (nested / "notes.txt").write_text("not a schema", encoding="utf-8")
+    assert ci_check_schemas.main(["check_schemas_valid.py", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "PASS: hw/hw-nested-0.1.0.schema.json" in out
+    assert "notes.txt" not in out
+
+    # A broken nested schema fails the gate and is reported with its
+    # repository-relative path.
+    (nested / "hw-broken-0.1.0.schema.json").write_text(
+        json.dumps({"$schema": "http://json-schema.org/draft-04/schema#"}),
+        encoding="utf-8")
+    assert ci_check_schemas.main(["check_schemas_valid.py", str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert "FAIL: hw/hw-broken-0.1.0.schema.json" in out
 
 
 def test_main_reports_every_problem(tmp_path, capsys):

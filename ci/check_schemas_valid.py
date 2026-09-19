@@ -28,6 +28,11 @@ Per file, the check therefore runs:
    green, so minimal environments keep working; CI installs jsonschema (see
    tests/unit/tools/requirements.txt) so the deep check runs there.
 
+Issue #33 (H-01) extends the scan to subdirectories of the schemas root, so
+the hardware schemas under ``schemas/hw/`` are checked in the same pass; the
+scan is deterministic (sorted directory walk) and reports paths relative to
+the root.
+
 Usage:
     python3 ci/check_schemas_valid.py <schemas-dir>
 
@@ -112,6 +117,19 @@ def jsonschema_available():
         return False
 
 
+def iter_schema_files(root):
+    """Yield every ``*.schema.json`` under ``root`` (deterministic order).
+
+    Issue #33: the hardware schemas live in ``schemas/hw/``; the walk covers
+    the root and all subdirectories so both trees are checked in one pass.
+    """
+    for current, directories, files in os.walk(root):
+        directories.sort()
+        for name in sorted(files):
+            if name.endswith(".schema.json"):
+                yield os.path.join(current, name)
+
+
 def main(argv):
     if len(argv) != 2:
         print("usage: check_schemas_valid.py <schemas-dir>")
@@ -127,10 +145,8 @@ def main(argv):
               "validation is not run (SW-FR-TOOL-008)")
 
     failures = 0
-    for name in sorted(os.listdir(root)):
-        if not name.endswith(".schema.json"):
-            continue
-        path = os.path.join(root, name)
+    for path in iter_schema_files(root):
+        name = os.path.relpath(path, root)
         problems = check_file(path)
         if problems:
             failures += 1
