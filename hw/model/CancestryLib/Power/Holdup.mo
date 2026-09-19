@@ -59,8 +59,8 @@ model Holdup
   parameter Real t_remove(unit = "s") = 0.1
     "Removal duration from BOR to 0 V (HW-SF-002 (iii), worst case 100 ms)";
 
-  Real v(fixed = true, start = V0, unit = "V")
-    "VBAT node voltage (retention domain)";
+  Real v(start = V0, unit = "V")
+    "VBAT node voltage (algebraic retention-domain variable)";
   Real vC(start = V0, unit = "V")
     "Ideal capacitor voltage (internal to the ESR branch)";
   Real iLoad(unit = "A") "Retention-domain load current (MCU + leakage)";
@@ -83,10 +83,14 @@ equation
   iLoad = I_mcu + I_leak;
 
   // Node equation: capacitor branch (ideal cap in series with ESR),
-  // load sink, and the ideal-diode charge path.
+  // load sink, and the ideal-diode charge path. Resolve the diode current
+  // explicitly so iCh does not form an algebraic loop through v:
+  //   iCh = (vin - (vC - ESR*iLoad))/(R_path + ESR), when forward biased.
   v = vC - ESR*(iLoad - iCh);
   der(vC) = (iCh - iLoad)/C;
-  iCh = if vin > v then (vin - v)/R_path else 0.0;
+  iCh = if vin > (vC - ESR*iLoad) then
+          (vin - (vC - ESR*iLoad))/(R_path + ESR)
+        else 0.0;
 annotation (
   Documentation(info = "<html>
 <h4>Scenario</h4>

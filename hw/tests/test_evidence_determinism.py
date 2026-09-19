@@ -34,11 +34,14 @@ EXPECTED_EVIDENCE = {
         "(ii) brownout to BOR level 3 (2.8 V) for 50 ms, then sub-event "
         "(iii) removal to 0 V for 100 ms, worst-case durations. VBAT(t) "
         "asserted within the sim-case tolerance; retention floor 1.65 V "
-        "held across the event."
+        "held across the event. The 0.001 V tolerance is provisional pending "
+        "H-02 vendor selection and ESR/R_path sensitivity rerun."
     ),
     "not_covered": [
         "HW-SF-002 sub-event (i) IWDG reset: firmware/reset-domain behavior, "
         "T2 virtual bench (H-02/H-03)",
+        "Charge-path turn-on and recharging dynamics: OR-001 is valid only "
+        "with iCh=0; a future H-02 oracle covers this behavior",
         "T4 physical correlation (real brownout shapes, golden measurement): "
         "bench-pending per HwRS section 5 seed list (oracle absence)",
     ],

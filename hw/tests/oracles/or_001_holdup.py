@@ -21,8 +21,10 @@ and follows the energy-balance ramp
 
 OR-001 takes ``esr`` explicitly so the oracle and model share the same
 initial condition; omitting it retains the idealized ESR-free behavior
-(``esr=0``) for callers that do not model the series drop. The hold-up
-margin is the time to the floor voltage,
+(``esr=0``) for callers that do not model the series drop. This oracle is
+valid only while the charge path is off (``iCh=0``), as in ``holdup_001``;
+charge-path turn-on and recharging dynamics require a future H-02 oracle.
+The hold-up margin is the time to the floor voltage,
 
     t_floor(v_floor) = C * (v0_effective - v_floor) / I,
 
