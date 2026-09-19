@@ -1,0 +1,3 @@
+requirement_id,method,capella_element_id,credibility_level,oracle_id,required_cl,status,evidence,evidence_sha256
+HW-SF-002,sim,CAP_PENDING,CL2,OR-001,CL3,"passing(sim,CL2,provisional)",hw/tests/evidence/holdup_001.json,sha256:f107d8f0583a7532e945a7ce71fc004e1c0820505c75dd5c6fc39bfb6b8223c4
+HW-SF-002,bench,CAP_PENDING,CL0,,CL3,bench-pending,,

@@ -42,6 +42,20 @@
 
 5. **Determinism.** Digest-pinned toolchain images, fixed seeds, hashed
    traces. Evidence format mirrors `docs/qa/hil-fault-injection-report.md`.
+   The digest re-verification step requires the docker buildx plugin, which is pre-installed on ubuntu-latest runners.
 
 6. **Fail-closed hardware.** Safe state must exist without firmware
-   (HW-SF-
+   (HW-SF-001): the passive fail-safe topology — reset, supervisor and
+   fail-safe latch paths — is a requirement, not an implementation detail.
+   Any change touching those paths is safety-relevant (HW-PLAN §11.1) and
+   requires Human Reviewer sign-off, not just an agent merge.
+
+---
+
+## Change Log
+
+| Version | Date | Change |
+|---|---|---|
+| 1.1.0 | 2026-09-19 | QA findings HwA-F1..F4:<br>• Rule 1: HwRS IDs only.<br>• Rule 2: `hw/bom/datasheets/` extracts.<br>• Rule 3: Oracle registry CSV source of truth.<br>• Rule 4: `provisional` and `fully-verified(CL3)` statuses.<br>• Rule 10: ECAD gate named to H-Phase 3 start. |
+| 1.0.0 | — | Initial hardware agent policy (approved with HW-PLAN v1.0.0). |
+

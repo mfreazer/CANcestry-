@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cancestry.dev/schemas/hw/hw-sim-0.1.0.schema.json",
+  "title": "CANcestry hardware simulation case (v0.1.0)",
+  "description": "Schema for a hardware simulation case (issue #33, H-01; HwAGENTS.md rule 3 and rule 5, virtual-bench-plan §6). A sim case declares, before the model is simulated: the requirement under test, the Modelica model, the parameter set (which hw/tests/test_power_sim.py cross-checks against the schema-validated BOM extract under hw/bom/), the acceptance tolerance, the oracle that must witness the result (rule 3: no oracle ID, no pass) and the fixed seeds. Determinism is mandatory (HwAGENTS.md rule 5): a sim case with no stochastic content declares an empty seed list; seeds must be integers when present.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "case_id",
+    "requirement_id",
+    "scenario",
+    "model",
+    "parameters",
+    "tolerances",
+    "oracle_id",
+    "seeds",
+    "solver"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0"
+    },
+    "case_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*\\d{3}$",
+      "description": "Stable case identifier; the evidence artifact is hw/tests/evidence/<case_id>.json."
+    },
+    "requirement_id": {
+      "type": "string",
+      "pattern": "^HW-(?:SF|FR|NF)-\\d{3}$"
+    },
+    "scenario": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable statement of the scenario, including which sub-events of the requirement it covers and which it does not."
+    },
+    "not_covered": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Sub-events or aspects of the requirement this case does NOT cover (honest ledger, HwAGENTS.md rule 4)."
+    },
+    "model": {
+      "type": "string",
+      "pattern": "^CancestryLib[.A-Za-z0-9_.]+$",
+      "description": "Qualified Modelica class name inside hw/model/CancestryLib/."
+    },
+    "parameters": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "number"
+      },
+      "description": "Model parameters for this case; every value must match the cited BOM extract (checked by hw/tests/test_power_sim.py)."
+    },
+    "tolerances": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "description": "Acceptance tolerances declared by the case (e.g. vb_max_abs_delta_v)."
+    },
+    "oracle_id": {
+      "type": "string",
+      "pattern": "^OR-\\d{3}[a-z]?$",
+      "description": "Oracle from hw/tests/oracles/registry.csv that must witness the result (HW-PLAN §10.2)."
+    },
+    "seeds": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      },
+      "description": "Fixed random seeds. Empty when the case has no stochastic content (determinism, HwAGENTS.md rule 5)."
+    },
+    "solver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "step_s",
+        "stop_s"
+      ],
+      "properties": {
+        "step_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "stop_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "description": "Fixed sampling step and stop time of the recorded trace."
+    }
+  }
+}

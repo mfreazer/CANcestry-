@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cancestry.dev/schemas/hw/hw-bom-0.1.0.schema.json",
+  "title": "CANcestry hardware BOM / datasheet parameter extract (v0.1.0)",
+  "description": "Hardware tree schema (issue #33, H-01; HwAGENTS.md rule 2, HW-PLAN §7/§9). One of two document kinds, both schema-validated: (1) kind=bom: the BOM extract under hw/bom/ - one entry per part candidate with the mandatory fields part number, manufacturer, AEC-Q status, lifecycle, FIT source citation, datasheet_ref and cited parameters; (2) kind=datasheet_extract: a parameter extract under hw/bom/datasheets/ citing manufacturer, document ID and retrieval date. Every parameter carries a source discriminator: hwers (value fixed by the HwRS derivation), datasheet (value from the cited document) or budget (engineering budget pending BOM selection - never a silent value). Numbers without an extract are defects (HwAGENTS.md rule 2).",
+  "oneOf": [
+    { "$ref": "#/$defs/bom" },
+    { "$ref": "#/$defs/datasheet_extract" }
+  ],
+  "$defs": {
+    "datasheet_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manufacturer",
+        "document_id",
+        "retrieval_date"
+      ],
+      "properties": {
+        "manufacturer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "document_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Manufacturer document identifier (e.g. datasheet number and table), or the repository record when the value is fixed by the HwRS (e.g. 'HwRS.md HW-FR-009, v0.2.0')."
+        },
+        "url": {
+          "type": "string"
+        },
+        "extract": {
+          "type": "string",
+          "description": "Repository-relative path of the schema-validated parameter extract under hw/bom/datasheets/ that carries the cited values."
+        },
+        "retrieval_date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        }
+      }
+    },
+    "fit_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "citation"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "tbd",
+            "cited"
+          ]
+        },
+        "citation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "For status=cited: the FIT database entry and its source. For status=tbd: the explicit reason and where the data will be curated (hw/bom/fit-database.csv, H-02)."
+        },
+        "rate_per_1e9_hours": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "parameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "value",
+        "unit",
+        "condition",
+        "source",
+        "citation"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+        },
+        "value": {
+          "type": "number"
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Operating condition and whether the value is a requirement bound, typical value or budget."
+        },
+        "source": {
+          "enum": [
+            "hwers",
+            "datasheet",
+            "budget"
+          ]
+        },
+        "citation_type": {
+          "enum": [
+            "datasheet",
+            "budget"
+          ],
+          "description": "Whether a provisional parameter is grounded in a vendor datasheet or an engineering budget. Requirement-bound HwRS values use source=hwers and may omit this field."
+        },
+        "citation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "HwRS requirement + HwRS version for source=hwers; document + table for source=datasheet; rationale + follow-up for source=budget."
+        }
+      }
+    },
+    "bom": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schema_version",
+        "baseline",
+        "parts"
+      ],
+      "properties": {
+        "kind": {
+          "const": "bom"
+        },
+        "schema_version": {
+          "const": "0.1.0"
+        },
+        "baseline": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What this extract represents (H-01: candidate parameter baseline, no vendor parts selected yet)."
+        },
+        "parts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "part_id",
+              "part_number",
+              "manufacturer",
+              "description",
+              "category",
+              "aec_q_status",
+              "lifecycle",
+              "fit_source",
+              "datasheet_ref",
+              "parameters"
+            ],
+            "properties": {
+              "part_id": {
+                "type": "string",
+                "pattern": "^PRT-\\d{3}$"
+              },
+              "part_number": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Vendor part number, or an explicit internal specification identifier when the vendor part is selected in a later phase."
+              },
+              "manufacturer": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1
+              },
+              "category": {
+                "enum": [
+                  "mcu",
+                  "capacitor",
+                  "resistor",
+                  "inductor",
+                  "diode",
+                  "regulator",
+                  "transceiver",
+                  "watchdog",
+                  "connector",
+                  "crystal",
+                  "passive",
+                  "other"
+                ]
+              },
+              "aec_q_status": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Qualification status (e.g. 'AEC-Q100 grade 0' or the explicit requirement pending selection per HW-NF-004)."
+              },
+              "lifecycle": {
+                "enum": [
+                  "active",
+                  "last-time-buy",
+                  "not-recommended",
+                  "obsolete",
+                  "candidate"
+                ]
+              },
+              "fit_source": {
+                "$ref": "#/$defs/fit_source"
+              },
+              "datasheet_ref": {
+                "$ref": "#/$defs/datasheet_ref"
+              },
+              "parameters": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "#/$defs/parameter"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "datasheet_extract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schema_version",
+        "source",
+        "entries"
+      ],
+      "properties": {
+        "kind": {
+          "const": "datasheet_extract"
+        },
+        "schema_version": {
+          "const": "0.1.0"
+        },
+        "source": {
+          "$ref": "#/$defs/datasheet_ref"
+        },
+        "note": {
+          "type": "string"
+        },
+        "entries": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/parameter"
+          }
+        }
+      }
+    }
+  }
+}

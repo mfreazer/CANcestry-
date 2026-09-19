@@ -1,0 +1,45 @@
+{
+  "kind": "datasheet_extract",
+  "schema_version": "0.1.0",
+  "source": {
+    "manufacturer": "STMicroelectronics",
+    "document_id": "DS12787, STM32G474 datasheet (VBAT/backup-domain supply; BOR levels)",
+    "url": "https://www.st.com/resource/en/datasheet/stm32g474rc.pdf",
+    "retrieval_date": "2026-09-19"
+  },
+  "note": "Values as recorded in the HwRS v0.2.0 derivations (HwAGENTS.md rule 2): the HwRS is the normative repository record; the exact datasheet table and page are re-verified against DS12787 during H-02 BOM curation.",
+  "entries": [
+    {
+      "name": "I_VBAT_bound",
+      "value": 1.2e-05,
+      "unit": "A",
+      "condition": "Worst-case retention-domain (VBAT) load bound = 10 x 1.2 uA typical MCU VBAT/backup-domain current, at VBAT minimum operating voltage",
+      "source": "hwers",
+      "citation": "HwRS.md HW-FR-009 (v0.2.0): 'I = 12 uA (10x margin on 1.2 uA)' derived from the STM32G4 RTC VBAT current table (typ. 1.2 uA)"
+    },
+    {
+      "name": "V_VBAT_min",
+      "value": 1.65,
+      "unit": "V",
+      "condition": "Retention floor for the VBAT domain at worst case (10% above the 1.55 V datasheet minimum VBAT operating voltage)",
+      "source": "hwers",
+      "citation": "HwRS.md HW-FR-009 (v0.2.0): dv = 3.3 V - 1.65 V = 1.65 V at the VBAT minimum operating voltage (1.65 V typical); STM32G474 datasheet VBAT range 1.55 to 3.6 V"
+    },
+    {
+      "name": "V_BOR3",
+      "value": 2.8,
+      "unit": "V",
+      "condition": "BOR level 3 threshold (falling) configured in option bytes; brownout floor of HW-SF-002 sub-event (ii)",
+      "source": "hwers",
+      "citation": "HwRS.md HW-SF-002 (v0.2.0): 'main-rail brownout to BOR level 3 (2.8 V)'; STM32G4 BOR level table (oracle OR-008)"
+    },
+    {
+      "name": "V_main_nominal",
+      "value": 3.3,
+      "unit": "V",
+      "condition": "Nominal 3V3 main rail / VBAT charge level at nominal 12 V vehicle supply (VBAT charged through the charge path while the rail is present)",
+      "source": "hwers",
+      "citation": "HwRS.md HW-FR-009 (v0.2.0) derivation uses 3.3 V nominal; HW-PLAN C3 board rails"
+    }
+  ]
+}

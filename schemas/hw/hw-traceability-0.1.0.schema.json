@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cancestry.dev/schemas/hw/hw-traceability-0.1.0.schema.json",
+  "title": "CANcestry hardware traceability row (v0.1.0)",
+  "description": "Schema for one row of the hardware traceability record hw/tests/traceability.csv (issue #33, H-01; HW-PLAN §10.8, HwAGENTS.md rule 4). The record is a one-row-per-(requirement, method) ledger: the extension columns capella_element_id, credibility_level and oracle_id ride on top of the requirement/method/status core. capella_element_id carries a non-empty Capella element identifier or the explicit H-01 placeholder CAP_PENDING/LA_PENDING until the Capella model exists (H-02, HW-PLAN G2). The status vocabulary is exactly the honest-ledger set from HwAGENTS.md rule 4; passing rows additionally require a registry-listed oracle_id, credibility >= required CL (a T1/T2 safety row may close provisionally below the required CL, pending T4 correlation, per the HwRS closure policy), and an evidence artifact hash. required_cl is the requirement's credibility level parsed from HwRS.md (ci/check_hw_traceability.py fails closed if the HwRS table format changes).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "requirement_id",
+    "method",
+    "capella_element_id",
+    "credibility_level",
+    "oracle_id",
+    "required_cl",
+    "status",
+    "evidence",
+    "evidence_sha256"
+  ],
+  "properties": {
+    "requirement_id": {
+      "type": "string",
+      "pattern": "^HW-(?:SF|FR|NF)-\\d{3}$"
+    },
+    "method": {
+      "enum": [
+        "analysis",
+        "sim",
+        "t2",
+        "bench"
+      ],
+      "description": "Verification method: analysis (T0), sim (T1 block simulation), t2 (T2 virtual bench), bench (T4 physical DVT/HIL)."
+    },
+    "capella_element_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Capella element linking this row to the MBSE model; CAP_PENDING or LA_PENDING is the explicit H-01 placeholder until the model exists (H-02)."
+    },
+    "credibility_level": {
+      "enum": [
+        "CL0",
+        "CL1",
+        "CL2",
+        "CL3"
+      ],
+      "description": "Credibility achieved by the evidence of this row (virtual-bench-plan §5). CL0 for rows without evidence yet."
+    },
+    "oracle_id": {
+      "type": "string",
+      "pattern": "^$|^OR-\\d{3}[a-z]?$",
+      "description": "Oracle from hw/tests/oracles/registry.csv; mandatory for every passing row (HW-PLAN §10.2), empty otherwise."
+    },
+    "required_cl": {
+      "enum": [
+        "CL1",
+        "CL2",
+        "CL3"
+      ],
+      "description": "Credibility required by the HwRS 'Req. CL' column for this requirement; cross-checked by ci/check_hw_traceability.py against HwRS.md."
+    },
+    "status": {
+      "anyOf": [
+        {
+          "enum": [
+            "draft",
+            "analysis-pending",
+            "sim-pending",
+            "bench-pending",
+            "passing(analysis)",
+            "fully-verified(CL3)"
+          ]
+        },
+        {
+          "pattern": "^passing\\(sim,CL[123](,provisional)?\\)$"
+        }
+      ],
+      "description": "Honest-ledger status (HwAGENTS.md rule 4). passing(sim,CLn,provisional) is the T1/T2 closure of a safety row whose required CL is higher, pending T4 bench correlation (HwRS closure policy)."
+    },
+    "evidence": {
+      "type": "string",
+      "description": "Repository-relative path of the evidence JSON (hw/tests/evidence/<case_id>.json); mandatory for passing rows, empty otherwise."
+    },
+    "evidence_sha256": {
+      "type": "string",
+      "pattern": "^$|^sha256:[0-9a-f]{64}$",
+      "description": "sha256 of the evidence artifact, recomputed by ci/check_hw_traceability.py; mandatory for passing rows, empty otherwise."
+    },
+    "validation_gap": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional oracle validation gap metadata; the authoritative value is carried in the oracle registry."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "pattern": "^passing"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "oracle_id"
+        ],
+        "properties": {
+          "oracle_id": {
+            "pattern": "^OR-\\d{3}[a-z]?$"
+          }
+        }
+      }
+    }
+  ]
+}
