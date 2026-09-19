@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xmi:XMI xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:viewpoint="http://www.eclipse.org/sirius/1.1.0">
+  <viewpoint:DAnalysis xmi:id="_aird_root" version="14.5.0.202102121000">
+    <semanticResources>cancestry.capella</semanticResources>
+    <semanticResources>cancestry.afm</semanticResources>
+  </viewpoint:DAnalysis>
+</xmi:XMI>

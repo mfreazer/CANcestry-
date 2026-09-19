@@ -1,0 +1,9 @@
+la_component,modelica_block,status,rationale
+RetentionDomain,CancestryLib.Power.Holdup,simulated,"Simulated by CancestryLib.Power.Holdup (retention-domain energy balance and discharge physics)"
+PowerSupervisor,CancestryLib.Power.PulseISO7637_2,simulated,"Simulated by CancestryLib.Power.PulseISO7637_2 (transient supply pulse generation)"
+SafetyMonitor,not_simulated,not_simulated,"discrete/functional behavior; reset and loss-of-control fault injection covered at Renode T2 in H-04"
+FailSafeLatch,not_simulated,not_simulated,"discrete/functional behavior; fail-safe output state logic covered at Renode T2 in H-04"
+CanPhy1,not_simulated,not_simulated,"physical layer transceivers not simulated at T1; ISO 11898-2 bit-timing and bus physical layer models land at H-03"
+CanPhy2,not_simulated,not_simulated,"physical layer transceivers not simulated at T1; ISO 11898-2 bit-timing and bus physical layer models land at H-03"
+CanPhy3,not_simulated,not_simulated,"physical layer transceivers not simulated at T1; ISO 11898-2 bit-timing and bus physical layer models land at H-03"
+TestInterface,not_simulated,not_simulated,"test access point and debugging interfaces; no plant physics required"

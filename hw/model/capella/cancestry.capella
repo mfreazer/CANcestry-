@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<org.polarsys.capella.core.data.capellamodeller:Project
+    xmi:version="2.0"
+    xmlns:xmi="http://www.omg.org/XMI"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:org.polarsys.capella.core.data.capellamodeller="http://www.polarsys.org/capella/core/modeller/5.0.0"
+    xmlns:org.polarsys.capella.core.data.oa="http://www.polarsys.org/capella/core/oa/5.0.0"
+    xmlns:org.polarsys.capella.core.data.ctx="http://www.polarsys.org/capella/core/ctx/5.0.0"
+    xmlns:org.polarsys.capella.core.data.la="http://www.polarsys.org/capella/core/la/5.0.0"
+    xmlns:org.polarsys.capella.core.data.pa="http://www.polarsys.org/capella/core/pa/5.0.0"
+    xmlns:org.polarsys.capella.core.data.capellacore="http://www.polarsys.org/capella/core/core/5.0.0"
+    xmlns:org.polarsys.capella.core.data.cs="http://www.polarsys.org/capella/core/cs/5.0.0"
+    xmlns:requirements="http://www.polarsys.org/kitalpha/requirements"
+    xmlns:CapellaRequirements="http://www.polarsys.org/capella/requirements"
+    id="project-cancestry" name="CANcestry">
+  <ownedModelRoots xsi:type="org.polarsys.capella.core.data.capellamodeller:SystemEngineering" id="syseng-cancestry" name="CANcestry">
+
+    <ownedArchitectures xsi:type="org.polarsys.capella.core.data.oa:OperationalAnalysis" id="oa-layer" name="Operational Analysis">
+      <ownedEntityPkg xsi:type="org.polarsys.capella.core.data.oa:EntityPkg" id="oa-entity-pkg" name="Operational Entities">
+        <ownedEntities xsi:type="org.polarsys.capella.core.data.oa:Entity" id="oa-actor-vehicle" name="VehicleActor" actor="true"/>
+        <ownedEntities xsi:type="org.polarsys.capella.core.data.oa:Entity" id="oa-actor-bench" name="BenchActor" actor="true"/>
+        <ownedEntities xsi:type="org.polarsys.capella.core.data.oa:Entity" id="oa-actor-diagnostic" name="DiagnosticActor" actor="true"/>
+        <ownedEntities xsi:type="org.polarsys.capella.core.data.oa:Entity" id="oa-entity-context" name="VehicleContext"/>
+      </ownedEntityPkg>
+      <ownedOperationalCapabilityPkg xsi:type="org.polarsys.capella.core.data.oa:OperationalCapabilityPkg" id="oa-cap-pkg" name="Operational Capabilities">
+        <ownedOperationalCapabilities xsi:type="org.polarsys.capella.core.data.oa:OperationalCapability" id="oa-mode-sleep" name="SleepMode"/>
+        <ownedOperationalCapabilities xsi:type="org.polarsys.capella.core.data.oa:OperationalCapability" id="oa-mode-active" name="ActiveMode"/>
+        <ownedOperationalCapabilities xsi:type="org.polarsys.capella.core.data.oa:OperationalCapability" id="oa-mode-safe" name="SafeMode"/>
+      </ownedOperationalCapabilityPkg>
+    </ownedArchitectures>
+
+    <ownedArchitectures xsi:type="org.polarsys.capella.core.data.ctx:SystemAnalysis" id="sa-layer" name="System Analysis">
+      <ownedFunctionPkg xsi:type="org.polarsys.capella.core.data.ctx:SystemFunctionPkg" id="sa-func-pkg" name="System Functions">
+        <ownedSystemFunctions xsi:type="org.polarsys.capella.core.data.ctx:SystemFunction" id="sa-root-func" name="Root System Function">
+          <ownedFunctions xsi:type="org.polarsys.capella.core.data.ctx:SystemFunction" id="sa-func-routing" name="GatewayRoutingFunction"/>
+          <ownedFunctions xsi:type="org.polarsys.capella.core.data.ctx:SystemFunction" id="sa-func-monitoring" name="SafetyMonitoringFunction"/>
+          <ownedFunctions xsi:type="org.polarsys.capella.core.data.ctx:SystemFunction" id="sa-func-retention" name="RetentionFunction"/>
+        </ownedSystemFunctions>
+      </ownedFunctionPkg>
+      <ownedSystemComponentPkg xsi:type="org.polarsys.capella.core.data.ctx:SystemComponentPkg" id="sa-comp-pkg" name="Structure">
+        <ownedSystemComponents xsi:type="org.polarsys.capella.core.data.ctx:SystemComponent" id="sa-sys-context" name="SystemContext"/>
+      </ownedSystemComponentPkg>
+    </ownedArchitectures>
+
+    <ownedArchitectures xsi:type="org.polarsys.capella.core.data.la:LogicalArchitecture" id="la-layer" name="Logical Architecture">
+      <ownedExtensions xsi:type="CapellaRequirements:CapellaModule" id="req-mod-hwrs" name="HwRS Requirements">
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_sf_001" name="HW-SF-001 Passive Fail-Safe Topology" reqId="HW-SF-001" identifier="HW-SF-001" hwrs_id="HW-SF-001" text="Passive Fail-Safe Topology">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_sf_001" value="HW-SF-001"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_sf_002" name="HW-SF-002 Retention Domain Backup Preserved" reqId="HW-SF-002" identifier="HW-SF-002" hwrs_id="HW-SF-002" text="Retention Domain Backup Preserved">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_sf_002" value="HW-SF-002"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_sf_003" name="HW-SF-003 Primary External Watchdog + Secondary IWDG" reqId="HW-SF-003" identifier="HW-SF-003" hwrs_id="HW-SF-003" text="Primary External Watchdog + Secondary IWDG">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_sf_003" value="HW-SF-003"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_sf_004" name="HW-SF-004 Power Loss Orderly Shutdown" reqId="HW-SF-004" identifier="HW-SF-004" hwrs_id="HW-SF-004" text="Power Loss Orderly Shutdown">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_sf_004" value="HW-SF-004"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_sf_005" name="HW-SF-005 Single Fault Protection for Reset/Supervisor/Latch" reqId="HW-SF-005" identifier="HW-SF-005" hwrs_id="HW-SF-005" text="Single Fault Protection for Reset/Supervisor/Latch">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_sf_005" value="HW-SF-005"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_001" name="HW-FR-001 MCU Peripherals and Memory Parity" reqId="HW-FR-001" identifier="HW-FR-001" hwrs_id="HW-FR-001" text="MCU Peripherals and Memory Parity">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_001" value="HW-FR-001"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_002" name="HW-FR-002 Three CAN Interfaces" reqId="HW-FR-002" identifier="HW-FR-002" hwrs_id="HW-FR-002" text="Three CAN Interfaces">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_002" value="HW-FR-002"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_003" name="HW-FR-003 CAN FD Physical Layer Conformance" reqId="HW-FR-003" identifier="HW-FR-003" hwrs_id="HW-FR-003" text="CAN FD Physical Layer Conformance">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_003" value="HW-FR-003"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_004" name="HW-FR-004 Transient Protection ISO 7637-2/16750-2" reqId="HW-FR-004" identifier="HW-FR-004" hwrs_id="HW-FR-004" text="Transient Protection ISO 7637-2/16750-2">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_004" value="HW-FR-004"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_005" name="HW-FR-005 Sleep Mode Low Power Drain" reqId="HW-FR-005" identifier="HW-FR-005" hwrs_id="HW-FR-005" text="Sleep Mode Low Power Drain">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_005" value="HW-FR-005"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_006" name="HW-FR-006 Flash and RAM Allocation Margins" reqId="HW-FR-006" identifier="HW-FR-006" hwrs_id="HW-FR-006" text="Flash and RAM Allocation Margins">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_006" value="HW-FR-006"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_007" name="HW-FR-007 Main Oscillator Accuracy" reqId="HW-FR-007" identifier="HW-FR-007" hwrs_id="HW-FR-007" text="Main Oscillator Accuracy">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_007" value="HW-FR-007"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_008" name="HW-FR-008 Testability Points and Shunts" reqId="HW-FR-008" identifier="HW-FR-008" hwrs_id="HW-FR-008" text="Testability Points and Shunts">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_008" value="HW-FR-008"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_009" name="HW-FR-009 VBAT Hold-Up Capacitor Bounds" reqId="HW-FR-009" identifier="HW-FR-009" hwrs_id="HW-FR-009" text="VBAT Hold-Up Capacitor Bounds">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_009" value="HW-FR-009"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_010" name="HW-FR-010 External Window Watchdog IC Parameters" reqId="HW-FR-010" identifier="HW-FR-010" hwrs_id="HW-FR-010" text="External Window Watchdog IC Parameters">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_010" value="HW-FR-010"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_nf_001" name="HW-NF-001 Operating and Storage Temperature Range" reqId="HW-NF-001" identifier="HW-NF-001" hwrs_id="HW-NF-001" text="Operating and Storage Temperature Range">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_nf_001" value="HW-NF-001"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_nf_002" name="HW-NF-002 Junction Temperature Derating" reqId="HW-NF-002" identifier="HW-NF-002" hwrs_id="HW-NF-002" text="Junction Temperature Derating">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_nf_002" value="HW-NF-002"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_nf_003" name="HW-NF-003 Electrical Stress Derating" reqId="HW-NF-003" identifier="HW-NF-003" hwrs_id="HW-NF-003" text="Electrical Stress Derating">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_nf_003" value="HW-NF-003"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_nf_004" name="HW-NF-004 AEC-Q Qualification and Lifecycle" reqId="HW-NF-004" identifier="HW-NF-004" hwrs_id="HW-NF-004" text="AEC-Q Qualification and Lifecycle">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_nf_004" value="HW-NF-004"/>
+        </ownedRequirements>
+        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_nf_005" name="HW-NF-005 Active Mode Power Consumption Envelope" reqId="HW-NF-005" identifier="HW-NF-005" hwrs_id="HW-NF-005" text="Active Mode Power Consumption Envelope">
+          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_nf_005" value="HW-NF-005"/>
+        </ownedRequirements>
+      </ownedExtensions>
+      <ownedLogicalFunctionPkg xsi:type="org.polarsys.capella.core.data.la:LogicalFunctionPkg" id="la-func-pkg" name="Logical Functions">
+        <ownedLogicalFunctions xsi:type="org.polarsys.capella.core.data.la:LogicalFunction" id="la-root-func" name="Root Logical Function"/>
+      </ownedLogicalFunctionPkg>
+      <ownedLogicalComponentPkg xsi:type="org.polarsys.capella.core.data.la:LogicalComponentPkg" id="la-comp-pkg" name="Structure">
+        <ownedLogicalComponents xsi:type="org.polarsys.capella.core.data.la:LogicalComponent" id="la-root-sys" name="Logical System">
+          <ownedLogicalComponents xsi:type="org.polarsys.capella.core.data.la:LogicalComponent" id="la-comp-powersupervisor" name="PowerSupervisor"/>
+          <ownedLogicalComponents xsi:type="org.polarsys.capella.core.data.la:LogicalComponent" id="la-comp-canphy1" name="CanPhy1"/>
+          <ownedLogicalComponents xsi:type="org.polarsys.capella.core.data.la:LogicalComponent" id="la-comp-canphy2" name="CanPhy2"/>
+          <ownedLogicalComponents xsi:type="org.polarsys.capella.core.data.la:LogicalComponent" id="la-comp-canphy3" name="CanPhy3"/>
+          <ownedLogicalComponents xsi:type="org.polarsys.capella.core.data.la:LogicalComponent" id="la-comp-safetymonitor" name="SafetyMonitor"/>
+          <ownedLogicalComponents xsi:type="org.polarsys.capella.core.data.la:LogicalComponent" id="la-comp-failsafelatch" name="FailSafeLatch"/>
+          <ownedLogicalComponents xsi:type="org.polarsys.capella.core.data.la:LogicalComponent" id="la-comp-retentiondomain" name="RetentionDomain"/>
+          <ownedLogicalComponents xsi:type="org.polarsys.capella.core.data.la:LogicalComponent" id="la-comp-testinterface" name="TestInterface"/>
+        </ownedLogicalComponents>
+      </ownedLogicalComponentPkg>
+    </ownedArchitectures>
+
+    <ownedArchitectures xsi:type="org.polarsys.capella.core.data.pa:PhysicalArchitecture" id="pa-layer" name="Physical Architecture">
+      <ownedPhysicalFunctionPkg xsi:type="org.polarsys.capella.core.data.pa:PhysicalFunctionPkg" id="pa-func-pkg" name="Physical Functions">
+        <ownedPhysicalFunctions xsi:type="org.polarsys.capella.core.data.pa:PhysicalFunction" id="pa-root-func" name="Root Physical Function"/>
+      </ownedPhysicalFunctionPkg>
+      <ownedPhysicalComponentPkg xsi:type="org.polarsys.capella.core.data.pa:PhysicalComponentPkg" id="pa-comp-pkg" name="Structure">
+        <ownedPhysicalComponents xsi:type="org.polarsys.capella.core.data.pa:PhysicalComponent" id="pa-root-sys" name="Physical System">
+          <ownedPhysicalComponents xsi:type="org.polarsys.capella.core.data.pa:PhysicalComponent" id="pa-comp-mcu" name="STM32G474_MCU">
+            <ownedComponentRealizations xsi:type="org.polarsys.capella.core.data.cs:ComponentRealization" id="pa-real-mcu" targetElement="#la-comp-testinterface"/>
+          </ownedPhysicalComponents>
+          <ownedPhysicalComponents xsi:type="org.polarsys.capella.core.data.pa:PhysicalComponent" id="pa-comp-canxcvr1" name="CAN_Transceiver_1">
+            <ownedComponentRealizations xsi:type="org.polarsys.capella.core.data.cs:ComponentRealization" id="pa-real-canxcvr1" targetElement="#la-comp-canphy1"/>
+          </ownedPhysicalComponents>
+          <ownedPhysicalComponents xsi:type="org.polarsys.capella.core.data.pa:PhysicalComponent" id="pa-comp-canxcvr2" name="CAN_Transceiver_2">
+            <ownedComponentRealizations xsi:type="org.polarsys.capella.core.data.cs:ComponentRealization" id="pa-real-canxcvr2" targetElement="#la-comp-canphy2"/>
+          </ownedPhysicalComponents>
+          <ownedPhysicalComponents xsi:type="org.polarsys.capella.core.data.pa:PhysicalComponent" id="pa-comp-canxcvr3" name="CAN_Transceiver_3">
+            <ownedComponentRealizations xsi:type="org.polarsys.capella.core.data.cs:ComponentRealization" id="pa-real-canxcvr3" targetElement="#la-comp-canphy3"/>
+          </ownedPhysicalComponents>
+          <ownedPhysicalComponents xsi:type="org.polarsys.capella.core.data.pa:PhysicalComponent" id="pa-comp-supervisor" name="Power_Supervisor_IC">
+            <ownedComponentRealizations xsi:type="org.polarsys.capella.core.data.cs:ComponentRealization" id="pa-real-supervisor" targetElement="#la-comp-powersupervisor"/>
+          </ownedPhysicalComponents>
+          <ownedPhysicalComponents xsi:type="org.polarsys.capella.core.data.pa:PhysicalComponent" id="pa-comp-latch" name="FailSafe_Latch_Circuit">
+            <ownedComponentRealizations xsi:type="org.polarsys.capella.core.data.cs:ComponentRealization" id="pa-real-latch" targetElement="#la-comp-failsafelatch"/>
+          </ownedPhysicalComponents>
+          <ownedPhysicalComponents xsi:type="org.polarsys.capella.core.data.pa:PhysicalComponent" id="pa-comp-retention" name="Retention_Storage">
+            <ownedComponentRealizations xsi:type="org.polarsys.capella.core.data.cs:ComponentRealization" id="pa-real-retention" targetElement="#la-comp-retentiondomain"/>
+          </ownedPhysicalComponents>
+          <ownedPhysicalComponents xsi:type="org.polarsys.capella.core.data.pa:PhysicalComponent" id="pa-comp-safetymonitor" name="Safety_Monitor_Hardware">
+            <ownedComponentRealizations xsi:type="org.polarsys.capella.core.data.cs:ComponentRealization" id="pa-real-safetymonitor" targetElement="#la-comp-safetymonitor"/>
+          </ownedPhysicalComponents>
+        </ownedPhysicalComponents>
+      </ownedPhysicalComponentPkg>
+    </ownedArchitectures>
+
+  </ownedModelRoots>
+</org.polarsys.capella.core.data.capellamodeller:Project>

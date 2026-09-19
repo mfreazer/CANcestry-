@@ -19,15 +19,19 @@
 ## Hardware baseline (H-Phase 1)
 
 Hardware documents are versioned independently of the software release
-(HW-PLAN §2). The H-Phase 1 baseline committed under issue #33:
+(HW-PLAN §2). The H-Phase 1 baseline committed under issues #33 and #35:
 
-| Document | Version | Status |
+| Document / Artifact | Version | Status |
 |---|---|---|
 | [`docs/hw/HW-PLAN.md`](hw/HW-PLAN.md) | 1.0.0 | Approved — H-Phase 1 plan of record |
-| [`docs/hw/HwRS.md`](hw/HwRS.md) | 0.2.0 | Approved — H-Phase 1 baseline (QA review of requirement text in flight; not modified by H-01) |
-| [`docs/hw/mbse-plan.md`](hw/mbse-plan.md) | 0.2.0 | Approved — Capella model plan (H-03 execution) |
-| [`docs/hw/virtual-bench-plan.md`](hw/virtual-bench-plan.md) | 0.2.0 | Approved — oracle registry and virtual-bench policy |
+| [`docs/hw/HwRS.md`](hw/HwRS.md) | 0.2.0 | Approved — H-Phase 1 baseline (requirement text frozen; requirement changes via QA PRs) |
+| [`docs/hw/mbse-plan.md`](hw/mbse-plan.md) | 0.3.0 | Approved — Capella model seed & Appendix A Trades T-01..T-04 baseline |
+| [`docs/hw/virtual-bench-plan.md`](hw/virtual-bench-plan.md) | 0.3.0 | Approved — oracle registry source of truth (§4) and Model fidelity roadmap (§8.1) |
+| [`docs/hw/tool-qualification.md`](hw/tool-qualification.md) | 0.1.0 | Approved — ISO 26262-8 §13 TCL classification and OR-001/OR-002 evidence |
 | [`HwAGENTS.md`](../HwAGENTS.md) | 1.1.0 | Approved — load-bearing hardware agent policy |
+| [`hw/model/capella/`](../hw/model/capella/) | 0.1.0 | Approved — Arcadia seed model (OA/SA/LA/PA + Capella requirements) |
+| [`hw/model/bridge.csv`](../hw/model/bridge.csv) | 0.1.0 | Approved — Capella LA → CancestryLib Modelica bridge mapping |
+| [`schemas/hw/hw-datasheet-extract-0.1.0.schema.json`](../schemas/hw/hw-datasheet-extract-0.1.0.schema.json) | 0.1.0 | Approved — datasheet parameter extract schema |
 
 These are document baselines, not release candidates: H-Phase 1 has no
 software-release semantics, and the `VERSION`/`CMakeLists.txt` pair above

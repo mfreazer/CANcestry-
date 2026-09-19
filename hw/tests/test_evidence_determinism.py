@@ -136,8 +136,7 @@ def test_evidence_is_byte_for_byte_deterministic():
 
 
 def test_evidence_has_no_time_or_absolute_path_metadata():
-    """HW-EVIDENCE-DETERMINISM-002: metadata stays portable and stable."""
-    raw = EVIDENCE_PATH.read_text(encoding="utf-8")
-    _assert_stable_metadata(raw, json.loads(raw))
-    generated = _regenerate_evidence()
-    _assert_stable_metadata(generated, json.loads(generated))
+    """HW-EVIDENCE-DETERMINISM-002: metadata stays portable and stable across all evidence files."""
+    for path in (REPO_ROOT / "hw" / "tests" / "evidence").glob("*.json"):
+        raw = path.read_text(encoding="utf-8")
+        _assert_stable_metadata(raw, json.loads(raw))

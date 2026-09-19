@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry MBSE Plan |
-| **Version** | 0.2.0 |
+| **Version** | 0.3.0 |
 | **Status** | Approved — H-Phase 1 baseline |
 | **Owner** | System Engineer |
 | **Approver** | QA Lead, Release Manager |
@@ -46,7 +46,7 @@ Capella project under `hw/model/capella/`. Git LFS applied if binary payloads ex
 
 ## 6. Open questions for QA
 
-None outstanding as of v0.2.0. The `hwrs_id` property name is confirmed (QA ruling MBSE-Q).
+None outstanding as of v0.3.0. The `hwrs_id` property name is confirmed (QA ruling MBSE-Q).
 
 ## 7. Change Log
 
@@ -54,3 +54,17 @@ None outstanding as of v0.2.0. The `hwrs_id` property name is confirmed (QA ruli
 |---|---|---|
 | 0.1.0 | 2026-09-19 | Initial draft |
 | 0.2.0 | 2026-09-19 | QA review applied: concurrent edit policy for safety-relevant diagrams added (MBSE-F1); `hwrs_id` property name confirmed and CI check list expanded (MBSE-Q); external watchdog added to LA and PA level descriptions; Git LFS threshold quantified; FMEDA oracle gate referenced. |
+| 0.3.0 | 2026-09-19 | Capella seed & structural gate baseline (issue #35): recorded Trades T-01..T-04 in Appendix A; documented Capella model seed structure under `hw/model/capella/` and bridge specification `hw/model/bridge.csv`. |
+
+---
+
+## Appendix A. Architectural Trade Studies (T-01..T-04)
+
+Per HW-PLAN §6 and HAD §7, open architectural trades are recorded here with owner, decision criterion, and target resolution phase. Trades are recorded, not decided, in H-Phase 1.
+
+| Trade ID | Description | Owner | Decision Criterion | Target Phase | Status |
+|---|---|---|---|---|---|
+| **T-01** | **Third CAN Controller**: On-chip 3rd instance (S32K-class) vs. SPI CAN-FD companion IC. | System Engineer | MCU selection, HAL driver complexity, SPI bandwidth, and BOM cost. | H-Phase 2 | Recorded |
+| **T-02** | **Watchdog Topology**: Internal IWDG only vs. Internal + External window supervisor IC. | System Engineer / QA Lead | ASIL-B single-fault coverage (HW-SF-005), FIT rate budget, and timebase tolerance. | H-Phase 2 | Recorded |
+| **T-03** | **Retention Store**: Supercap populate vs. DNP footprint / ceramic capacitor bank. | System Engineer | Holding retention voltage above $V_{\text{VBAT,min}}$ floor during worst-case loss-of-power event. | H-Phase 2 | Recorded |
+| **T-04** | **Termination Default**: Per-channel termination default state during SSN activation. | System Engineer | Bus topology compliance, stub reflections, and bus loading when node is unpowered. | H-Phase 2 | Recorded |

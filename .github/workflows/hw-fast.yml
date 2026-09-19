@@ -119,13 +119,19 @@ jobs:
 
               echo "== 2. HwRS parser + hardware ledger (unit tests, 95% branch coverage gate)"
               python3 -m coverage run --branch \
-                --include=ci/check_hw_traceability.py \
-                -m pytest tests/unit/tools/test_check_hw_traceability.py -q || {
+                --include=ci/check_hw_traceability.py,ci/check_capella_model.py \
+                -m pytest tests/unit/tools/test_check_hw_traceability.py tests/unit/tools/test_check_capella_model.py -q || {
                 echo "::error::hw-fast gate 2 failed: checker unit tests"
                 exit 1
               }
               python3 -m coverage report --fail-under=95 || {
                 echo "::error::hw-fast gate 2 failed: checker branch coverage below 95%"
+                exit 1
+              }
+
+              echo "== 2.5. Capella seed model structural gates & bridge CSV"
+              python3 ci/check_capella_model.py . || {
+                echo "::error::hw-fast gate 2.5 failed: Capella seed model structural check"
                 exit 1
               }
 
