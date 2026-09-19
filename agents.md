@@ -30,6 +30,22 @@ A task is only complete when:
 4. Documentation (`docs/`) is updated to reflect the change.
 5. A human maintainer has reviewed and approved the PR.
 
+## Scope and hardware policy pointer (added 2026-09-19)
+
+- This policy governs the software trees: `core/`, `platform/`, `tools/`,
+  `tests/`, `schemas/`, `formal/`, and software documents under `docs/`.
+- Hardware trees (`hw/`, `docs/hw/`, `schemas/hw/`, future `hw/ecad/`) are
+  governed by `HwAGENTS.md`.
+- Shared invariants apply to both trees unchanged: requirements-first,
+  schema-is-law, determinism, fail-closed, honest ledger, documented
+  deviations, no self-approval of safety-relevant changes.
+- Rule 1 extension: requirement IDs may be software (`SW-FR-*`, `SYS-SF-*`)
+  or hardware (`HW-SF-*`, `HW-FR-*`, `HW-NF-*`), or an HW-PLAN clause.
+- Traceability extension: `docs/trace/traceability.csv` now carries hardware
+  rows with the columns `capella_element_id, credibility_level, oracle_id`.
+  The oracle rule (HW-PLAN §10.2) applies to every `passing` row of any kind:
+  no oracle ID, no pass.
 ---
 *Last Updated: 2026-09-14*
-*Version: 0.2.1*
+
+*Version: 1.0.1*
