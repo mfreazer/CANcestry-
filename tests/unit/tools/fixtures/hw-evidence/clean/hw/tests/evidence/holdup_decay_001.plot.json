@@ -1,0 +1,174 @@
+{
+  "credibility_level": "CL2",
+  "method": "sim",
+  "oracle_id": "OR-001",
+  "plot_description": "Fixture plot-data for the visual-evidence gate. The view is a fixture, not evidence: the real plot for HW-SF-002 is minted by the H-05 renderer run.",
+  "plot_id": "holdup_decay_001",
+  "plot_title": "HW-SF-002 hold-up decay: model vs OR-001",
+  "plot_version": "0.1.0",
+  "provenance_notes": "Fixture: hashes and series values are generated deterministically; no wall-clock timestamp is present.",
+  "provisional": true,
+  "renderer_tool": "cancestry-render-fixture",
+  "renderer_tool_digest": "sha256:b1208aa109510321e3b853ad4981a39430eb1700d56f425d7461562063fb77ee",
+  "renderer_tool_version": "0.1.0",
+  "schema_version": "0.1.0",
+  "series": [
+    {
+      "description": "FMU trace of CancestryLib.Power.Holdup",
+      "name": "model",
+      "non_color_encoding": {
+        "line_style": "solid",
+        "marker": "circle"
+      },
+      "role": "model",
+      "x": [
+        0.0,
+        0.015,
+        0.03,
+        0.045,
+        0.06,
+        0.075,
+        0.09,
+        0.105,
+        0.12,
+        0.135,
+        0.15
+      ],
+      "x_units": "s",
+      "y": [
+        3.30009966,
+        3.27459966,
+        3.24909966,
+        3.22359966,
+        3.19809966,
+        3.17259966,
+        3.14709966,
+        3.12159966,
+        3.09609966,
+        3.07059966,
+        3.04509966
+      ],
+      "y_units": "V"
+    },
+    {
+      "description": "OR-001 closed form",
+      "name": "oracle",
+      "non_color_encoding": {
+        "line_style": "dashed",
+        "marker": "square"
+      },
+      "role": "oracle",
+      "x": [
+        0.0,
+        0.015,
+        0.03,
+        0.045,
+        0.06,
+        0.075,
+        0.09,
+        0.105,
+        0.12,
+        0.135,
+        0.15
+      ],
+      "x_units": "s",
+      "y": [
+        3.29999966,
+        3.27449966,
+        3.24899966,
+        3.22349966,
+        3.19799966,
+        3.17249966,
+        3.14699966,
+        3.12149966,
+        3.09599966,
+        3.07049966,
+        3.04499966
+      ],
+      "y_units": "V"
+    },
+    {
+      "name": "tol_lower",
+      "non_color_encoding": {
+        "line_style": "dotted",
+        "marker": "none"
+      },
+      "role": "tolerance_lower",
+      "x": [
+        0.0,
+        0.015,
+        0.03,
+        0.045,
+        0.06,
+        0.075,
+        0.09,
+        0.105,
+        0.12,
+        0.135,
+        0.15
+      ],
+      "x_units": "s",
+      "y": [
+        3.29899966,
+        3.27349966,
+        3.24799966,
+        3.22249966,
+        3.19699966,
+        3.17149966,
+        3.14599966,
+        3.12049966,
+        3.09499966,
+        3.06949966,
+        3.04399966
+      ],
+      "y_units": "V"
+    },
+    {
+      "name": "tol_upper",
+      "non_color_encoding": {
+        "line_style": "dotted",
+        "marker": "none"
+      },
+      "role": "tolerance_upper",
+      "x": [
+        0.0,
+        0.015,
+        0.03,
+        0.045,
+        0.06,
+        0.075,
+        0.09,
+        0.105,
+        0.12,
+        0.135,
+        0.15
+      ],
+      "x_units": "s",
+      "y": [
+        3.30099966,
+        3.27549966,
+        3.24999966,
+        3.22449966,
+        3.19899966,
+        3.17349966,
+        3.14799966,
+        3.12249966,
+        3.09699966,
+        3.07149966,
+        3.04599966
+      ],
+      "y_units": "V"
+    }
+  ],
+  "source_evidence_hash": "sha256:05113287759304cd87e6a6112bd6ac230acfda6a0fdb51d92097f263254d68dd",
+  "source_evidence_path": "hw/tests/evidence/holdup_001.json",
+  "source_requirement": "HW-SF-002",
+  "status": "passing",
+  "tolerance_band": {
+    "description": "\u00b11 mV per sample, per OR-001",
+    "hatch": "///",
+    "lower_series": "tol_lower",
+    "units": "V",
+    "upper_series": "tol_upper"
+  }
+}

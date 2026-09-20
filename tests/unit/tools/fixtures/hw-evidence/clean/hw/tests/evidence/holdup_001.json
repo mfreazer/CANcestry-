@@ -1,0 +1,9 @@
+{
+  "case_id": "holdup_001",
+  "credibility_level": "CL2",
+  "evidence_of": "Fixture source evidence for the visual-evidence gate unit tests.",
+  "oracle_id": "OR-001",
+  "pass": true,
+  "provisional": true,
+  "requirement_id": "HW-SF-002"
+}
