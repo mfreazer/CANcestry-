@@ -1,7 +1,7 @@
 {
   "case_id": "holdup_001",
   "credibility_level": "CL2",
-  "evidence_of": "T1 block simulation of CancestryLib.Power.Holdup (FMU via omc, executed with FMPy) against oracle OR-001: HW-SF-002 sub-event (ii) brownout to BOR level 3 (2.8 V) for 50 ms, then sub-event (iii) removal to 0 V for 100 ms, worst-case durations. VBAT(t) asserted within the sim-case tolerance; retention floor 1.65 V held across the event. The 0.001 V tolerance is provisional pending vendor selection and future ESR/R_path sensitivity rerun.",
+  "evidence_of": "T1 block simulation of CancestryLib.Power.Holdup (FMU via omc, executed by FMPy as explicit CoSimulation) against oracle OR-001: HW-SF-002 sub-event (ii) brownout to BOR level 3 (2.8 V) for 50 ms, then sub-event (iii) removal to 0 V for 100 ms, worst-case durations. VBAT(t) asserted within the sim-case tolerance; retention floor 1.65 V held across the event. The 0.001 V tolerance is provisional pending vendor selection and future ESR/R_path sensitivity rerun.",
   "not_covered": [
     "HW-SF-002 sub-event (i) IWDG reset: firmware/reset-domain behavior, future T2 virtual bench",
     "Charge-path turn-on and recharging dynamics: OR-001 is valid only with iCh=0; extended charge-path oracle remains planned, not verified",
@@ -15,7 +15,7 @@
   "source_hashes": {
     "ci/docker/Dockerfile": "sha256:49703d8b330e41c58e5411bdede3310aec55199e3fb77fc973189b9ee7358102",
     "ci/docker/base-image.digest": "sha256:fbe0594ac4ef88a211f86be44892d6d24efaefd22b747fe6aca41f512e38614f",
-    "docs/hw/tool-qualification.md": "sha256:7a899dfc3b6487ddd1565691328057d55a0877ec655a771b2b0621107ee88660",
+    "docs/hw/tool-qualification.md": "sha256:ce53847dfb64d82696f3debf29dae23ec5487862ccb4920995f772f7794e6758",
     "hw/bom/bom.json": "sha256:779a79e7cc6649f7c345fc70ff97ca0b5c0fe615e1475a9ff6f423e1dbf41311",
     "hw/bom/datasheets/extract-holdup-cap.json": "sha256:b6b75ce57d0a27690e7cba788380c74d5b408385e24f9ce2990cbf2785b5686f",
     "hw/bom/datasheets/extract-mcu-vbat.json": "sha256:755fa5d3a31e36811f6f112f4ea6f764f14d4f47c01f76c78720b1b289eab518",
@@ -26,8 +26,8 @@
     "hw/tests/oracles/or_001_holdup.py": "sha256:0be9fe0869c355a9780f73d17981f92dba4af1bbfc2b1be392930402a5f63b9d",
     "hw/tests/oracles/registry.csv": "sha256:b9d2d2228742ca3bc0d412e20cb720b27d35e1692f4f67e88cffd903b70146d2",
     "hw/tests/oracles/registry.json": "sha256:432a6ee5e340acca558e6382e4d6e083437d26b584944a70602a3662c326f269",
-    "hw/tests/test_evidence_determinism.py": "sha256:ea6ca280613c23e7f884352cfde985136ea20ca179d62317d61c5b190ad46d49",
-    "hw/tests/test_power_sim.py": "sha256:cad89a14d52c8c53d263197e90384231af6dca1617b150f322d709bb8cc91cb2",
+    "hw/tests/test_evidence_determinism.py": "sha256:2576cb298ba158d9f98cf15aefc90f67b3c3b84623b6fbbd8c53fc363f6b6869",
+    "hw/tests/test_power_sim.py": "sha256:26194fe5303bec1242ed2e2717e0fb4050ba64795905df7631d3e82b3b173487",
     "schemas/hw/hw-bom-0.1.0.schema.json": "sha256:53c2b0796fa5805f43f1683cece6e2bd9ebedde131d1b6729607902ff1677a6a",
     "schemas/hw/hw-datasheet-extract-0.1.0.schema.json": "sha256:cd9de8b653e8b774926eaa3953c7122ea64bd1d3ec64de906b48ec0465ac5eff",
     "schemas/hw/hw-oracle-registry-0.1.0.schema.json": "sha256:7bd0a15770f2bae185600bd554198a791ab94dceb59b4d8084111d5bf01e6123",

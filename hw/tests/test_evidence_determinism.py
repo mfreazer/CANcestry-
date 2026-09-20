@@ -30,7 +30,8 @@ EXPECTED_EVIDENCE = {
     "credibility_level": "CL2",
     "evidence_of": (
         "T1 block simulation of CancestryLib.Power.Holdup (FMU via omc, "
-        "executed with FMPy) against oracle OR-001: HW-SF-002 sub-event "
+        "executed by FMPy as explicit CoSimulation) against oracle OR-001: "
+        "HW-SF-002 sub-event "
         "(ii) brownout to BOR level 3 (2.8 V) for 50 ms, then sub-event "
         "(iii) removal to 0 V for 100 ms, worst-case durations. VBAT(t) "
         "asserted within the sim-case tolerance; retention floor 1.65 V "

@@ -17,7 +17,7 @@ explicitly set for local development); it never downgrades to a
 compile-only check.
 
 Requirements traced: HW-SF-002, HW-FR-009.
-Test ids: HW-SIM-HOLDUP-001 .. HW-SIM-HOLDUP-005.
+Test ids: HW-SIM-HOLDUP-001 .. HW-SIM-HOLDUP-008.
 """
 
 from __future__ import annotations
@@ -31,6 +31,8 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -43,7 +45,12 @@ EVIDENCE_DIR = REPO_ROOT / "hw" / "tests" / "evidence"
 ORACLE_PATH = REPO_ROOT / "hw" / "tests" / "oracles" / "or_001_holdup.py"
 BUILD_DIR = REPO_ROOT / "build" / "hw"
 
+# The generic builder fallback is retained for callers that declare their own
+# interface needs. HW-SF-002 / HW-FR-009 deliberately do not use it: the
+# qualifying hold-up execution is a CoSimulation-only configuration.
 FMI_TYPES = ("cs", "me_cs", "me")
+HOLDUP_FMU_BUILD_TYPES = ("cs",)
+HOLDUP_FMPY_TYPE = "CoSimulation"
 
 
 # --------------------------------------------------------------------------
@@ -206,9 +213,27 @@ def build_fmu(sim_case, build_dir, fmi_types=FMI_TYPES):
         "omc buildModelFMU failed (last output):\n%s" % result.stdout[-4000:])
 
 
-def simulate_fmu(fmu, sim_case):
-    """Execute the FMU with FMPy; return (times, voltages) as float lists."""
+def _require_holdup_cosimulation(fmu):
+    """Read and constrain the HW-SF-002 FMU interface before native execution."""
     import fmpy
+
+    description = fmpy.read_model_description(str(fmu))
+    # HW-SF-002 / HW-FR-009 / N2: this stateful plant is intentionally run as
+    # CoSimulation. Do not let FMPy silently select ModelExchange/CVode if the
+    # generated FMU or the build configuration drifts.
+    assert description.coSimulation is not None, \
+        "hold-up FMU must support the qualified CoSimulation execution path"
+    return fmpy, description
+
+
+def simulate_fmu(fmu, sim_case):
+    """Execute the stateful hold-up FMU through FMPy's CoSimulation path.
+
+    The state belongs to the compiled FMU. FMPy schedules FMI ``doStep`` calls
+    and reads the output; it is not selected as a ModelExchange/CVode solver
+    for this HW-SF-002 / HW-FR-009 evidence configuration.
+    """
+    fmpy, description = _require_holdup_cosimulation(fmu)
 
     solver = sim_case["solver"]
     result = fmpy.simulate_fmu(
@@ -217,7 +242,9 @@ def simulate_fmu(fmu, sim_case):
         stop_time=solver["stop_s"],
         step_size=solver["step_s"],
         output=["v"],
-        logger=None)
+        logger=None,
+        fmi_type=HOLDUP_FMPY_TYPE,
+        model_description=description)
     # FMPy 0.3.24 returns one structured ndarray, not a ``(time, data)``
     # tuple: selecting result[0]/result[1] accidentally indexes samples and
     # turns the scalar v field into a non-iterable numpy.float64.
@@ -298,7 +325,8 @@ def bom():
 def pipeline(sim_case, bom):
     """Build the FMU once per session and run the oracle-verified sim."""
     build_dir = BUILD_DIR / sim_case["case_id"]
-    fmu = build_fmu(sim_case, build_dir)
+    # HW-SF-002 / HW-FR-009 / N2: no fallback to an unreviewed FMU interface.
+    fmu = build_fmu(sim_case, build_dir, fmi_types=HOLDUP_FMU_BUILD_TYPES)
     omc = _require_toolchain()
     times, voltages = simulate_fmu(fmu, sim_case)
 
@@ -364,6 +392,54 @@ def test_sim_case_and_bom_validate(sim_case, bom):
             document = _json(REPO_ROOT / extract)
             _validate_against_schema(document, "hw-datasheet-extract-0.1.0.schema.json",
                                      "extract %s" % extract)
+
+
+def test_holdup_rejects_non_cosimulation_metadata_before_fmpy_execution(monkeypatch):
+    """HW-SF-002 / HW-FR-009 / N2: a mode drift fails before native execution."""
+    import fmpy
+
+    description = SimpleNamespace(coSimulation=None, numberOfContinuousStates=1)
+    reader = Mock(return_value=description)
+    executor = Mock(side_effect=AssertionError("FMPy execution must not be reached"))
+    monkeypatch.setattr(fmpy, "read_model_description", reader)
+    monkeypatch.setattr(fmpy, "simulate_fmu", executor)
+
+    with pytest.raises(AssertionError, match="must support the qualified CoSimulation"):
+        simulate_fmu("fixture.fmu", {"solver": {"stop_s": 0.15, "step_s": 1e-5}})
+
+    reader.assert_called_once_with("fixture.fmu")
+    executor.assert_not_called()
+
+
+def test_holdup_passes_stateful_cosimulation_to_fmpy(monkeypatch):
+    """HW-SF-002 / HW-FR-009 / N2: stateful FMU, explicit FMPy CS dispatch."""
+    import fmpy
+
+    description = SimpleNamespace(coSimulation=SimpleNamespace(),
+                                  numberOfContinuousStates=1)
+    result = {"time": [0.0, 0.15], "v": [3.29999966, 3.04499966]}
+    executor = Mock(return_value=result)
+    monkeypatch.setattr(fmpy, "read_model_description", Mock(return_value=description))
+    monkeypatch.setattr(fmpy, "simulate_fmu", executor)
+
+    times, voltages = simulate_fmu(
+        "fixture.fmu", {"solver": {"stop_s": 0.15, "step_s": 1e-5}})
+
+    assert times == [0.0, 0.15]
+    assert voltages == [3.29999966, 3.04499966]
+    executor.assert_called_once()
+    _, kwargs = executor.call_args
+    assert kwargs["fmi_type"] == HOLDUP_FMPY_TYPE
+    assert kwargs["model_description"] is description
+
+
+def test_compiled_holdup_fmu_uses_cosimulation(pipeline):
+    """HW-SF-002 / HW-FR-009 / N2: actual FMU uses the audited CS interface."""
+    _, description = _require_holdup_cosimulation(pipeline["fmu"])
+    assert description.coSimulation is not None
+    # The source's der(vC) state evolves inside the compiled CS FMU; this is
+    # intentionally distinct from choosing FMPy's ModelExchange solver.
+    assert pipeline["voltages"][0] > pipeline["voltages"][-1]
 
 
 def test_sim_case_parameters_match_bom(sim_case, bom):
