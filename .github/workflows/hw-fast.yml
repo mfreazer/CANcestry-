@@ -9,6 +9,7 @@
 #   3. Modelica compile -> FMU  (omc, headless)
 #   4. FMU oracle test          (FMPy vs OR-001, schema-declared tolerance)
 #   5. traceability gate        (ci/check_hw_traceability.py)
+#   6. visual-evidence gate     (ci/check_hw_evidence.py, H-03 hash chain)
 #
 # The base image digest pin is re-verified against the registry before any
 # build (HwAGENTS.md rule 5: determinism) — a re-pushed base image fails
@@ -30,6 +31,7 @@ on:
       - "schemas/hw/**"
       - "tests/unit/tools/test_check_hw_*.py"
       - "tests/unit/tools/test_check_capella_model.py"
+      - "tests/unit/tools/fixtures/**"
       - "docs/system/mode-fault-state-machine.md"
       - "ci/**"
       - "HwAGENTS.md"
@@ -44,6 +46,7 @@ on:
       - "schemas/hw/**"
       - "tests/unit/tools/test_check_hw_*.py"
       - "tests/unit/tools/test_check_capella_model.py"
+      - "tests/unit/tools/fixtures/**"
       - "docs/system/mode-fault-state-machine.md"
       - "ci/**"
       - "HwAGENTS.md"
@@ -108,6 +111,14 @@ jobs:
       - name: Run the hardware gates
         env:
           CANCESTRY_HW_IMAGE: ${{ steps.pin.outputs.image-digest }}
+          # HwAGENTS.md rule 13 / issue #36 section 4.3: a renderer drift may be
+          # accepted only when the PR body *declares* it, i.e. a line that begins
+          # with the prefix "renderer-drift:" followed by the reason. The
+          # declaration is parsed inside the container (a substring match over
+          # the whole body would let a mere mention of the phrase -- "we did not
+          # declare renderer-drift: ..." -- silently downgrade the error to a
+          # warning). Push events carry no PR body and never allow drift.
+          HW_PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           set -euo pipefail
           IMAGE="cancestry/hw-fast:${GITHUB_SHA}"
@@ -115,9 +126,19 @@ jobs:
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/work" -w /work \
             -e CANCESTRY_HW_IMAGE \
+            -e HW_PR_BODY \
             "$IMAGE" bash -lc '
               set -euo pipefail
               trap "chmod -R a+rX build/hw 2>/dev/null || true" EXIT
+              # Fail closed: only an explicit line-level declaration counts.
+              # The pattern is pinned by tests/unit/tools/test_check_hw_evidence.py
+              # (HW-EVIDENCE-GATE-DECL-001); keep the two in step.
+              DRIFT_DECL='"'"'^[[:space:]]*([-*+>]|[0-9]+[.)])?[[:space:]]*[`*_]*renderer-drift:[[:space:]]*[^[:space:]]'"'"'
+              if printf "%s\n" "${HW_PR_BODY:-}" | grep -qE "$DRIFT_DECL"; then
+                export RENDERER_DRIFT_ALLOWED=1
+              else
+                export RENDERER_DRIFT_ALLOWED=0
+              fi
               echo "== 1. Schema validation (software + hardware trees)"
               python3 ci/check_schemas_valid.py schemas || {
                 echo "::error::hw-fast gate 1 failed: schema validation"
@@ -132,10 +153,10 @@ jobs:
               # JSON is authoritative; emit the legacy CSV before the ledger gate.
               python3 ci/check_hw_contracts.py . --export
 
-              echo "== 2. HwRS parser + hardware ledger (unit tests, 95% branch coverage gate)"
+              echo "== 2. Hardware checkers (unit tests, 95% branch coverage gate)"
               python3 -m coverage run --branch \
-                --include=ci/check_hw_traceability.py,ci/check_capella_model.py,ci/check_hw_contracts.py \
-                -m pytest tests/unit/tools/test_check_hw_traceability.py tests/unit/tools/test_check_capella_model.py tests/unit/tools/test_check_hw_contracts.py -q || {
+                --include=ci/check_hw_traceability.py,ci/check_capella_model.py,ci/check_hw_contracts.py,ci/check_hw_evidence.py \
+                -m pytest tests/unit/tools/test_check_hw_traceability.py tests/unit/tools/test_check_capella_model.py tests/unit/tools/test_check_hw_contracts.py tests/unit/tools/test_check_hw_evidence.py -q || {
                 echo "::error::hw-fast gate 2 failed: checker unit tests"
                 exit 1
               }
@@ -159,6 +180,16 @@ jobs:
               echo "== 5. Hardware traceability gate (honest ledger)"
               python3 ci/check_hw_traceability.py . || {
                 echo "::error::hw-fast gate 5 failed: hardware traceability ledger"
+                exit 1
+              }
+
+              echo "== 6. Hardware visual evidence (hash chain, H-03)"
+              # HwAGENTS.md rule 13: every committed visual is a view of a
+              # hashed plot-data file that pins a hashed evidence artifact.
+              # The fast path verifies the committed bytes; renderer
+              # determinism belongs to the nightly --rerender --strict job.
+              python3 ci/check_hw_evidence.py --root . || {
+                echo "::error::hw-fast gate 6 failed: visual evidence hash chain"
                 exit 1
               }
             ' 2>&1 | tee /tmp/hw-fast-output.log

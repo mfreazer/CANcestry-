@@ -85,7 +85,7 @@
       "minLength": 1,
       "maxLength": 128,
       "pattern": "^[a-z0-9][a-z0-9._-]*$",
-      "$comment": "Renderer id; resolves to <renderers-dir>/<renderer_tool>.py for the --rerender check (H-03 section 5)."
+      "$comment": "Renderer id; resolves to <renderers-dir>/<renderer_tool>.py for the --rerender check (visual-evidence-plan section 6)."
     },
     "renderer_tool_version": {
       "$ref": "#/$defs/semver"
