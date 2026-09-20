@@ -3,11 +3,11 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Hardware Agent Policy |
-| **Version** | 1.1.1 |
-| **Status** | H-04 registry-path correction pending QA; existing rules remain load-bearing |
+| **Version** | 1.1.2 |
+| **Status** | Rule 13 (H-03) pending QA; existing rules remain load-bearing |
 | **Owner** | System Engineer |
 | **Approver** | QA Lead |
-| **Last Review** | 2026-09-19 |
+| **Last Review** | 2026-09-20 |
 | **Repository location** | `HwAGENTS.md` (repository root) |
 | **Governing document** | `docs/hw/HW-PLAN.md` v1.0.0 |
 | **Applies to** | `hw/`, `docs/hw/`, `schemas/hw/`, future `hw/ecad/`, and `@cancestry-hw-agent` |
@@ -51,12 +51,24 @@
    Any change touching those paths is safety-relevant (HW-PLAN §11.1) and
    requires Human Reviewer sign-off, not just an agent merge.
 
+13. **Visual evidence is a view, never the proof.** Every visual artifact is
+    rendered from a hashed plot-data file
+    (schemas/hw/hw-plot-data-0.1.0.schema.json) that itself references a hashed
+    evidence file. The provenance footer (tool+digest, input hashes, oracle,
+    credibility, status) is mandatory and MUST agree with the embedded
+    cancestry-provenance comment. A visual without provenance is an assertion
+    and shall be rejected at review. Renderer drift (output changed, data hash
+    unchanged) is a non-evidence change and must be flagged explicitly in the
+    PR with the prefix `renderer-drift:`. The renderer-drift manifest is
+    renders/manifest.json.
+
 ---
 
 ## Change Log
 
 | Version | Date | Change |
 |---|---|---|
+| 1.1.2 | 2026-09-20 | H-03 #36: Rule 13 added (visual evidence is a view of a hashed plot-data file, never the proof); checker `ci/check_hw_evidence.py` and `docs/hw/visual-evidence-plan.md` bind it. |
 | 1.1.1 | 2026-09-19 | H-04 #38: Rule 3 source-of-truth path migrated to JSON; CSV remains a deterministic export. |
 | 1.1.0 | 2026-09-19 | QA findings HwA-F1..F4:<br>• Rule 1: HwRS IDs only.<br>• Rule 2: `hw/bom/datasheets/` extracts.<br>• Rule 3: Oracle registry CSV source of truth.<br>• Rule 4: `provisional` and `fully-verified(CL3)` statuses.<br>• Rule 10: ECAD gate named to H-Phase 3 start. |
 | 1.0.0 | — | Initial hardware agent policy (approved with HW-PLAN v1.0.0). |
