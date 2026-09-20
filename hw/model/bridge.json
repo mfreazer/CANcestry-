@@ -1,0 +1,61 @@
+{
+  "schema_version": "0.1.0",
+  "mappings": [
+    {
+      "la_component": "RetentionDomain",
+      "modelica_block": "CancestryLib.Power.Holdup",
+      "status": "simulated",
+      "rationale": "n/a",
+      "coverage_note": "Simulated by CancestryLib.Power.Holdup (retention-domain energy balance and discharge physics)"
+    },
+    {
+      "la_component": "PowerSupervisor",
+      "modelica_block": "CancestryLib.Power.PulseISO7637_2",
+      "status": "simulated",
+      "rationale": "n/a",
+      "coverage_note": "Supply stimulus only via PulseISO7637_2; supervisor threshold and reset behavior are NOT simulated."
+    },
+    {
+      "la_component": "SafetyMonitor",
+      "modelica_block": null,
+      "status": "not_simulated",
+      "rationale": "emulated-by-other-means",
+      "coverage_note": "discrete/functional behavior; reset and loss-of-control fault injection planned for a future Renode T2 issue; H-04 does not implement Renode"
+    },
+    {
+      "la_component": "FailSafeLatch",
+      "modelica_block": null,
+      "status": "not_simulated",
+      "rationale": "emulated-by-other-means",
+      "coverage_note": "discrete/functional behavior; fail-safe output state logic planned for a future Renode T2 issue; H-04 does not implement Renode"
+    },
+    {
+      "la_component": "CanPhy1",
+      "modelica_block": null,
+      "status": "not_simulated",
+      "rationale": "not-yet-modeled",
+      "coverage_note": "physical layer transceivers not simulated at T1; ISO 11898-2 bit-timing and bus physical layer models remain future work; no bus model exists"
+    },
+    {
+      "la_component": "CanPhy2",
+      "modelica_block": null,
+      "status": "not_simulated",
+      "rationale": "not-yet-modeled",
+      "coverage_note": "physical layer transceivers not simulated at T1; ISO 11898-2 bit-timing and bus physical layer models remain future work; no bus model exists"
+    },
+    {
+      "la_component": "CanPhy3",
+      "modelica_block": null,
+      "status": "not_simulated",
+      "rationale": "not-yet-modeled",
+      "coverage_note": "physical layer transceivers not simulated at T1; ISO 11898-2 bit-timing and bus physical layer models remain future work; no bus model exists"
+    },
+    {
+      "la_component": "TestInterface",
+      "modelica_block": null,
+      "status": "not_simulated",
+      "rationale": "not-simulatable",
+      "coverage_note": "test access point and debugging interfaces; no plant physics required"
+    }
+  ]
+}

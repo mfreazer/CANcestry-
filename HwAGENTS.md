@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Hardware Agent Policy |
-| **Version** | 1.1.0 |
-| **Status** | Approved — load-bearing policy |
+| **Version** | 1.1.1 |
+| **Status** | H-04 registry-path correction pending QA; existing rules remain load-bearing |
 | **Owner** | System Engineer |
 | **Approver** | QA Lead |
 | **Last Review** | 2026-09-19 |
@@ -28,8 +28,9 @@
    Numbers in CSV comments, or values without an extract, are defects.
 
 3. **Oracle rule.** A simulation or analysis shall not close a requirement
-   without an oracle ID listed in `hw/tests/oracles/registry.csv` — the
-   source of truth for oracles (HW-PLAN §10.2).
+   without an oracle ID listed in `hw/tests/oracles/registry.json` — the
+   schema-validated source of truth for oracles (HW-PLAN §10.2).
+   `registry.csv` is a generated compatibility export, never an editable authority.
    `docs/hw/virtual-bench-plan.md` §4 is a rendered view of that registry.
 
 4. **Honest ledger.** Row statuses are: `draft`, `analysis-pending`,
@@ -56,6 +57,7 @@
 
 | Version | Date | Change |
 |---|---|---|
+| 1.1.1 | 2026-09-19 | H-04 #38: Rule 3 source-of-truth path migrated to JSON; CSV remains a deterministic export. |
 | 1.1.0 | 2026-09-19 | QA findings HwA-F1..F4:<br>• Rule 1: HwRS IDs only.<br>• Rule 2: `hw/bom/datasheets/` extracts.<br>• Rule 3: Oracle registry CSV source of truth.<br>• Rule 4: `provisional` and `fully-verified(CL3)` statuses.<br>• Rule 10: ECAD gate named to H-Phase 3 start. |
 | 1.0.0 | — | Initial hardware agent policy (approved with HW-PLAN v1.0.0). |
 

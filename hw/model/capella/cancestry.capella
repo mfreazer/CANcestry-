@@ -10,7 +10,7 @@
     xmlns:org.polarsys.capella.core.data.pa="http://www.polarsys.org/capella/core/pa/5.0.0"
     xmlns:org.polarsys.capella.core.data.capellacore="http://www.polarsys.org/capella/core/core/5.0.0"
     xmlns:org.polarsys.capella.core.data.cs="http://www.polarsys.org/capella/core/cs/5.0.0"
-    xmlns:requirements="http://www.polarsys.org/kitalpha/requirements"
+    xmlns:Requirements="http://www.polarsys.org/kitalpha/requirements"
     xmlns:CapellaRequirements="http://www.polarsys.org/capella/requirements"
     id="project-cancestry" name="CANcestry">
   <ownedModelRoots xsi:type="org.polarsys.capella.core.data.capellamodeller:SystemEngineering" id="syseng-cancestry" name="CANcestry">
@@ -44,65 +44,65 @@
 
     <ownedArchitectures xsi:type="org.polarsys.capella.core.data.la:LogicalArchitecture" id="la-layer" name="Logical Architecture">
       <ownedExtensions xsi:type="CapellaRequirements:CapellaModule" id="req-mod-hwrs" name="HwRS Requirements">
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_sf_001" name="HW-SF-001 Passive Fail-Safe Topology" reqId="HW-SF-001" identifier="HW-SF-001" hwrs_id="HW-SF-001" text="Passive Fail-Safe Topology">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_sf_001" value="HW-SF-001"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_sf_001" name="HW-SF-001 Passive Fail-Safe Topology" reqId="HW-SF-001" identifier="HW-SF-001" hwrs_id="HW-SF-001" text="Passive Fail-Safe Topology">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_sf_001" value="HW-SF-001"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_sf_002" name="HW-SF-002 Retention Domain Backup Preserved" reqId="HW-SF-002" identifier="HW-SF-002" hwrs_id="HW-SF-002" text="Retention Domain Backup Preserved">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_sf_002" value="HW-SF-002"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_sf_002" name="HW-SF-002 Retention Domain Backup Preserved" reqId="HW-SF-002" identifier="HW-SF-002" hwrs_id="HW-SF-002" text="Retention Domain Backup Preserved">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_sf_002" value="HW-SF-002"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_sf_003" name="HW-SF-003 Primary External Watchdog + Secondary IWDG" reqId="HW-SF-003" identifier="HW-SF-003" hwrs_id="HW-SF-003" text="Primary External Watchdog + Secondary IWDG">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_sf_003" value="HW-SF-003"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_sf_003" name="HW-SF-003 Primary External Watchdog + Secondary IWDG" reqId="HW-SF-003" identifier="HW-SF-003" hwrs_id="HW-SF-003" text="Primary External Watchdog + Secondary IWDG">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_sf_003" value="HW-SF-003"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_sf_004" name="HW-SF-004 Power Loss Orderly Shutdown" reqId="HW-SF-004" identifier="HW-SF-004" hwrs_id="HW-SF-004" text="Power Loss Orderly Shutdown">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_sf_004" value="HW-SF-004"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_sf_004" name="HW-SF-004 Power Loss Orderly Shutdown" reqId="HW-SF-004" identifier="HW-SF-004" hwrs_id="HW-SF-004" text="Power Loss Orderly Shutdown">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_sf_004" value="HW-SF-004"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_sf_005" name="HW-SF-005 Single Fault Protection for Reset/Supervisor/Latch" reqId="HW-SF-005" identifier="HW-SF-005" hwrs_id="HW-SF-005" text="Single Fault Protection for Reset/Supervisor/Latch">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_sf_005" value="HW-SF-005"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_sf_005" name="HW-SF-005 Single Fault Protection for Reset/Supervisor/Latch" reqId="HW-SF-005" identifier="HW-SF-005" hwrs_id="HW-SF-005" text="Single Fault Protection for Reset/Supervisor/Latch">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_sf_005" value="HW-SF-005"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_001" name="HW-FR-001 MCU Peripherals and Memory Parity" reqId="HW-FR-001" identifier="HW-FR-001" hwrs_id="HW-FR-001" text="MCU Peripherals and Memory Parity">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_001" value="HW-FR-001"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_fr_001" name="HW-FR-001 MCU Peripherals and Memory Parity" reqId="HW-FR-001" identifier="HW-FR-001" hwrs_id="HW-FR-001" text="MCU Peripherals and Memory Parity">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_fr_001" value="HW-FR-001"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_002" name="HW-FR-002 Three CAN Interfaces" reqId="HW-FR-002" identifier="HW-FR-002" hwrs_id="HW-FR-002" text="Three CAN Interfaces">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_002" value="HW-FR-002"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_fr_002" name="HW-FR-002 Three CAN Interfaces" reqId="HW-FR-002" identifier="HW-FR-002" hwrs_id="HW-FR-002" text="Three CAN Interfaces">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_fr_002" value="HW-FR-002"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_003" name="HW-FR-003 CAN FD Physical Layer Conformance" reqId="HW-FR-003" identifier="HW-FR-003" hwrs_id="HW-FR-003" text="CAN FD Physical Layer Conformance">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_003" value="HW-FR-003"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_fr_003" name="HW-FR-003 CAN FD Physical Layer Conformance" reqId="HW-FR-003" identifier="HW-FR-003" hwrs_id="HW-FR-003" text="CAN FD Physical Layer Conformance">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_fr_003" value="HW-FR-003"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_004" name="HW-FR-004 Transient Protection ISO 7637-2/16750-2" reqId="HW-FR-004" identifier="HW-FR-004" hwrs_id="HW-FR-004" text="Transient Protection ISO 7637-2/16750-2">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_004" value="HW-FR-004"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_fr_004" name="HW-FR-004 Transient Protection ISO 7637-2/16750-2" reqId="HW-FR-004" identifier="HW-FR-004" hwrs_id="HW-FR-004" text="Transient Protection ISO 7637-2/16750-2">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_fr_004" value="HW-FR-004"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_005" name="HW-FR-005 Sleep Mode Low Power Drain" reqId="HW-FR-005" identifier="HW-FR-005" hwrs_id="HW-FR-005" text="Sleep Mode Low Power Drain">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_005" value="HW-FR-005"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_fr_005" name="HW-FR-005 Sleep Mode Low Power Drain" reqId="HW-FR-005" identifier="HW-FR-005" hwrs_id="HW-FR-005" text="Sleep Mode Low Power Drain">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_fr_005" value="HW-FR-005"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_006" name="HW-FR-006 Flash and RAM Allocation Margins" reqId="HW-FR-006" identifier="HW-FR-006" hwrs_id="HW-FR-006" text="Flash and RAM Allocation Margins">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_006" value="HW-FR-006"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_fr_006" name="HW-FR-006 Flash and RAM Allocation Margins" reqId="HW-FR-006" identifier="HW-FR-006" hwrs_id="HW-FR-006" text="Flash and RAM Allocation Margins">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_fr_006" value="HW-FR-006"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_007" name="HW-FR-007 Main Oscillator Accuracy" reqId="HW-FR-007" identifier="HW-FR-007" hwrs_id="HW-FR-007" text="Main Oscillator Accuracy">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_007" value="HW-FR-007"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_fr_007" name="HW-FR-007 Main Oscillator Accuracy" reqId="HW-FR-007" identifier="HW-FR-007" hwrs_id="HW-FR-007" text="Main Oscillator Accuracy">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_fr_007" value="HW-FR-007"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_008" name="HW-FR-008 Testability Points and Shunts" reqId="HW-FR-008" identifier="HW-FR-008" hwrs_id="HW-FR-008" text="Testability Points and Shunts">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_008" value="HW-FR-008"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_fr_008" name="HW-FR-008 Testability Points and Shunts" reqId="HW-FR-008" identifier="HW-FR-008" hwrs_id="HW-FR-008" text="Testability Points and Shunts">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_fr_008" value="HW-FR-008"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_009" name="HW-FR-009 VBAT Hold-Up Capacitor Bounds" reqId="HW-FR-009" identifier="HW-FR-009" hwrs_id="HW-FR-009" text="VBAT Hold-Up Capacitor Bounds">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_009" value="HW-FR-009"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_fr_009" name="HW-FR-009 VBAT Hold-Up Capacitor Bounds" reqId="HW-FR-009" identifier="HW-FR-009" hwrs_id="HW-FR-009" text="VBAT Hold-Up Capacitor Bounds">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_fr_009" value="HW-FR-009"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_fr_010" name="HW-FR-010 External Window Watchdog IC Parameters" reqId="HW-FR-010" identifier="HW-FR-010" hwrs_id="HW-FR-010" text="External Window Watchdog IC Parameters">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_fr_010" value="HW-FR-010"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_fr_010" name="HW-FR-010 External Window Watchdog IC Parameters" reqId="HW-FR-010" identifier="HW-FR-010" hwrs_id="HW-FR-010" text="External Window Watchdog IC Parameters">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_fr_010" value="HW-FR-010"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_nf_001" name="HW-NF-001 Operating and Storage Temperature Range" reqId="HW-NF-001" identifier="HW-NF-001" hwrs_id="HW-NF-001" text="Operating and Storage Temperature Range">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_nf_001" value="HW-NF-001"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_nf_001" name="HW-NF-001 Operating and Storage Temperature Range" reqId="HW-NF-001" identifier="HW-NF-001" hwrs_id="HW-NF-001" text="Operating and Storage Temperature Range">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_nf_001" value="HW-NF-001"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_nf_002" name="HW-NF-002 Junction Temperature Derating" reqId="HW-NF-002" identifier="HW-NF-002" hwrs_id="HW-NF-002" text="Junction Temperature Derating">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_nf_002" value="HW-NF-002"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_nf_002" name="HW-NF-002 Junction Temperature Derating" reqId="HW-NF-002" identifier="HW-NF-002" hwrs_id="HW-NF-002" text="Junction Temperature Derating">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_nf_002" value="HW-NF-002"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_nf_003" name="HW-NF-003 Electrical Stress Derating" reqId="HW-NF-003" identifier="HW-NF-003" hwrs_id="HW-NF-003" text="Electrical Stress Derating">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_nf_003" value="HW-NF-003"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_nf_003" name="HW-NF-003 Electrical Stress Derating" reqId="HW-NF-003" identifier="HW-NF-003" hwrs_id="HW-NF-003" text="Electrical Stress Derating">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_nf_003" value="HW-NF-003"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_nf_004" name="HW-NF-004 AEC-Q Qualification and Lifecycle" reqId="HW-NF-004" identifier="HW-NF-004" hwrs_id="HW-NF-004" text="AEC-Q Qualification and Lifecycle">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_nf_004" value="HW-NF-004"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_nf_004" name="HW-NF-004 AEC-Q Qualification and Lifecycle" reqId="HW-NF-004" identifier="HW-NF-004" hwrs_id="HW-NF-004" text="AEC-Q Qualification and Lifecycle">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_nf_004" value="HW-NF-004"/>
         </ownedRequirements>
-        <ownedRequirements xsi:type="requirements:Requirement" id="cap-req-hw_nf_005" name="HW-NF-005 Active Mode Power Consumption Envelope" reqId="HW-NF-005" identifier="HW-NF-005" hwrs_id="HW-NF-005" text="Active Mode Power Consumption Envelope">
-          <ownedAttributes xsi:type="requirements:StringValueAttribute" id="attr-hw_nf_005" value="HW-NF-005"/>
+        <ownedRequirements xsi:type="Requirements:Requirement" id="cap-req-hw_nf_005" name="HW-NF-005 Active Mode Power Consumption Envelope" reqId="HW-NF-005" identifier="HW-NF-005" hwrs_id="HW-NF-005" text="Active Mode Power Consumption Envelope">
+          <ownedAttributes xsi:type="Requirements:StringValueAttribute" id="attr-hw_nf_005" value="HW-NF-005"/>
         </ownedRequirements>
       </ownedExtensions>
       <ownedLogicalFunctionPkg xsi:type="org.polarsys.capella.core.data.la:LogicalFunctionPkg" id="la-func-pkg" name="Logical Functions">

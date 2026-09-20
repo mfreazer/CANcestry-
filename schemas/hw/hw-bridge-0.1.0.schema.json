@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cancestry.dev/schemas/hw/hw-bridge-0.1.0.schema.json",
+  "title": "CANcestry hardware bridge (v0.1.0)",
+  "description": "Implements HW-SF-001..005, HW-FR-002, HW-FR-004, HW-FR-008, HW-FR-009. ci/check_capella_model.py binds la_component/modelica_block enums to the live Capella LA and file-per-class Modelica inventory, then enforces exact 1:1 coverage. The LA root is a container, not a mapped component.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "mappings"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0"
+    },
+    "mappings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "la_component",
+          "modelica_block",
+          "status",
+          "rationale",
+          "coverage_note"
+        ],
+        "properties": {
+          "la_component": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "modelica_block": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^CancestryLib(?:\\.[A-Za-z_][A-Za-z0-9_]*)+$"
+          },
+          "status": {
+            "enum": [
+              "simulated",
+              "not_simulated"
+            ]
+          },
+          "rationale": {
+            "enum": [
+              "not-yet-modeled",
+              "out-of-scope-for-h02",
+              "emulated-by-other-means",
+              "not-simulatable",
+              "n/a"
+            ]
+          },
+          "coverage_note": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "simulated"
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "modelica_block": {
+                  "type": "string"
+                },
+                "rationale": {
+                  "const": "n/a"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "modelica_block": {
+                  "type": "null"
+                },
+                "rationale": {
+                  "enum": [
+                    "not-yet-modeled",
+                    "out-of-scope-for-h02",
+                    "emulated-by-other-means",
+                    "not-simulatable"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -4,8 +4,12 @@
   "title": "CANcestry hardware BOM / datasheet parameter extract (v0.1.0)",
   "description": "Hardware tree schema (issue #33, H-01; HwAGENTS.md rule 2, HW-PLAN §7/§9). One of two document kinds, both schema-validated: (1) kind=bom: the BOM extract under hw/bom/ - one entry per part candidate with the mandatory fields part number, manufacturer, AEC-Q status, lifecycle, FIT source citation, datasheet_ref and cited parameters; (2) kind=datasheet_extract: a parameter extract under hw/bom/datasheets/ citing manufacturer, document ID and retrieval date. Every parameter carries a source discriminator: hwers (value fixed by the HwRS derivation), datasheet (value from the cited document) or budget (engineering budget pending BOM selection - never a silent value). Numbers without an extract are defects (HwAGENTS.md rule 2).",
   "oneOf": [
-    { "$ref": "#/$defs/bom" },
-    { "$ref": "#/$defs/datasheet_extract" }
+    {
+      "$ref": "#/$defs/bom"
+    },
+    {
+      "$ref": "#/$defs/datasheet_extract"
+    }
   ],
   "$defs": {
     "datasheet_ref": {
@@ -235,7 +239,59 @@
           "const": "0.1.0"
         },
         "source": {
-          "$ref": "#/$defs/datasheet_ref"
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "manufacturer",
+            "document_id",
+            "retrieval_date",
+            "source_pdf_hash"
+          ],
+          "properties": {
+            "manufacturer": {
+              "type": "string",
+              "minLength": 1
+            },
+            "document_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "retrieval_date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "source_pdf_hash": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            },
+            "source_url": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https?://[^\\s]+$"
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "source_pdf_hash": {
+                    "type": "null"
+                  }
+                },
+                "required": [
+                  "source_pdf_hash"
+                ]
+              },
+              "then": {
+                "required": [
+                  "source_url"
+                ]
+              }
+            }
+          ]
         },
         "note": {
           "type": "string"

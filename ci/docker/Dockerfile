@@ -33,6 +33,7 @@ RUN printf '%s\n' \
 ENV PATH="/opt/venv/bin:${PATH}"
 
 RUN python3 -m pip install \
+    capellambse==0.6.17 \
     fmpy==0.3.24 \
     numpy==2.1.3 \
     jsonschema==4.23.0 \

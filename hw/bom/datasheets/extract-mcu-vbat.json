@@ -4,10 +4,11 @@
   "source": {
     "manufacturer": "STMicroelectronics",
     "document_id": "DS12787, STM32G474 datasheet (VBAT/backup-domain supply; BOR levels)",
-    "url": "https://www.st.com/resource/en/datasheet/stm32g474rc.pdf",
-    "retrieval_date": "2026-09-19"
+    "retrieval_date": "2026-09-19",
+    "source_pdf_hash": null,
+    "source_url": "https://www.st.com/resource/en/datasheet/stm32g474rc.pdf"
   },
-  "note": "Values as recorded in the HwRS v0.2.0 derivations (HwAGENTS.md rule 2): the HwRS is the normative repository record; the exact datasheet table and page are re-verified against DS12787 during H-02 BOM curation.",
+  "note": "Values as recorded in the HwRS v0.2.0 derivations (HwAGENTS.md rule 2): the HwRS is the normative repository record; the exact datasheet table and page are re-verified against DS12787 during H-02 BOM curation. H-04 provenance: no source PDF is retained; source_url is a fallback, not a verified PDF digest.",
   "entries": [
     {
       "name": "I_VBAT_bound",

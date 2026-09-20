@@ -1,0 +1,112 @@
+{
+  "schema_version": "0.1.0",
+  "oracles": [
+    {
+      "oracle_id": "OR-001",
+      "description": "RC hold-up / energy-balance closed form",
+      "class": "analytical",
+      "serves": [
+        "HW-SF-002",
+        "HW-SF-004",
+        "HW-FR-009"
+      ],
+      "source_citation": "HwRS.md v0.2.0 (2026), HW-SF-002 / HW-FR-009: C dV/dt = -I; or_001_holdup.py independent closed form and RK4 self-check.",
+      "validation_gap": "Idealized ODE; ESR temperature dependence, leakage nonlinearity, and real brownout shapes not modeled. T2 action: correlate with vendor SPICE or bench measurement."
+    },
+    {
+      "oracle_id": "OR-002",
+      "description": "ISO 7637-2 / 16750-2 tabulated pulse parameters",
+      "class": "standard",
+      "serves": [
+        "HW-FR-004"
+      ],
+      "source_citation": "ISO 7637-2:2011; ISO 16750-2:2012; H-04 issue #38 specifies Pulse 5b Us=40 V, Ri=0.5 ohm, td=350 ms.",
+      "validation_gap": "Idealized unloaded pulse source only; source impedance coupling, full cranking shape, TVS response, parasitics, bursts and T4 correlation remain unvalidated."
+    },
+    {
+      "oracle_id": "OR-003",
+      "description": "ISO 11898-2 bit-timing and level tables",
+      "class": "standard",
+      "serves": [
+        "HW-FR-003",
+        "HW-FR-007"
+      ],
+      "source_citation": "ISO 11898-2:2016 and HwRS.md HW-FR-003 / HW-FR-007.",
+      "validation_gap": "Bus model and physical ISO 11898-2 conformance measurements pending."
+    },
+    {
+      "oracle_id": "OR-004",
+      "description": "ISO 26262-5 Annex D worked example (FMEDA tool gate)",
+      "class": "standard",
+      "serves": [
+        "HW-SF-005"
+      ],
+      "source_citation": "ISO 26262-5:2018 Annex D worked example; calculator qualification pending.",
+      "validation_gap": "FMEDA calculator and independent Annex D regression not implemented."
+    },
+    {
+      "oracle_id": "OR-005",
+      "description": "Independent netlist query (KiCad) vs schematic author intent",
+      "class": "independent_model",
+      "serves": [
+        "HW-SF-001",
+        "HW-FR-008"
+      ],
+      "source_citation": "HwRS.md v0.2.0 (2026), HW-SF-001 / HW-FR-008; independent KiCad netlist query planned, no netlist yet.",
+      "validation_gap": "Netlist query and independent schematic-intent comparison pending ECAD."
+    },
+    {
+      "oracle_id": "OR-006",
+      "description": "Datasheet sleep/VBAT current tables",
+      "class": "standard",
+      "serves": [
+        "HW-FR-005",
+        "HW-SF-002",
+        "HW-FR-009"
+      ],
+      "source_citation": "STMicroelectronics DS12787, STM32G474 VBAT current tables; hw/bom/datasheets/extract-mcu-vbat.json.",
+      "validation_gap": "Vendor table/page re-verification and board-current measurement pending."
+    },
+    {
+      "oracle_id": "OR-007",
+      "description": "STM32G4 LSI tolerance datasheet",
+      "class": "standard",
+      "serves": [
+        "HW-SF-003"
+      ],
+      "source_citation": "STMicroelectronics DS12787, STM32G474 LSI tolerance table (exact table/page verification pending).",
+      "validation_gap": "Vendor table/page re-verification pending; LSI does not qualify the primary watchdog window."
+    },
+    {
+      "oracle_id": "OR-008",
+      "description": "STM32G4 BOR level table",
+      "class": "standard",
+      "serves": [
+        "HW-SF-004"
+      ],
+      "source_citation": "STMicroelectronics DS12787, STM32G474 BOR level table; HW-SF-004.",
+      "validation_gap": "BOR threshold spread and physical brownout correlation pending."
+    },
+    {
+      "oracle_id": "OR-009",
+      "description": "External watchdog IC datasheet (window + timebase tolerance)",
+      "class": "standard",
+      "serves": [
+        "HW-FR-010",
+        "HW-SF-003"
+      ],
+      "source_citation": "HwRS.md v0.2.0 (2026), HW-FR-010 / HW-SF-003; vendor IC selection and datasheet pending.",
+      "validation_gap": "External watchdog vendor, datasheet and timebase/window correlation pending."
+    },
+    {
+      "oracle_id": "OR-010",
+      "description": "Golden measurement from first fabricated board (post-bench)",
+      "class": "golden_measurement",
+      "serves": [
+        "HW-SF-001"
+      ],
+      "source_citation": "HwRS.md v0.2.0 (2026), HW-SF-001; planned golden-board measurement, not acquired. Renumbered OR-010 from OR-005b in H-04.",
+      "validation_gap": "No fabricated-board measurement exists; cannot support CL3 closure."
+    }
+  ]
+}

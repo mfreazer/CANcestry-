@@ -25,6 +25,7 @@ compile_commands.json
 *.map
 
 # Local tooling
+.venv/
 .cache/
 .vscode/
 .idea/

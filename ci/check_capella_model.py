@@ -14,8 +14,8 @@ Rules enforced:
    ``hwrs_id`` property matching an HwRS ID.
 5. Every physical component in PA (excluding the root physical system) must be
    allocated to/realize at least one Logical Architecture (LA) parent component.
-6. The bridge file ``hw/model/bridge.csv`` must be complete for all LA safety-relevant
-   components, and every ``not_simulated`` entry must carry a non-empty rationale.
+6. Implements HW-SF-001..005 / HW-FR-002,004,008,009: the bridge file ``hw/model/bridge.json`` must map every non-root LA component exactly once and every top-level
+   Modelica block exactly once, using schema-controlled exemption rationales.
 
 Exit codes:
     0  all Capella model structural gates and bridge checks passed
@@ -23,10 +23,16 @@ Exit codes:
 """
 
 import argparse
-import csv
+from collections import Counter
+import copy
+from pathlib import Path
 import os
 import re
 import sys
+
+# Also support direct CLI execution, where sys.path starts at ci/.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ci.check_hw_contracts import load_contract, read_json, validate
 
 try:
     import capellambse
@@ -36,7 +42,7 @@ except ImportError:  # pragma: no cover
 
 HWRs_RELATIVE_PATH = os.path.join("docs", "hw", "HwRS.md")
 MODEL_RELATIVE_PATH = os.path.join("hw", "model", "capella", "cancestry.aird")
-BRIDGE_RELATIVE_PATH = os.path.join("hw", "model", "bridge.csv")
+BRIDGE_RELATIVE_PATH = os.path.join("hw", "model", "bridge.json")
 
 HW_ROW = re.compile(r"^\|\s*(HW-(?:SF|FR|NF)-\d{3})\s*\|")
 HW_ID_PATTERN = re.compile(r"^HW-(?:SF|FR|NF)-\d{3}$")
@@ -165,44 +171,80 @@ def check_pa_elements_have_la_parent(model, report):
                 report.fail(5, f"PA physical component {name!r} (uuid={comp.uuid}) has no LA parent/realization link")
 
 
-def check_bridge_csv(root, report):
-    """Rule 6: Validate hw/model/bridge.csv for LA safety-relevant components."""
-    bridge_path = os.path.join(root, BRIDGE_RELATIVE_PATH)
-    if not os.path.isfile(bridge_path):
-        report.fail(6, f"Bridge file {BRIDGE_RELATIVE_PATH} is missing")
-        return
+def modelica_inventory(root):
+    """Resolve file-per-class top-level models/blocks, never comments/strings.
 
-    with open(bridge_path, "r", encoding="utf-8", newline="") as handle:
-        rows = list(csv.reader(handle))
-
-    if not rows or rows[0] != ["la_component", "modelica_block", "status", "rationale"]:
-        report.fail(6, f"{BRIDGE_RELATIVE_PATH} header invalid, expected ['la_component', 'modelica_block', 'status', 'rationale']")
-        return
-
-    required_la = {"PowerSupervisor", "CanPhy1", "CanPhy2", "CanPhy3", "SafetyMonitor", "FailSafeLatch", "RetentionDomain", "TestInterface"}
-    seen_la = set()
-
-    for row_idx, row in enumerate(rows[1:], start=2):
-        if len(row) != 4:
-            report.fail(6, f"{BRIDGE_RELATIVE_PATH} line {row_idx}: expected 4 columns, got {len(row)}")
+    Implements HW-FR-004, HW-FR-009. Package/within/name drift, nested model
+    declarations and empty inventories fail closed rather than guessing.
+    """
+    library = Path(root) / "hw/model/CancestryLib"
+    models = []
+    for path in sorted(library.rglob("*.mo")):
+        code = re.sub(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"',
+                      ' ', path.read_text(encoding="utf-8"), flags=re.S)
+        declarations = re.findall(r"\b(?:model|block)\s+([A-Za-z_]\w*)", code)
+        if not declarations:
             continue
-        la_comp, modelica_block, status, rationale = [col.strip() for col in row]
-        seen_la.add(la_comp)
+        header = re.match(
+            r"\s*within\s+([A-Za-z_][\w.]*)\s*;\s*"
+            r"(?:(?:encapsulated|partial|final)\s+)*(?:model|block)\s+(\w+)\b", code)
+        if not header or len(declarations) != 1:
+            raise ValueError(f"{path.name}: expected one top-level file-per-class model/block")
+        package, name = header.groups()
+        expected_package = '.'.join(('CancestryLib', *path.relative_to(library).parts[:-1]))
+        if package != expected_package or name != path.stem:
+            raise ValueError(f"{path.name}: Modelica within/name does not match its path")
+        if not re.search(rf"\bend\s+{re.escape(name)}\s*;\s*$", code):
+            raise ValueError(f"{path.name}: missing matching model/block end")
+        models.append(package + '.' + name)
+    if not models:
+        raise ValueError("No top-level Modelica models/blocks found in CancestryLib")
+    return models
 
-        if status == "not_simulated" or modelica_block == "not_simulated":
-            if not rationale:
-                report.fail(6, f"{BRIDGE_RELATIVE_PATH} line {row_idx}: component {la_comp!r} is not_simulated but lacks a rationale")
 
-    missing = required_la - seen_la
-    if missing:
-        report.fail(6, f"{BRIDGE_RELATIVE_PATH} is missing required LA safety-relevant components: {sorted(missing)}")
+def check_bridge_json(root, model, report):
+    """Rule 6: live LA and Modelica 1:1 bridge, not a hard-coded name list.
+
+    Implements HW-SF-001..005, HW-FR-002, HW-FR-004, HW-FR-008..009.
+    Root LA container is excluded; every other component occurs once.
+    Null not_simulated targets never count as simulated Modelica coverage.
+    """
+    root = Path(root)
+    try:
+        document = load_contract(root, BRIDGE_RELATIVE_PATH, 'bridge')
+        la_names = [c.name for c in model.la.all_components
+                    if c.uuid != model.la.root_component.uuid]
+        if not la_names or any(not name for name in la_names):
+            raise ValueError("LA inventory is empty or contains an unnamed component")
+        duplicate_names = sorted(n for n, count in Counter(la_names).items() if count != 1)
+        if duplicate_names:
+            raise ValueError(f"Ambiguous duplicate LA component names: {duplicate_names}")
+        blocks = modelica_inventory(root)
+        # Bind the schema's reference fields to the real inventories at CI time.
+        schema = copy.deepcopy(read_json(root / 'schemas/hw/hw-bridge-0.1.0.schema.json'))
+        properties = schema['properties']['mappings']['items']['properties']
+        properties['la_component']['enum'] = sorted(la_names)
+        properties['modelica_block']['enum'] = [None, *sorted(blocks)]
+        validate(document, schema, BRIDGE_RELATIVE_PATH)
+        rows = document['mappings']
+        la_counts = Counter(r['la_component'] for r in rows)
+        block_counts = Counter(r['modelica_block'] for r in rows
+                               if r['status'] == 'simulated')
+        for name in sorted(la_names):
+            if la_counts[name] != 1:
+                report.fail(6, f"LA component {name!r} must appear exactly once in bridge.json; found {la_counts[name]}")
+        for block in sorted(blocks):
+            if block_counts[block] != 1:
+                report.fail(6, f"Modelica block {block!r} must be referenced exactly once; found {block_counts[block]}")
+    except (OSError, ValueError) as error:
+        report.fail(6, f"Bridge validation failed: {error}")
 
 
 def main(argv=None):
     if argv is None:
         argv = sys.argv
 
-    parser = argparse.ArgumentParser(description="Check Capella seed model structural gates and bridge CSV.")
+    parser = argparse.ArgumentParser(description="Check Capella seed model structural gates and bridge JSON.")
     parser.add_argument("repo_root", help="Path to repository root")
     args = parser.parse_args(argv[1:])
 
@@ -227,10 +269,9 @@ def main(argv=None):
             check_orphan_blocks(model, report)
             check_hwrs_linkage(model, hwrs_reqs, report)
             check_pa_elements_have_la_parent(model, report)
+            check_bridge_json(root, model, report)
         except Exception as err:
             report.fail(1, f"Failed to load Capella model {MODEL_RELATIVE_PATH}: {err}")
-
-    check_bridge_csv(root, report)
 
     if not report.ok:
         print(f"FAIL: {len(report.failures)} Capella model problem(s)")
@@ -238,7 +279,7 @@ def main(argv=None):
             print(f"      {failure}")
         return 1
 
-    print("PASS: Capella seed model and bridge CSV pass all structural gates")
+    print("PASS: Capella seed model and bridge JSON pass all structural gates")
     return 0
 
 
