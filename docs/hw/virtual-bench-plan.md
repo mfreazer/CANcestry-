@@ -98,15 +98,23 @@ Evidence artifact per run: tool digests, ELF sha256, trace CSV sha256, oracle de
 
 ### 8.1 Model fidelity roadmap
 
-To address QA's H-01 concern ("no stated path from T1 idealization to T2 fidelity"), each `CancestryLib` plant model defines its current T1 idealizations, the applicable T2/bench trigger class (HW-PLAN §10.4), and the fidelity step required to close the gap:
+This is a roadmap, **not** additional verification evidence. Only the two
+existing model files are listed below. HW-SF-002 / HW-FR-009 motivate the
+hold-up rows; HW-FR-004 motivates the pulse rows. Planned charge-path work
+must provide an independently derived oracle before any ledger pass.
 
-| Modelica Model | Current T1 Idealizations | Trigger Class (HW-PLAN §10.4) | Fidelity Step to Close |
-|---|---|---|---|
-| `Power.Holdup` | Constant-current discharge; linear leakage; constant ESR; ideal diode charge path. | Trigger 2 (Model boundary) | Add ESR temperature dependence ($T = -40^\circ\text{C}$ to $+85^\circ\text{C}$), non-linear capacitor leakage vs. voltage, WCCA derating, and correlate with vendor SPICE / bench measurement at H-03. |
-| `Power.PulseISO7637_2` | Ideal voltage/current sources; lumped line impedance; ideal step/exponential edges. | Trigger 1 (Discretization gap) & Trigger 2 (Model boundary) | Add real TVS clamping curves, high-frequency parasitic inductance, and oscilloscope trace replay correlation at H-03/H-04. |
-| `Bus.LumpedPhy` | Lumped RC/RL bus model; ideal transceiver switching thresholds; no common-mode choke saturation. | Trigger 2 (Model boundary) | Incorporate transceiver loop delay spread, differential-to-common-mode conversion, and physical cable harness measurement correlation at H-03/H-04. |
-| `Thermal.RCNetwork` | Lumped 1D RC thermal nodes; constant ambient temperature; fixed thermal conductances. | Trigger 2 (Model boundary) | Include temperature-dependent $R_{\text{DS(on)}}$, PCB thermal copper pour FEM extract, and thermal camera bench calibration at H-03/H-04. |
-| `Safety.Supervisor` | Fixed voltage threshold; ideal comparator response; constant propagation delay. | Trigger 1 (Discretization gap) & Trigger 2 (Model boundary) | Add threshold tolerance band across temperature, glitch filter dynamic response, and Renode T2 co-simulation replay at H-04. |
+| model_file | fidelity_axis | current_oracle | target_oracle | tier | validation_gap |
+|---|---|---|---|---|---|
+| `hw/model/CancestryLib/Power/Holdup.mo` | Discharge, ESR vs temperature, nonlinear leakage | OR-001 (constant-current discharge only) | OR-001 plus vendor-SPICE / golden measurement | T1 → T4 | Constant ESR/leakage and ideal brownout shapes; model-boundary trigger. No claim of vendor or bench correlation. |
+| `hw/model/CancestryLib/Power/Holdup.mo` | **Planned case `holdup_charge_001.simcase.json`: R_path and diode forward bias (iCh > 0)** | OR-001 excludes the conducting charge branch | **OR-001 extended with an independent piecewise charging solution** | **analysis (T0), then T1 regression** | R_path is a budget and unexercised in holdup_001. Charge turn-on/recharge analysis and case are future work, not implemented or passed by H-04. |
+| `hw/model/CancestryLib/Power/Holdup.mo` | Supervisor threshold / real brownout and reset sequences | OR-001 discharge; OR-008 planned threshold reference | OR-008 plus golden brownout/reset traces | T2 → T4 | Supervisor threshold spread and firmware/reset-domain behavior are outside this plant; model-boundary and oracle-absence triggers. |
+| `hw/model/CancestryLib/Power/PulseISO7637_2.mo` | Peak, time-to-peak, decay constant of unloaded source | OR-002 tabulated parameters | OR-002 plus independent waveform/generator measurement | T1 → T4 | Idealized source, no TVS or load coupling; sub-nanosecond sampling needed for fast pulses. Discretization and model-boundary triggers. |
+| `hw/model/CancestryLib/Power/PulseISO7637_2.mo` | Full cranking profile; unsuppressed load-dump pulse 5a | OR-002 reduced cranking / suppressed 5b only | Extended OR-002 with qualified standard/golden waveform | T1 → T4 (H-06) | Multi-stage Ua/Us/t7/t8 cranking and unsuppressed 5a energy/clamping behavior are not closed by the present reduced source. H-06 owns the missing transient fidelity. |
+
+Bus, thermal and supervisor-specific physics models do not yet exist. Their
+future fidelity work remains in the bench-trigger planning; this table must
+not make nonexistent model files appear implemented. H-03/H-04 no longer
+serve as promised Renode or vendor-SPICE completion dates.
 
 ## 9. Open questions for QA
 
@@ -118,6 +126,6 @@ None outstanding as of v0.3.0.
 |---|---|---|
 | 0.1.0 | 2026-09-19 | Initial draft |
 | 0.2.0 | 2026-09-19 | QA review applied: rebuild and retention policy added (VB-F1); sub-step discrete event injection clarified for HW-SF-004 (VB-Q1); OR-005b class (c) golden-measurement upgrade path added (VB-Q2); oracle registry expanded with OR-007, OR-008, OR-009 to serve HW-SF-003, HW-SF-004, HW-FR-010. |
-| 0.4.0 | 2026-09-19 | H-04 #38: schema-validated JSON oracle registry, generated CSV/table, explicit pending-oracle gaps and OR-010 renumbering. |
+| 0.4.0 | 2026-09-19 | H-04 #38: schema-validated JSON oracle registry, generated CSV/table, explicit pending-oracle gaps, OR-010 renumbering and tabulated fidelity/charge-path roadmap. |
 | 0.3.0 | 2026-09-19 | Residual state reconciliation (issue #35): declared `hw/tests/oracles/registry.csv` source of truth for oracles and added `validation_gap` column to rendered view (§4); added Model fidelity roadmap (§8.1) defining T1 idealizations, trigger classes, and closure steps per `CancestryLib` model. |
 

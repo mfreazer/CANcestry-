@@ -17,13 +17,17 @@ Rules enforced:
 6. Implements HW-SF-001..005 / HW-FR-002,004,008,009: the bridge file ``hw/model/bridge.json`` must map every non-root LA component exactly once and every top-level
    Modelica block exactly once, using schema-controlled exemption rationales.
 
+7. Every HW-SF-* requirement reaches an explicitly marked LA safety mechanism.
+8. Regulatory authority is a linked OA constraint; SA modes resolve to the
+   normative firmware FSM without inventing software states.
+
 Exit codes:
     0  all Capella model structural gates and bridge checks passed
     1  at least one structural gate failed
 """
 
 import argparse
-from collections import Counter
+from collections import Counter, defaultdict
 import copy
 from pathlib import Path
 import os
@@ -33,6 +37,7 @@ import sys
 # Also support direct CLI execution, where sys.path starts at ci/.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ci.check_hw_contracts import load_contract, read_json, validate
+from ci.check_hw_traceability import parse_hwrs
 
 try:
     import capellambse
@@ -70,41 +75,13 @@ def read_text(path):
 def get_hwrs_requirements(root):
     """Parse HwRS.md returning dict of requirement_id -> required_cl."""
     hwrs_path = os.path.join(root, HWRs_RELATIVE_PATH)
-    reqs = {}
-    if not os.path.isfile(hwrs_path):
-        return reqs
-    for line in read_text(hwrs_path).splitlines():
-        match = HW_ROW.match(line)
-        if match:
-            req_id = match.group(1)
-            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-            reqs[req_id] = cells[4] if len(cells) > 4 else "CL1"
-    return reqs
+    return parse_hwrs(read_text(hwrs_path))
 
 
 def get_capella_req_hwrs_id(req_obj):
-    """Extract hwrs_id attribute/property from a Capella requirement object."""
-    elem = getattr(req_obj, "_element", None)
-    if elem is not None:
-        for attr in ("hwrs_id", "reqId", "identifier", "name"):
-            val = elem.get(attr)
-            if val and HW_ID_PATTERN.match(val):
-                return val
-            if val and " " in val:
-                first_word = val.split()[0]
-                if HW_ID_PATTERN.match(first_word):
-                    return first_word
-
-    # Fallback to python attributes
-    for attr in ("identifier", "name", "text"):
-        val = getattr(req_obj, attr, None)
-        if val and isinstance(val, str):
-            if HW_ID_PATTERN.match(val):
-                return val
-            first_word = val.split()[0] if val else ""
-            if HW_ID_PATTERN.match(first_word):
-                return first_word
-    return None
+    """HW-SF-001..005: require the actual property, not an ID in prose."""
+    value = req_obj._element.get("hwrs_id", "")
+    return value if HW_ID_PATTERN.fullmatch(value) else None
 
 
 def check_orphan_blocks(model, report):
@@ -115,24 +92,23 @@ def check_orphan_blocks(model, report):
     or their sub-components. Any component directly under a package or unparented
     is an orphan.
     """
-    root_names = {"Operational Entities", "SystemContext", "Logical System", "Physical System"}
-
     layers = [
-        ("OA", getattr(model.oa, "all_entities", [])),
-        ("SA", getattr(model.sa, "all_components", [])),
-        ("LA", getattr(model.la, "all_components", [])),
-        ("PA", getattr(model.pa, "all_components", [])),
+        ("OA", model.oa.all_entities, model.oa),
+        ("SA", model.sa.all_components, model.sa),
+        ("LA", model.la.all_components, model.la),
+        ("PA", model.pa.all_components, model.pa),
     ]
-
-    for layer_name, comps in layers:
-        for comp in comps:
-            name = getattr(comp, "name", "")
-            if name in root_names:
-                continue
-            parent = getattr(comp, "parent", None)
-            parent_name = getattr(parent, "name", "")
-            if parent is None or parent_name.endswith("Pkg") or parent_name == "Structure":
-                report.fail(2, f"Orphan block in {layer_name}: component {name!r} (uuid={comp.uuid}) is not contained within the root system component hierarchy")
+    for layer_name, components, architecture in layers:
+        try:
+            root = architecture if layer_name == "OA" else architecture.root_component
+        except (ValueError, RuntimeError) as error:
+            report.fail(2, f"Orphan block / ambiguous root in {layer_name}: {error}")
+            continue
+        for component in components:
+            ancestors = {component.uuid, *(a.get("id") for a in
+                                          component._element.iterancestors())}
+            if root.uuid not in ancestors:
+                report.fail(2, f"Orphan block in {layer_name}: component {component.name!r} (uuid={component.uuid}) is not contained within the root system component hierarchy")
 
 
 def check_hwrs_linkage(model, hwrs_reqs, report):
@@ -148,6 +124,8 @@ def check_hwrs_linkage(model, hwrs_reqs, report):
         else:
             if hwrs_id not in hwrs_reqs:
                 report.fail(4, f"Capella requirement {req_obj.uuid} carries hwrs_id {hwrs_id!r} which is absent from HwRS.md")
+            if hwrs_id in found_hwrs_ids:
+                report.fail(4, f"Duplicate Capella requirement hwrs_id {hwrs_id!r}")
             found_hwrs_ids.add(hwrs_id)
 
     # Rule 3: Check all HW-SF-* and HW-FR-* requirements from HwRS.md are linked
@@ -158,17 +136,98 @@ def check_hwrs_linkage(model, hwrs_reqs, report):
 
 
 def check_pa_elements_have_la_parent(model, report):
-    """Rule 5: Every PA element (non-root) must realize an LA component."""
+    """Rule 5: resolve realizations to actual non-root LA components."""
+    la_ids = {c.uuid for c in model.la.all_components
+              if c.uuid != model.la.root_component.uuid}
     for comp in model.pa.all_components:
-        name = getattr(comp, "name", "")
-        if name == "Physical System":
+        if comp.uuid == model.pa.root_component.uuid:
             continue
-        realized = getattr(comp, "realized_components", [])
-        if not realized:
-            # Check component_realizations
-            realizations = getattr(comp, "component_realizations", [])
-            if not realizations:
-                report.fail(5, f"PA physical component {name!r} (uuid={comp.uuid}) has no LA parent/realization link")
+        realized = list(comp.realized_components)
+        if not realized or any(c.uuid not in la_ids for c in realized):
+            report.fail(5, f"PA physical component {comp.name!r} (uuid={comp.uuid}) has no LA parent/realization link to a non-root LA component")
+
+
+def is_safety_mechanism(component):
+    """A typed boolean/property or explicit stereotype, never truthy prose."""
+    elem = component._element
+    if elem.get("safety_mechanism") == "true":
+        return True
+    stereotypes = elem.get("stereotype", "") + " " + elem.get("stereotypes", "")
+    if "safety_mechanism" in re.findall(r"[A-Za-z_]+", stereotypes):
+        return True
+    return any(p.name == "safety_mechanism" and
+               p.xtype.endswith(":BooleanPropertyValue") and p.value is True
+               for p in component.property_values)
+
+
+def check_safety_linkage(model, report):
+    """Rule 7: HW-SF-001..005 must reach a marked LA safety mechanism.
+
+    Traverse directed ReqIF incoming/outgoing/internal relations (capellambse
+    normalizes outgoing relation storage direction), plus GenericTrace edges.
+    Container membership is NOT a trace link; cycles never confer coverage.
+    Broken references fail closed even if another valid path exists.
+    """
+    adjacency = defaultdict(set)
+    for link in model.search("CapellaIncomingRelation", "CapellaOutgoingRelation",
+                             "InternalRelation", "GenericTrace"):
+        try:
+            source, target = link.source, link.target
+            if source is None or target is None:
+                raise ValueError("missing source or target")
+            adjacency[source.uuid].add(target.uuid)
+        except (KeyError, ValueError, TypeError) as error:
+            report.fail(7, f"Broken safety trace {link.uuid}: {error}")
+    safety = {c.uuid for c in model.la.all_components
+              if c.uuid != model.la.root_component.uuid and is_safety_mechanism(c)}
+    for req in model.search("Requirement"):
+        hwrs_id = get_capella_req_hwrs_id(req)
+        if not hwrs_id or not re.fullmatch(r"HW-SF-\d+", hwrs_id):
+            continue
+        pending, seen = [req.uuid], set()
+        while pending:
+            current = pending.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            pending.extend(sorted(adjacency[current] - seen))
+        if not (seen & safety):
+            report.fail(7, f"{hwrs_id} has no downstream LA safety_mechanism via trace links")
+
+
+FIRMWARE_FSM = "docs/system/mode-fault-state-machine.md"
+MODE_MAPPING = {"idle": "LISTEN_ONLY", "active": "ACTIVE",
+                "diagnosing": "CONFIG", "safe-latch": "SAFE"}
+
+
+def check_authority_and_modes(root, model, report):
+    """Rule 8: HW-SF-001 / HW-FR-003/004/008: constraint and FSM linkage."""
+    authorities = [c for c in model.search("Constraint")
+                   if c.name == "RegulatoryAuthority" and c.layer.uuid == model.oa.uuid]
+    if len(authorities) != 1:
+        report.fail(8, "OA must have exactly one RegulatoryAuthority constraint")
+    else:
+        required = {"HW-FR-003", "HW-FR-004", "HW-SF-005", "HW-NF-004"}
+        linked = {get_capella_req_hwrs_id(r) for r in authorities[0].constrained_elements}
+        if not required <= linked:
+            report.fail(8, "RegulatoryAuthority constraint must link the standards/qualification requirements")
+    for entity in model.oa.all_entities:
+        if re.search(r"regulat|authority", entity.name, re.I):
+            report.fail(8, f"Authority {entity.name!r} must be a Constraint, not a functional Actor/Entity")
+    modes = [m for m in model.search("Mode") if m.layer.uuid == model.sa.uuid]
+    counts = Counter(m.name for m in modes)
+    if counts != Counter(MODE_MAPPING.keys()):
+        report.fail(8, "SA must contain exactly the modes idle, active, diagnosing, safe-latch")
+    firmware = Path(root, FIRMWARE_FSM).read_text(encoding="utf-8")
+    # Only normative §1 bullets are states, not incidental mentions in prose.
+    section = firmware.split("## 1. System Modes", 1)[-1].split("## 2.", 1)[0]
+    states = set(re.findall(r"^- ([A-Z_]+)$", section, re.M))
+    for mode in modes:
+        props = {p.name: p.value for p in mode.property_values}
+        expected = MODE_MAPPING.get(mode.name)
+        if props.get("firmware_fsm") != FIRMWARE_FSM + "#1-system-modes" or not (
+                expected in states and props.get("firmware_mode") == expected):
+            report.fail(8, f"SA mode {mode.name!r} lacks a valid normative firmware FSM link/mapping")
 
 
 def modelica_inventory(root):
@@ -269,6 +328,8 @@ def main(argv=None):
             check_orphan_blocks(model, report)
             check_hwrs_linkage(model, hwrs_reqs, report)
             check_pa_elements_have_la_parent(model, report)
+            check_safety_linkage(model, report)
+            check_authority_and_modes(root, model, report)
             check_bridge_json(root, model, report)
         except Exception as err:
             report.fail(1, f"Failed to load Capella model {MODEL_RELATIVE_PATH}: {err}")

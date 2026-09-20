@@ -29,7 +29,7 @@ Hardware documents are versioned independently of the software release
 | [`docs/hw/virtual-bench-plan.md`](hw/virtual-bench-plan.md) | 0.4.0 | H-04 draft — JSON oracle registry and fidelity roadmap |
 | [`docs/hw/tool-qualification.md`](hw/tool-qualification.md) | 0.1.0 | Approved — ISO 26262-8 §13 TCL classification and OR-001/OR-002 evidence |
 | [`HwAGENTS.md`](../HwAGENTS.md) | 1.1.1 | H-04 draft — oracle registry path correction; existing rules unchanged |
-| [`hw/model/capella/`](../hw/model/capella/) | 0.1.0 | Approved — Arcadia seed model (OA/SA/LA/PA + Capella requirements) |
+| [`hw/model/capella/`](../hw/model/capella/) | 0.2.0 | H-04 draft — safety traces/markers, OA authority constraint, SA firmware-mode aliases; Human Reviewer required |
 | [`hw/model/bridge.json`](../hw/model/bridge.json) | 0.1.0 | H-04 draft — live 1:1 bridge and controlled rationale codes |
 | [`schemas/hw/hw-datasheet-extract-0.1.0.schema.json`](../schemas/hw/hw-datasheet-extract-0.1.0.schema.json) | 0.1.0 | H-04 correction — PDF hash / URL fallback; URN migration blocked |
 

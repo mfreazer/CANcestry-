@@ -28,7 +28,22 @@ Requirements live **only** in `docs/hw/HwRS.md`. Capella requirement objects car
 - Safety-relevant component without a linked `HW-SF-*` or `HW-FR-*` ID.
 - `hwrs_id` property present in the model but absent from `HwRS.md`.
 - HwRS ID present in `HwRS.md` but not linked from any Capella element (dangling requirement).
-- PA element without an LA parent.
+- PA realization not resolving to a non-root LA component.
+- HW-SF-* requirement without a directed trace path to a logical component
+  carrying a typed `safety_mechanism=true` property or explicit stereotype.
+  Requirement existence/name alone is not linkage; cycles and container
+  membership do not confer coverage, and broken references fail closed.
+- Regulatory authority represented as a functional actor instead of an OA
+  Constraint linked to HW-FR-003/004, HW-SF-005 and HW-NF-004.
+- SA Mode mappings that drift from the normative firmware FSM.
+
+The SA modes are architectural aliases, not additional firmware states:
+`idle → LISTEN_ONLY`, `active → ACTIVE`, `diagnosing → CONFIG`,
+`safe-latch → SAFE`. Each Mode carries a `firmware_fsm` link to
+`docs/system/mode-fault-state-machine.md#1-system-modes` and a
+`firmware_mode` property checked against the normative state list. Diagnostic
+access in SAFE and BOOT/OFF transients remain governed by the firmware FSM;
+no new firmware transitions or passive-latch recovery path are introduced.
 
 ## 3. Safety analysis path
 
@@ -68,7 +83,7 @@ None outstanding as of v0.3.0. The `hwrs_id` property name is confirmed (QA ruli
 |---|---|---|
 | 0.1.0 | 2026-09-19 | Initial draft |
 | 0.2.0 | 2026-09-19 | QA review applied: concurrent edit policy for safety-relevant diagrams added (MBSE-F1); `hwrs_id` property name confirmed and CI check list expanded (MBSE-Q); external watchdog added to LA and PA level descriptions; Git LFS threshold quantified; FMEDA oracle gate referenced. |
-| 0.4.0 | 2026-09-19 | H-04 #38: JSON bridge and structured trades; generated views and live 1:1 validation. |
+| 0.4.0 | 2026-09-19 | H-04 #38: JSON bridge and structured trades; generated views, live 1:1 validation, safety-mechanism reachability, authority constraint and firmware-aligned SA modes. |
 | 0.3.0 | 2026-09-19 | Capella seed & structural gate baseline (issue #35): recorded Trades T-01..T-04 in Appendix A; documented Capella model seed structure under `hw/model/capella/` and bridge specification `hw/model/bridge.json`. |
 
 ---

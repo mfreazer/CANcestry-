@@ -175,3 +175,146 @@ def test_corrupt_model(repo, capsys):
 
 def test_invalid_root(capsys):
     run('/nonexistent/directory', capsys, 'is not a directory')
+
+
+def test_hwrs_id_property_required_not_name_fallback(repo, capsys):
+    # The name/identifier still contain a valid ID; they may not mask deletion.
+    xml_change(repo, lambda tree: element(tree, 'cap-req-hw_sf_002').attrib.pop('hwrs_id'))
+    run(repo, capsys, "lacks a valid 'hwrs_id'")
+
+
+def test_duplicate_hwrs_property(repo, capsys):
+    xml_change(repo, lambda tree: element(tree, 'cap-req-hw_sf_002').set('hwrs_id', 'HW-SF-001'))
+    run(repo, capsys, 'Duplicate Capella requirement')
+
+
+def test_hwrs_parser_fails_closed(repo, capsys):
+    (repo / 'docs/hw/HwRS.md').write_text('# format changed\n')
+    run(repo, capsys, 'no HW-* requirement rows')
+
+
+def test_pa_realization_must_target_la(repo, capsys):
+    xml_change(repo, lambda tree: element(tree, 'pa-real-mcu').set('targetElement', '#sa-sys-context'))
+    run(repo, capsys, 'no LA parent/realization')
+
+
+def delete_link(tree, uuid='trace-sf_002-retentiondomain'):
+    obj = element(tree, uuid)
+    obj.getparent().remove(obj)
+
+
+def test_safety_requirement_object_without_trace_fails(repo, capsys):
+    xml_change(repo, delete_link)
+    run(repo, capsys, 'HW-SF-002 has no downstream LA safety_mechanism')
+
+
+@pytest.mark.parametrize('target', ['#la-comp-testinterface', '#sa-sys-context', '#la-root-sys'])
+def test_safety_link_to_unmarked_or_non_la_does_not_qualify(repo, capsys, target):
+    xml_change(repo, lambda tree: element(tree, 'trace-sf_002-retentiondomain').set('target', target))
+    run(repo, capsys, 'HW-SF-002 has no downstream LA safety_mechanism')
+
+
+@pytest.mark.parametrize('change', [
+    lambda tree: element(tree, 'safety-retentiondomain').set('value', 'false'),
+    lambda tree: element(tree, 'safety-retentiondomain').set(XSI,
+        'org.polarsys.capella.core.data.capellacore:StringPropertyValue'),
+    lambda tree: element(tree, 'safety-retentiondomain').set('name', 'unrelated'),
+])
+def test_safety_flag_must_be_typed_true(repo, capsys, change):
+    xml_change(repo, change)
+    run(repo, capsys, 'HW-SF-002 has no downstream LA safety_mechanism')
+
+
+@pytest.mark.parametrize('attr,value', [('safety_mechanism', 'true'),
+                                       ('stereotype', '<<safety_mechanism>>')])
+def test_attribute_and_stereotype_supported(repo, capsys, attr, value):
+    def change(tree):
+        element(tree, 'safety-retentiondomain').set('value', 'false')
+        element(tree, 'la-comp-retentiondomain').set(attr, value)
+    xml_change(repo, change)
+    run(repo, capsys)
+
+
+def test_indirect_requirement_trace_supported(repo, capsys):
+    xml_change(repo, lambda tree: element(tree, 'trace-sf_002-retentiondomain').set('target', '#cap-req-hw_fr_009'))
+    run(repo, capsys)
+
+
+def generic_trace(tree, uuid, source, target):
+    child = etree.SubElement(element(tree, 'la-layer'), 'ownedTraces',
+                             id=uuid, sourceElement=source, targetElement=target)
+    child.set(XSI, 'org.polarsys.capella.core.data.capellacommon:GenericTrace')
+
+
+def test_trace_cycles_do_not_confer_coverage(repo, capsys):
+    def change(tree):
+        delete_link(tree)
+        delete_link(tree, 'trace-fr_009-retentiondomain')
+        generic_trace(tree, 'cycle-a', '#cap-req-hw_sf_002', '#cap-req-hw_fr_009')
+        generic_trace(tree, 'cycle-b', '#cap-req-hw_fr_009', '#cap-req-hw_sf_002')
+    xml_change(repo, change)
+    run(repo, capsys, 'HW-SF-002 has no downstream LA safety_mechanism')
+
+
+def test_reversed_trace_not_downstream(repo, capsys):
+    def change(tree):
+        delete_link(tree)
+        generic_trace(tree, 'reversed', '#la-comp-retentiondomain', '#cap-req-hw_sf_002')
+    xml_change(repo, change)
+    run(repo, capsys, 'HW-SF-002 has no downstream LA safety_mechanism')
+
+
+def test_reqif_outgoing_storage_direction_supported(repo, capsys):
+    def change(tree):
+        delete_link(tree)
+        child = etree.SubElement(element(tree, 'la-comp-retentiondomain'),
+             'ownedExtensions', id='outgoing-relation', source='#la-comp-retentiondomain',
+             target='#cap-req-hw_sf_002')
+        child.set(XSI, 'CapellaRequirements:CapellaOutgoingRelation')
+    xml_change(repo, change)
+    run(repo, capsys)
+
+
+@pytest.mark.parametrize('target', ['#missing-component', ''])
+def test_broken_trace_fails_even_with_another_valid_path(repo, capsys, target):
+    xml_change(repo, lambda tree: element(tree, 'trace-sf_004-powersupervisor').set('target', target))
+    run(repo, capsys, 'Broken safety trace')
+
+
+def test_missing_authority_constraint(repo, capsys):
+    def change(tree):
+        obj = element(tree, 'oa-constraint-regulatory')
+        obj.getparent().remove(obj)
+    xml_change(repo, change)
+    run(repo, capsys, 'RegulatoryAuthority constraint')
+
+
+def test_unlinked_authority_constraint(repo, capsys):
+    xml_change(repo, lambda tree: element(tree, 'oa-constraint-regulatory').set('constrainedElements', ''))
+    run(repo, capsys, 'standards/qualification requirements')
+
+
+def test_authority_cannot_be_functional_actor(repo, capsys):
+    xml_change(repo, lambda tree: element(tree, 'oa-actor-bench').set('name', 'RegulatoryAuthority'))
+    run(repo, capsys, 'not a functional Actor/Entity')
+
+
+@pytest.mark.parametrize('change,message', [
+    (lambda tree: element(tree, 'sa-mode-idle').set('name', 'new-state'), 'exactly the modes'),
+    (lambda tree: element(tree, 'mode-idle-firmware').set('value', 'IDLE'), 'FSM link/mapping'),
+    (lambda tree: element(tree, 'mode-idle-fsm').set('value', 'docs/no-such-fsm.md'), 'FSM link/mapping'),
+])
+def test_mode_contracts(repo, capsys, change, message):
+    xml_change(repo, change)
+    run(repo, capsys, message)
+
+
+def test_firmware_mode_removal_detected(repo, capsys):
+    path = repo / gate.FIRMWARE_FSM
+    path.write_text(path.read_text().replace('- LISTEN_ONLY\n', ''))
+    run(repo, capsys, 'FSM link/mapping')
+
+
+def test_missing_reader_fails_cli(repo, capsys, monkeypatch):
+    monkeypatch.setattr(gate, 'CAPELLAMBSE_AVAILABLE', False)
+    run(repo, capsys, 'capellambse python package is not installed')
