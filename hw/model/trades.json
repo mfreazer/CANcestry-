@@ -1,0 +1,137 @@
+{
+  "schema_version": "0.1.0",
+  "trades": [
+    {
+      "trade_id": "T-01",
+      "title": "Third CAN Controller",
+      "motivating_requirement_or_risk": "HW-FR-001; HW-FR-002",
+      "owner": "System Engineer",
+      "target_phase": "H-Phase 2",
+      "status": "recorded",
+      "options_considered": [
+        {
+          "name": "On-chip third CAN instance (S32K-class)",
+          "rationale_for_rejection": null
+        },
+        {
+          "name": "SPI CAN-FD companion IC",
+          "rationale_for_rejection": null
+        }
+      ],
+      "selected_option": null,
+      "decision_criteria": [
+        {
+          "criterion": "MCU/HAL compatibility",
+          "weight": null
+        },
+        {
+          "criterion": "HAL driver complexity",
+          "weight": null
+        },
+        {
+          "criterion": "SPI bandwidth",
+          "weight": null
+        },
+        {
+          "criterion": "BOM cost",
+          "weight": null
+        }
+      ],
+      "decision_rationale": "Decision and criterion weights remain pending SE/QA review in H-Phase 2; this record is not a component selection."
+    },
+    {
+      "trade_id": "T-02",
+      "title": "Watchdog Topology",
+      "motivating_requirement_or_risk": "HW-SF-003; HW-SF-005; HW-FR-010",
+      "owner": "System Engineer / QA Lead",
+      "target_phase": "H-Phase 2",
+      "status": "recorded",
+      "options_considered": [
+        {
+          "name": "Internal IWDG only",
+          "rationale_for_rejection": "Cannot satisfy HW-SF-003 / HW-FR-010: external watchdog is mandatory."
+        },
+        {
+          "name": "Internal IWDG plus external window supervisor IC",
+          "rationale_for_rejection": null
+        }
+      ],
+      "selected_option": null,
+      "decision_criteria": [
+        {
+          "criterion": "Single-fault coverage",
+          "weight": null
+        },
+        {
+          "criterion": "FIT rate budget",
+          "weight": null
+        },
+        {
+          "criterion": "Timebase tolerance",
+          "weight": null
+        }
+      ],
+      "decision_rationale": "Decision and criterion weights remain pending SE/QA review in H-Phase 2; this record is not a component selection."
+    },
+    {
+      "trade_id": "T-03",
+      "title": "Retention Store",
+      "motivating_requirement_or_risk": "HW-SF-002; HW-FR-009",
+      "owner": "System Engineer",
+      "target_phase": "H-Phase 2",
+      "status": "recorded",
+      "options_considered": [
+        {
+          "name": "Populate supercap",
+          "rationale_for_rejection": null
+        },
+        {
+          "name": "DNP supercap footprint with ceramic capacitor bank",
+          "rationale_for_rejection": null
+        }
+      ],
+      "selected_option": null,
+      "decision_criteria": [
+        {
+          "criterion": "VBAT retention floor at worst-case supply loss",
+          "weight": null
+        }
+      ],
+      "decision_rationale": "Decision and criterion weights remain pending SE/QA review in H-Phase 2; this record is not a component selection."
+    },
+    {
+      "trade_id": "T-04",
+      "title": "Termination Default",
+      "motivating_requirement_or_risk": "HW-FR-002; HW-FR-003",
+      "owner": "System Engineer",
+      "target_phase": "H-Phase 2",
+      "status": "recorded",
+      "options_considered": [
+        {
+          "name": "Termination enabled by default",
+          "rationale_for_rejection": null
+        },
+        {
+          "name": "Termination disabled by default",
+          "rationale_for_rejection": null
+        }
+      ],
+      "selected_option": null,
+      "decision_criteria": [
+        {
+          "criterion": "Bus topology compliance",
+          "weight": null
+        },
+        {
+          "criterion": "Stub reflections",
+          "weight": null
+        },
+        {
+          "criterion": "Unpowered bus loading",
+          "weight": null
+        }
+      ],
+      "decision_rationale": "Decision and criterion weights remain pending SE/QA review in H-Phase 2; this record is not a component selection."
+    }
+  ]
+}

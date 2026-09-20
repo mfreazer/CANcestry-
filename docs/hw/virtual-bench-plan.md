@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Virtual Bench Plan |
-| **Version** | 0.3.0 |
-| **Status** | Approved — H-Phase 1 baseline |
+| **Version** | 0.4.1 |
+| **Status** | Draft — H-04, pending QA approval |
 | **Owner** | System Engineer |
 | **Co-author** | QA Lead (oracle rule, credibility scheme) |
 | **Approver** | Release Manager |
@@ -44,24 +44,31 @@ The ELF is built from tag `v1.0.0` with the pinned toolchain image (`ci/docker/`
 
 ## 4. Oracle registry
 
-`hw/tests/oracles/registry.csv` is the normative source of truth for oracles (HW-PLAN §10.2, HwAGENTS.md Rule 3). The table below is a rendered view of that registry:
+`hw/tests/oracles/registry.json` is the normative source of truth, validated by
+`schemas/hw/hw-oracle-registry-0.1.0.schema.json`. `registry.csv` is a generated
+backward-compatible export, not an editable record. The table below is also
+generated; CI rejects drift. OR-010 replaces the former provisional OR-005b
+identifier to satisfy the strict `OR-NNN` contract; no measurement or oracle
+closure is claimed by this renumbering.
 
-| ID | Oracle | Class | Serves | Validation Gap |
-|---|---|---|---|---|
-| OR-001 | RC hold-up / energy-balance closed form | (a) | HW-SF-002, HW-SF-004, HW-FR-009 | Idealized ODE; ESR temperature dependence, leakage nonlinearity, and real brownout shapes not modeled. T2 action: correlate with vendor SPICE or bench measurement. |
-| OR-002 | ISO 7637-2 / 16750-2 tabulated pulse parameters | (b) | HW-FR-004 | — |
-| OR-003 | ISO 11898-2 bit-timing and level tables | (b) | HW-FR-003, HW-FR-007 | — |
-| OR-004 | ISO 26262-5 Annex D worked example (FMEDA tool gate) | (b) | HW-SF-005 | — |
-| OR-005 | Independent netlist query (KiCad) vs schematic author intent | (d) | HW-SF-001, HW-FR-008 | — |
-| OR-005b | Golden measurement from first fabricated board (post-bench) | (c) | HW-SF-001 | — |
-| OR-006 | Datasheet sleep/VBAT current tables | (b) | HW-FR-005, HW-SF-002, HW-FR-009 | — |
-| OR-007 | STM32G4 LSI tolerance datasheet | (b) | HW-SF-003 | — |
-| OR-008 | STM32G4 BOR level table | (b) | HW-SF-004 | — |
-| OR-009 | External watchdog IC datasheet (window + timebase tolerance) | (b) | HW-FR-010, HW-SF-003 | — |
+<!-- BEGIN ORACLE REGISTRY -->
+| ID | Oracle | Class | Serves | Validation Gap | Source citation |
+| --- | --- | --- | --- | --- | --- |
+| OR-001 | RC hold-up / energy-balance closed form | analytical | HW-SF-002, HW-SF-004, HW-FR-009 | Idealized ODE; ESR temperature dependence, leakage nonlinearity, and real brownout shapes not modeled. T2 action: correlate with vendor SPICE or bench measurement. | HwRS.md v0.2.0 (2026), HW-SF-002 / HW-FR-009: C dV/dt = -I; or_001_holdup.py independent closed form and RK4 self-check. |
+| OR-002 | Pulse reference data and reduced-source regression; qualification pending | standard | HW-FR-004 | No qualified Pulse 4 starting-profile oracle or Test B source topology. The old 2011 §5.6.2/Table 11 citation and 40 V clamp were corrected; shape qualification remains pending #41. Aggregate HW-FR-004 evidence is pending (CL0), not passing; numeric regression is not physical conformance. | ISO 7637-2:2011 for pulses 1/2/3 only; ISO 16750-2:2012 §4.6.3.2 Figure 7/Table 3 (starting-profile target), §4.6.4.2.3 Figure 9/Table 6 pp. 12–13 (Test B); hw/bom/datasheets/extract-iso16750-2-2012.json. |
+| OR-003 | ISO 11898-2 bit-timing and level tables | standard | HW-FR-003, HW-FR-007 | Bus model and physical ISO 11898-2 conformance measurements pending. | ISO 11898-2:2016 and HwRS.md HW-FR-003 / HW-FR-007. |
+| OR-004 | ISO 26262-5 Annex D worked example (FMEDA tool gate) | standard | HW-SF-005 | FMEDA calculator and independent Annex D regression not implemented. | ISO 26262-5:2018 Annex D worked example; calculator qualification pending. |
+| OR-005 | Independent netlist query (KiCad) vs schematic author intent | independent_model | HW-SF-001, HW-FR-008 | Netlist query and independent schematic-intent comparison pending ECAD. | HwRS.md v0.2.0 (2026), HW-SF-001 / HW-FR-008; independent KiCad netlist query planned, no netlist yet. |
+| OR-006 | Datasheet sleep/VBAT current tables | standard | HW-FR-005, HW-SF-002, HW-FR-009 | Vendor table/page re-verification and board-current measurement pending. | STMicroelectronics DS12787, STM32G474 VBAT current tables; hw/bom/datasheets/extract-mcu-vbat.json. |
+| OR-007 | STM32G4 LSI tolerance datasheet | standard | HW-SF-003 | Vendor table/page re-verification pending; LSI does not qualify the primary watchdog window. | STMicroelectronics DS12787, STM32G474 LSI tolerance table (exact table/page verification pending). |
+| OR-008 | STM32G4 BOR level table | standard | HW-SF-004 | BOR threshold spread and physical brownout correlation pending. | STMicroelectronics DS12787, STM32G474 BOR level table; HW-SF-004. |
+| OR-009 | External watchdog IC datasheet (window + timebase tolerance) | standard | HW-FR-010, HW-SF-003 | External watchdog vendor, datasheet and timebase/window correlation pending. | HwRS.md v0.2.0 (2026), HW-FR-010 / HW-SF-003; vendor IC selection and datasheet pending. |
+| OR-010 | Golden measurement from first fabricated board (post-bench) | golden_measurement | HW-SF-001 | No fabricated-board measurement exists; cannot support CL3 closure. | HwRS.md v0.2.0 (2026), HW-SF-001; planned golden-board measurement, not acquired. Renumbered OR-010 from OR-005b in H-04. |
+<!-- END ORACLE REGISTRY -->
 
 A T1/T2 row cannot become `passing` without a registry link (CI-enforced via `oracle_id` column).
 
-**Oracle upgrade path (QA ruling VB-Q2):** when the first board is fabricated and measured, class (d) oracles for physical-layer requirements are supplemented by a class (c) golden-measurement oracle. The class (c) oracle is added to the registry (e.g., OR-005b) and the traceability row is updated to require the class (c) link for CL3 closure.
+**Oracle upgrade path (QA ruling VB-Q2):** when the first board is fabricated and measured, class (d) oracles for physical-layer requirements are supplemented by a class (c) golden-measurement oracle. The class (c) oracle is added to the registry (OR-010, formerly OR-005b) and the traceability row is updated to require the class (c) link for CL3 closure.
 
 ## 5. Credibility scheme (CL0–CL3)
 
@@ -91,15 +98,23 @@ Evidence artifact per run: tool digests, ELF sha256, trace CSV sha256, oracle de
 
 ### 8.1 Model fidelity roadmap
 
-To address QA's H-01 concern ("no stated path from T1 idealization to T2 fidelity"), each `CancestryLib` plant model defines its current T1 idealizations, the applicable T2/bench trigger class (HW-PLAN §10.4), and the fidelity step required to close the gap:
+This is a roadmap, **not** additional verification evidence. Only the two
+existing model files are listed below. HW-SF-002 / HW-FR-009 motivate the
+hold-up rows; HW-FR-004 motivates the pulse rows. Planned charge-path work
+must provide an independently derived oracle before any ledger pass.
 
-| Modelica Model | Current T1 Idealizations | Trigger Class (HW-PLAN §10.4) | Fidelity Step to Close |
-|---|---|---|---|
-| `Power.Holdup` | Constant-current discharge; linear leakage; constant ESR; ideal diode charge path. | Trigger 2 (Model boundary) | Add ESR temperature dependence ($T = -40^\circ\text{C}$ to $+85^\circ\text{C}$), non-linear capacitor leakage vs. voltage, WCCA derating, and correlate with vendor SPICE / bench measurement at H-03. |
-| `Power.PulseISO7637_2` | Ideal voltage/current sources; lumped line impedance; ideal step/exponential edges. | Trigger 1 (Discretization gap) & Trigger 2 (Model boundary) | Add real TVS clamping curves, high-frequency parasitic inductance, and oscilloscope trace replay correlation at H-03/H-04. |
-| `Bus.LumpedPhy` | Lumped RC/RL bus model; ideal transceiver switching thresholds; no common-mode choke saturation. | Trigger 2 (Model boundary) | Incorporate transceiver loop delay spread, differential-to-common-mode conversion, and physical cable harness measurement correlation at H-03/H-04. |
-| `Thermal.RCNetwork` | Lumped 1D RC thermal nodes; constant ambient temperature; fixed thermal conductances. | Trigger 2 (Model boundary) | Include temperature-dependent $R_{\text{DS(on)}}$, PCB thermal copper pour FEM extract, and thermal camera bench calibration at H-03/H-04. |
-| `Safety.Supervisor` | Fixed voltage threshold; ideal comparator response; constant propagation delay. | Trigger 1 (Discretization gap) & Trigger 2 (Model boundary) | Add threshold tolerance band across temperature, glitch filter dynamic response, and Renode T2 co-simulation replay at H-04. |
+| model_file | fidelity_axis | current_oracle | target_oracle | tier | validation_gap |
+|---|---|---|---|---|---|
+| `hw/model/CancestryLib/Power/Holdup.mo` | Discharge, ESR vs temperature, nonlinear leakage | OR-001 (constant-current discharge only) | OR-001 plus vendor-SPICE / golden measurement | T1 → T4 | Constant ESR/leakage and ideal brownout shapes; model-boundary trigger. No claim of vendor or bench correlation. |
+| `hw/model/CancestryLib/Power/Holdup.mo` | **Planned case `holdup_charge_001.simcase.json`: R_path and diode forward bias (iCh > 0)** | OR-001 excludes the conducting charge branch | **OR-001 extended with an independent piecewise charging solution** | **analysis (T0), then T1 regression** | R_path is a budget and unexercised in holdup_001. Charge turn-on/recharge analysis and case are future work, not implemented or passed by H-04. |
+| `hw/model/CancestryLib/Power/Holdup.mo` | Supervisor threshold / real brownout and reset sequences | OR-001 discharge; OR-008 planned threshold reference | OR-008 plus golden brownout/reset traces | T2 → T4 | Supervisor threshold spread and firmware/reset-domain behavior are outside this plant; model-boundary and oracle-absence triggers. |
+| `hw/model/CancestryLib/Power/PulseISO7637_2.mo` | Peak/time/decay numerical regression; NOT qualification | OR-002 reference/fixture data (CL0 qualification) | Independently qualified OR-002 source waveform per #41, then T4 | T1 → T4 | Pulse manifest and ledger are pending; numeric regression success cannot promote incomplete coverage. |
+| `hw/model/CancestryLib/Power/PulseISO7637_2.mo` | Full cranking profile; unsuppressed load-dump pulse 5a | OR-002 reduced cranking / suppressed 5b only | Extended OR-002 with qualified standard/golden waveform | T1 → T4 (#41 / H-06) | Pulse 4 is a 1/20/1 ms engineering dip, not a qualified starting profile; 5b source topology remains pending #41 despite corrected 35 V clamp/source citation. Unsuppressed 5a remains H-06. |
+
+Bus, thermal and supervisor-specific physics models do not yet exist. Their
+future fidelity work remains in the bench-trigger planning; this table must
+not make nonexistent model files appear implemented. H-03/H-04 no longer
+serve as promised Renode or vendor-SPICE completion dates.
 
 ## 9. Open questions for QA
 
@@ -111,5 +126,7 @@ None outstanding as of v0.3.0.
 |---|---|---|
 | 0.1.0 | 2026-09-19 | Initial draft |
 | 0.2.0 | 2026-09-19 | QA review applied: rebuild and retention policy added (VB-F1); sub-step discrete event injection clarified for HW-SF-004 (VB-Q1); OR-005b class (c) golden-measurement upgrade path added (VB-Q2); oracle registry expanded with OR-007, OR-008, OR-009 to serve HW-SF-003, HW-SF-004, HW-FR-010. |
+| 0.4.1 | 2026-09-19 | H-04 review: correct OR-002 source and withdraw aggregate pulse qualification to pending; track full Pulse 4/Test B qualification in #41. |
+| 0.4.0 | 2026-09-19 | H-04 #38: schema-validated JSON oracle registry, generated CSV/table, explicit pending-oracle gaps, OR-010 renumbering and tabulated fidelity/charge-path roadmap. |
 | 0.3.0 | 2026-09-19 | Residual state reconciliation (issue #35): declared `hw/tests/oracles/registry.csv` source of truth for oracles and added `validation_gap` column to rendered view (§4); added Model fidelity roadmap (§8.1) defining T1 idealizations, trigger classes, and closure steps per `CancestryLib` model. |
 

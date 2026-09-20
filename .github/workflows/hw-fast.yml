@@ -28,6 +28,9 @@ on:
       - "hw/**"
       - "docs/hw/**"
       - "schemas/hw/**"
+      - "tests/unit/tools/test_check_hw_*.py"
+      - "tests/unit/tools/test_check_capella_model.py"
+      - "docs/system/mode-fault-state-machine.md"
       - "ci/**"
       - "HwAGENTS.md"
       - "agents.md"
@@ -39,6 +42,9 @@ on:
       - "hw/**"
       - "docs/hw/**"
       - "schemas/hw/**"
+      - "tests/unit/tools/test_check_hw_*.py"
+      - "tests/unit/tools/test_check_capella_model.py"
+      - "docs/system/mode-fault-state-machine.md"
       - "ci/**"
       - "HwAGENTS.md"
       - "agents.md"
@@ -111,16 +117,25 @@ jobs:
             -e CANCESTRY_HW_IMAGE \
             "$IMAGE" bash -lc '
               set -euo pipefail
+              trap "chmod -R a+rX build/hw 2>/dev/null || true" EXIT
               echo "== 1. Schema validation (software + hardware trees)"
               python3 ci/check_schemas_valid.py schemas || {
                 echo "::error::hw-fast gate 1 failed: schema validation"
                 exit 1
               }
 
+              echo "== 1.5. Hardware contract instances and generated views"
+              python3 ci/check_hw_contracts.py . || {
+                echo "::error::hw-fast gate 1.5 failed: hardware contracts or rendered-view drift"
+                exit 1
+              }
+              # JSON is authoritative; emit the legacy CSV before the ledger gate.
+              python3 ci/check_hw_contracts.py . --export
+
               echo "== 2. HwRS parser + hardware ledger (unit tests, 95% branch coverage gate)"
               python3 -m coverage run --branch \
-                --include=ci/check_hw_traceability.py,ci/check_capella_model.py \
-                -m pytest tests/unit/tools/test_check_hw_traceability.py tests/unit/tools/test_check_capella_model.py -q || {
+                --include=ci/check_hw_traceability.py,ci/check_capella_model.py,ci/check_hw_contracts.py \
+                -m pytest tests/unit/tools/test_check_hw_traceability.py tests/unit/tools/test_check_capella_model.py tests/unit/tools/test_check_hw_contracts.py -q || {
                 echo "::error::hw-fast gate 2 failed: checker unit tests"
                 exit 1
               }
@@ -129,7 +144,7 @@ jobs:
                 exit 1
               }
 
-              echo "== 2.5. Capella seed model structural gates & bridge CSV"
+              echo "== 2.5. Capella seed model structural gates & live bridge JSON"
               python3 ci/check_capella_model.py . || {
                 echo "::error::hw-fast gate 2.5 failed: Capella seed model structural check"
                 exit 1

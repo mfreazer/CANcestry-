@@ -2,46 +2,56 @@
   "schema_version": "0.1.0",
   "case_id": "pulse_7637_001",
   "requirement_id": "HW-FR-004",
-  "scenario": "ISO 7637-2 and ISO 16750-2 automotive transient immunity pulse generation for supply line pulses 1, 2a, 2b, 3a, 3b, 4, and 5b (12 V system nominal). Verification asserts peak voltage amplitudes, pulse durations, and rise/fall times against oracle OR-002 tabulated parameters.",
+  "scenario": "HW-FR-004 reduced unloaded source regression, NOT passing standards evidence. Tests compare deterministic fixture invariants for pulses 1, 2a, 2b, 3a, 3b, 4 and 5b. Pulse 4 and Test B/5b remain partial and pending (#41); correcting 5b Us* to 35 V does not qualify the waveform.",
   "not_covered": [
-    "Physical EMC lab pulse generator impedance coupling: covered at T4 bench verification",
-    "Continuous multi-pulse burst train repetition rate thermal stress: covered at T1/T4 thermal sweep"
+    "DUT immunity and loaded source/protection response; Ri is unused metadata.",
+    "Pulse 4: current 13.5 V -> 6 V dip uses 1 ms fall, 20 ms dwell, 1 ms rise. No full ISO 16750-2:2012 §4.6.3.2 starting profile, temperature dependence, battery ESR variation or alternator recovery. Qualification CL0, pending #41.",
+    "Pulse 5b: ISO 16750-2:2012 §4.6.4.2.3 Figure 9 / Table 6 is normative. Us* corrected to 35 V, but separate unclamped Us, suppressed plateau, source-impedance placement, standard edge/duration definitions and repetition remain unqualified; pending #41.",
+    "Pulse 5a is not implemented; H-06.",
+    "Linear edges, excursion conventions and td/3 decay are fixture assumptions, not an independently qualified standard waveform oracle.",
+    "Pulse bursts, parasitics, EMC and T4 physical correlation remain pending."
   ],
   "model": "CancestryLib.Power.PulseISO7637_2",
   "parameters": {
     "V_nominal": 13.5,
     "Us_pulse1": -100.0,
     "td_pulse1": 0.002,
-    "tr_pulse1": 1.0e-06,
+    "tr_pulse1": 1e-06,
     "Ri_pulse1": 10.0,
     "Us_pulse2a": 37.0,
-    "td_pulse2a": 5.0e-05,
-    "tr_pulse2a": 1.0e-06,
+    "td_pulse2a": 5e-05,
+    "tr_pulse2a": 1e-06,
     "Ri_pulse2a": 2.0,
     "Us_pulse2b": 10.0,
     "td_pulse2b": 1.0,
     "tr_pulse2b": 0.001,
     "Us_pulse3a": -150.0,
-    "td_pulse3a": 1.0e-07,
-    "tr_pulse3a": 5.0e-09,
+    "td_pulse3a": 1e-07,
+    "tr_pulse3a": 5e-09,
     "Us_pulse3b": 100.0,
-    "td_pulse3b": 1.0e-07,
-    "tr_pulse3b": 5.0e-09,
+    "td_pulse3b": 1e-07,
+    "tr_pulse3b": 5e-09,
     "Us_pulse4": 6.0,
     "td_pulse4": 0.02,
     "tr_pulse4": 0.001,
     "Us_pulse5b": 35.0,
-    "td_pulse5b": 0.2,
-    "tr_pulse5b": 0.005
+    "td_pulse5b": 0.35,
+    "tr_pulse5b": 0.005,
+    "Ri_pulse5b": 0.5
   },
   "tolerances": {
-    "peak_voltage_tol_v": 0.01,
-    "duration_tol_s": 1.0e-06
+    "peak_relative": 0.02,
+    "time_to_peak_relative": 0.05,
+    "decay_tau_relative": 0.1,
+    "duration_relative": 0.02
   },
   "oracle_id": "OR-002",
   "seeds": [],
   "solver": {
-    "step_s": 1.0e-06,
-    "stop_s": 2.0
+    "step_s": 0.002,
+    "stop_s": 2.0,
+    "sampling": "pulse_features",
+    "rise_intervals": 100,
+    "decay_intervals": 1200
   }
 }

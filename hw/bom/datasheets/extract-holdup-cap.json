@@ -4,13 +4,15 @@
   "source": {
     "manufacturer": "TBD (vendor part selection at H-02)",
     "document_id": "HW-FR-009 retention hold-up capacitor specification, HwRS.md v0.2.0 (section 3)",
-    "retrieval_date": "2026-09-19"
+    "retrieval_date": "2026-09-19",
+    "source_pdf_hash": null,
+    "source_url": "https://github.com/mfreazer/CANcestry-/blob/ec28a001bb7e17d2ca8127858a046887be529a58/docs/hw/HwRS.md"
   },
-  "note": "H-01 fixes the requirement bounds and one engineering budget; the vendor datasheet (with table and page) replaces the budget entries at H-02 BOM selection. No value in this extract is an un-cited number (HwAGENTS.md rule 2).",
+  "note": "H-01 fixes the requirement bounds and one engineering budget; the vendor datasheet (with table and page) replaces the budget entries at H-02 BOM selection. No value in this extract is an un-cited number (HwAGENTS.md rule 2). H-04 provenance: no source PDF is retained; source_url is a fallback, not a verified PDF digest.",
   "entries": [
     {
       "name": "C_nominal",
-      "value": 1.0e-05,
+      "value": 1e-05,
       "unit": "F",
       "condition": "Nominal hold-up capacitance; requirement is C >= 10 uF",
       "source": "hwers",
@@ -18,7 +20,7 @@
     },
     {
       "name": "I_leak_max",
-      "value": 5.0e-06,
+      "value": 5e-06,
       "unit": "A",
       "condition": "Maximum capacitor leakage at 85 degC (requirement bound)",
       "source": "hwers",

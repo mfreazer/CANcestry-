@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://cancestry.dev/schemas/hw/hw-sim-0.1.0.schema.json",
   "title": "CANcestry hardware simulation case (v0.1.0)",
-  "description": "Schema for a hardware simulation case (issue #33, H-01; HwAGENTS.md rule 3 and rule 5, virtual-bench-plan §6). A sim case declares, before the model is simulated: the requirement under test, the Modelica model, the parameter set (which hw/tests/test_power_sim.py cross-checks against the schema-validated BOM extract under hw/bom/), the acceptance tolerance, the oracle that must witness the result (rule 3: no oracle ID, no pass) and the fixed seeds. Determinism is mandatory (HwAGENTS.md rule 5): a sim case with no stochastic content declares an empty seed list; seeds must be integers when present.",
+  "description": "Schema for a hardware simulation case (issue #33, H-01; HwAGENTS.md rule 3 and rule 5, virtual-bench-plan \u00a76). A sim case declares, before the model is simulated: the requirement under test, the Modelica model, the parameter set (which hw/tests/test_power_sim.py cross-checks against the schema-validated BOM extract under hw/bom/), the acceptance tolerance, the oracle that must witness the result (rule 3: no oracle ID, no pass) and the fixed seeds. Determinism is mandatory (HwAGENTS.md rule 5): a sim case with no stochastic content declares an empty seed list; seeds must be integers when present.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -67,8 +67,8 @@
     },
     "oracle_id": {
       "type": "string",
-      "pattern": "^OR-\\d{3}[a-z]?$",
-      "description": "Oracle from hw/tests/oracles/registry.csv that must witness the result (HW-PLAN §10.2)."
+      "pattern": "^OR-\\d{3}$",
+      "description": "Oracle from the authoritative hw/tests/oracles/registry.json."
     },
     "seeds": {
       "type": "array",
@@ -92,9 +92,45 @@
         "stop_s": {
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "sampling": {
+          "enum": [
+            "uniform",
+            "pulse_features"
+          ]
+        },
+        "rise_intervals": {
+          "type": "integer",
+          "minimum": 40,
+          "maximum": 1000
+        },
+        "decay_intervals": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 10000
         }
       },
-      "description": "Fixed sampling step and stop time of the recorded trace."
+      "description": "Uniform trace sampling by default. pulse_features uses fixed interval counts around each oracle pulse feature, with step_s as the maximum communication step and stop_s as the per-pulse time ceiling (HW-FR-004).",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "sampling": {
+                "const": "pulse_features"
+              }
+            },
+            "required": [
+              "sampling"
+            ]
+          },
+          "then": {
+            "required": [
+              "rise_intervals",
+              "decay_intervals"
+            ]
+          }
+        }
+      ]
     }
   }
 }

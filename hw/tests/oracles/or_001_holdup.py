@@ -1,6 +1,6 @@
 """Oracle OR-001: RC hold-up / energy-balance closed form.
 
-Registry: ``hw/tests/oracles/registry.csv`` (class (a), serves HW-SF-002,
+Registry: ``hw/tests/oracles/registry.json`` (class (a), serves HW-SF-002,
 HW-SF-004, HW-FR-009 per ``docs/hw/virtual-bench-plan.md`` section 4).
 
 Model (mirrors ``CancestryLib.Power.Holdup``): the retention (VBAT) domain

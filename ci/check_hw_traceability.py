@@ -14,7 +14,7 @@ Rules enforced
    required-CL cell that reads ``CL1``/``CL2``/``CL3``. Any deviation fails
    the gate CLOSED (the parser is a structural guard: if the HwRS table
    format changes, the gate fails instead of silently tracing nothing).
-1. ``hw/tests/traceability.csv`` carries the documented nine-column header;
+1. ``hw/tests/traceability.csv`` carries the documented ten-column header;
    one row per (requirement, method) pair; no empty required fields.
 2. ``method``, ``status``, ``credibility_level`` and ``oracle_id`` use the
    controlled vocabularies (HwAGENTS.md rule 4); every row is additionally
@@ -36,6 +36,14 @@ Rules enforced
    source file it pins by hash must still match (evidence drift = gate
    failure). Non-passing rows carry no evidence.
 
+8. Evidence inherits exact TCL2/TCL3 producer validation gaps unless an
+   independent, hashed full-output witness validates it. TCL1-only rows carry
+   no tool gap. Implements HW-SF-002 / HW-FR-004.
+
+9. HW-FR-004 pulse source evidence is validated even while pending: partial
+   coverage cannot be passing, source hashes and inherited tool gaps stay
+   enforced, and the aggregate qualification must agree with the ledger.
+
 Usage:
     python3 ci/check_hw_traceability.py <repo-root> [--explain]
 
@@ -55,6 +63,10 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ci.check_hw_contracts import load_registry as load_json_registry, registry_csv, read_json, validate, load_contract
 
 HWRs_RELATIVE_PATH = os.path.join("docs", "hw", "HwRS.md")
 REGISTRY_RELATIVE_PATH = os.path.join("hw", "tests", "oracles", "registry.csv")
@@ -66,11 +78,11 @@ HW_REQUIREMENT_ID = re.compile(r"^HW-(?:SF|FR|NF)-\d{3}$")
 HW_ROW = re.compile(r"^\|\s*(HW-(?:SF|FR|NF)-\d{3})\s*\|")
 CREDIBILITY = re.compile(r"^CL([0-3])$")
 REQUIRED_CREDIBILITY = re.compile(r"^CL([1-3])$")
-ORACLE_ID = re.compile(r"^OR-\d{3}[a-z]?$")
+ORACLE_ID = re.compile(r"^OR-\d{3}$")
 EVIDENCE_SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 # Verification methods (HW-PLAN section 10.8: analysis, sim(CLn), bench).
-METHODS = ("analysis", "sim", "t2", "bench")
+METHODS = ("analysis", "sim", "virtual_bench", "bench")
 
 # Honest-ledger status vocabulary (HwAGENTS.md rule 4).
 STATUS_LITERALS = (
@@ -93,6 +105,7 @@ CSV_HEADER = (
     "status",
     "evidence",
     "evidence_sha256",
+    "inherited_validation_gap",
 )
 REGISTRY_HEADER = ("oracle_id", "oracle", "class", "serves",
                    "validation_gap")
@@ -218,14 +231,14 @@ def load_registry(root, report):
     if not os.path.isfile(path):
         report.fail(0, "%s is missing (oracle registry)" %
                     REGISTRY_RELATIVE_PATH)
-        return set()
+        return {}
     with open(path, "r", encoding="utf-8", newline="") as handle:
         rows = list(csv.reader(handle))
     if not rows or rows[0] != list(REGISTRY_HEADER):
         report.fail(0, "%s header is %r, expected %r" %
                     (REGISTRY_RELATIVE_PATH, rows[0] if rows else None,
                      list(REGISTRY_HEADER)))
-        return set()
+        return {}
     oracles = set()
     for number, row in enumerate(rows[1:], start=2):
         if len(row) != len(REGISTRY_HEADER):
@@ -234,11 +247,18 @@ def load_registry(root, report):
                          len(REGISTRY_HEADER)))
             continue
         if not ORACLE_ID.match(row[0]):
-            report.fail(0, "%s line %d: oracle id %r is not OR-xxx[letter]" %
+            report.fail(0, "%s line %d: oracle id %r is not OR-xxx" %
                         (REGISTRY_RELATIVE_PATH, number, row[0]))
             continue
         oracles.add(row[0])
-    return oracles
+    try:
+        document = load_json_registry(Path(root))
+        if read_text(path) != registry_csv(document):
+            report.fail(0, "registry.csv differs from authoritative registry.json; regenerate the export")
+        return {row["oracle_id"]: row for row in document["oracles"]}
+    except (OSError, ValueError) as error:
+        report.fail(0, f"Authoritative oracle registry: {error}")
+        return {}
 
 
 def load_rows(root, report):
@@ -308,7 +328,122 @@ def is_passing(status):
             or status.startswith("fully-verified"))
 
 
-def check_evidence(number, row, root, report):
+QUALIFICATION_PATH = "docs/hw/tool-qualification.md"
+RUNTIME_PINS = {"python", "numpy"}
+TOOL_HEADER = ["tool_id", "Tool / role and rationale", "TI", "TD", "TCL", "validation_gap"]
+
+
+def load_tool_qualifications(root, report):
+    """Rule 8 (HW-SF-002 / HW-FR-004): the controlled TCL table is law."""
+    try:
+        text = read_text(os.path.join(root, QUALIFICATION_PATH))
+        start, end = "<!-- BEGIN TOOL CLASSIFICATION -->", "<!-- END TOOL CLASSIFICATION -->"
+        if text.count(start) != 1 or text.count(end) != 1 or text.index(start) >= text.index(end):
+            raise ValueError("missing/duplicate/reversed classification markers")
+        lines = text.split(start)[1].split(end)[0].strip().splitlines()
+        rows = [[cell.strip() for cell in line.strip().strip("|").split("|")]
+                for line in lines]
+        if len(rows) < 3 or rows[0] != TOOL_HEADER or len(rows[1]) != 6:
+            raise ValueError("invalid classification header/table")
+        tools = {}
+        for row in rows[2:]:
+            if len(row) != 6:
+                raise ValueError("classification row must have six fields")
+            tool, _, ti, td, tcl, gap = row
+            gap = "" if gap == "-" else gap
+            if not tool or tool in tools or tcl not in ("TCL1", "TCL2", "TCL3", "pending"):
+                raise ValueError(f"invalid/duplicate tool classification {tool!r} / {tcl!r}")
+            expected = {"TCL1": (("TI1", "TD1"), ("TI1", "TD2"), ("TI1", "TD3"), ("TI2", "TD1")),
+                        "TCL2": (("TI2", "TD2"),), "TCL3": (("TI2", "TD3"),)}
+            if tcl != "pending" and (ti, td) not in expected[tcl]:
+                raise ValueError(f"{tool}: TI/TD inconsistent with {tcl}")
+            if (tcl in ("TCL2", "TCL3") and not gap) or (tcl == "TCL1" and gap):
+                raise ValueError(f"{tool}: validation_gap inconsistent with {tcl}")
+            tools[tool] = {"tcl": tcl, "gap": gap}
+        if not {"openmodelica", "fmpy", "capellambse"} <= tools.keys():
+            raise ValueError("missing required tool classification")
+        return tools
+    except (OSError, ValueError) as error:
+        report.fail(8, f"Tool qualification table: {error}")
+        return {}
+
+
+def _repo_artifact(root, relative):
+    """Keep evidence/witness sources inside the checked repository."""
+    path = Path(relative)
+    if path.is_absolute() or ".." in path.parts:
+        raise ValueError(f"artifact path is not repository-relative: {relative!r}")
+    resolved = (Path(root) / path).resolve()
+    if not resolved.is_relative_to(Path(root).resolve()):
+        raise ValueError(f"artifact path escapes repository: {relative!r}")
+    return resolved
+
+
+def _metadata_schema(root, definition):
+    schema = read_json(Path(root) / ROW_SCHEMA_RELATIVE_PATH)
+    return {"$schema": schema["$schema"], "$defs": schema["$defs"],
+            "$ref": f"#/$defs/{definition}"}
+
+
+def independent_tool_waivers(document, row, root, registry, tools):
+    """Check full-output witnesses; an oracle ID alone cannot waive a gap."""
+    waived = set()
+    for ref in document.get("independent_tool_validation", []):
+        tool = ref["tool"]
+        if tool in waived or tool not in document["tool_pins"] or tool not in tools:
+            raise ValueError("duplicate or unknown waiver producer")
+        if tools[tool]["tcl"] not in ("TCL2", "TCL3"):
+            raise ValueError("waiver producer must be TCL2/TCL3")
+        oracle = registry.get(ref["oracle_id"])
+        if not oracle or row["requirement_id"] not in oracle["serves"]:
+            raise ValueError("waiver oracle is unregistered or does not serve this requirement")
+        if document.get("source_hashes", {}).get(ref["output"]) != ref["output_sha256"]:
+            raise ValueError("waiver output is not pinned by the evidence")
+        output = _repo_artifact(root, ref["output"])
+        witness_path = _repo_artifact(root, ref["witness"])
+        if sha256_file(output) != ref["output_sha256"] or sha256_file(witness_path) != ref["witness_sha256"]:
+            raise ValueError("waiver output/witness hash mismatch")
+        witness = read_json(witness_path)
+        validate(witness, _metadata_schema(root, "tool_validation_witness"), "independent witness")
+        if witness["oracle_id"] != ref["oracle_id"] or witness["output_sha256"] != ref["output_sha256"]:
+            raise ValueError("witness oracle/output does not match reference")
+        if tool not in witness["independent_of"] or tool in witness["tool_pins"]:
+            raise ValueError("witness is not independent of producer")
+        for producer in witness["tool_pins"]:
+            if producer not in RUNTIME_PINS and tools.get(producer, {}).get("tcl") != "TCL1":
+                raise ValueError("witness uses an unknown or unqualified producer")
+        for relative, digest in witness["source_hashes"].items():
+            if sha256_file(_repo_artifact(root, relative)) != digest:
+                raise ValueError("independent witness source drift")
+        waived.add(tool)
+    return waived
+
+
+def check_tool_inheritance(number, row, document, root, registry, tools, report):
+    """Rule 8: exact TCL2+ gap inheritance; empty for TCL1 or verified waiver."""
+    try:
+        metadata = {key: document[key] for key in
+                    ("tool_pins", "independent_tool_validation") if key in document}
+        validate(metadata, _metadata_schema(root, "evidence_tool_metadata"), "evidence tool metadata")
+        pins = document["tool_pins"]
+        producers = set(pins) - RUNTIME_PINS
+        if not producers:
+            raise ValueError("evidence declares no classified producing tool")
+        if any(source.endswith(".mo") for source in document.get("source_hashes", {})) and "openmodelica" not in producers:
+            raise ValueError("Modelica evidence must declare the OpenModelica compiler pin")
+        for tool in sorted(producers):
+            if tool not in tools or tools[tool]["tcl"] == "pending":
+                raise ValueError(f"unknown/unqualified producing tool {tool!r}")
+        waived = independent_tool_waivers(document, row, root, registry, tools)
+        expected = " | ".join(f"{tool}: {tools[tool]['gap']}" for tool in sorted(producers - waived)
+                              if tools[tool]["tcl"] in ("TCL2", "TCL3"))
+        if row["inherited_validation_gap"] != expected:
+            raise ValueError(f"inherited_validation_gap must be {expected!r}")
+    except (OSError, ValueError) as error:
+        report.fail(8, f"line {number}: {error}")
+
+
+def check_evidence(number, row, root, report, registry, tools):
     """Rule 7: passing rows must pin a live, matching evidence artifact."""
     evidence = row["evidence"]
     digest = row["evidence_sha256"]
@@ -332,11 +467,18 @@ def check_evidence(number, row, root, report):
                     (number, evidence))
         return
     try:
-        document = json.loads(read_text(path))
+        document = read_json(path)
     except ValueError as error:
         report.fail(7, "line %d: evidence artifact %s is not valid JSON: %s" %
                     (number, evidence, error))
         return
+    if not isinstance(document, dict):
+        report.fail(7, f"line {number}: evidence must be a JSON object")
+        return
+    if not isinstance(document.get("source_hashes", {}), dict):
+        report.fail(7, f"line {number}: source_hashes must be an object")
+        return
+    check_tool_inheritance(number, row, document, root, registry, tools, report)
     if document.get("pass") is not True:
         report.fail(7, "line %d: evidence artifact %s does not record "
                     "pass=true" % (number, evidence))
@@ -364,6 +506,7 @@ def check_evidence(number, row, root, report):
 
 def validate_rows(records, hwrs, registry, root, report):
     """Rules 2-7 on the parsed rows."""
+    tools = load_tool_qualifications(root, report)
     for number, row in records:
         requirement_id = row["requirement_id"]
         method = row["method"]
@@ -391,7 +534,7 @@ def validate_rows(records, hwrs, registry, root, report):
             report.fail(2, "line %d: credibility_level %r is not CL0..CL3" %
                         (number, credibility))
         if oracle_id and not ORACLE_ID.match(oracle_id):
-            report.fail(2, "line %d: oracle_id %r is not OR-xxx[letter]" %
+            report.fail(2, "line %d: oracle_id %r is not OR-xxx" %
                         (number, oracle_id))
 
         if requirement_id not in hwrs:
@@ -405,6 +548,8 @@ def validate_rows(records, hwrs, registry, root, report):
                          hwrs[requirement_id]))
 
         if not is_passing(status):
+            if row["inherited_validation_gap"]:
+                report.fail(8, f"line {number}: pending row has no artifact and must not inherit a tool gap")
             if row["evidence"] or row["evidence_sha256"]:
                 report.fail(7, "line %d: %s / %s: non-passing row carries "
                             "evidence (honest ledger: evidence only with a "
@@ -459,7 +604,46 @@ def validate_rows(records, hwrs, registry, root, report):
                                     (number, requirement_id, method,
                                      credibility, required_cl))
 
-        check_evidence(number, row, root, report)
+        check_evidence(number, row, root, report, registry, tools)
+
+
+
+PULSE_EVIDENCE_RELATIVE_PATH = "hw/tests/evidence/pulse_7637_001.json"
+
+
+def check_pulse_qualification(root, hwrs, records, registry, report):
+    """HW-FR-004: pending pulse evidence is still schema/hash/tool-gap gated.
+
+    Numeric regression success is not a qualification pass. Keep the source
+    manifest and its ledger row consistent even when the row cannot reference
+    closure evidence. This is not a replacement for #36's future plot gate.
+    """
+    path = Path(root) / PULSE_EVIDENCE_RELATIVE_PATH
+    if "HW-FR-004" not in hwrs and not path.exists():
+        return  # Minimal fixtures / repos with no HW-FR-004 scope.
+    try:
+        document = load_contract(Path(root), PULSE_EVIDENCE_RELATIVE_PATH, "pulse-evidence")
+        rows = [row for _, row in records if row["requirement_id"] == "HW-FR-004"
+                and row["method"] == "virtual_bench"]
+        if len(rows) != 1:
+            raise ValueError("HW-FR-004 needs exactly one virtual_bench ledger row")
+        row = rows[0]
+        if document["status"] == "pending":
+            if row["status"] != "sim-pending" or row["credibility_level"] != "CL0":
+                raise ValueError("pending pulse manifest requires a sim-pending/CL0 ledger row; no passing claim")
+        elif not is_passing(row["status"]) or row["credibility_level"] != document["credibility_level"]:
+            raise ValueError("passing pulse manifest and ledger status/credibility disagree")
+        tools = load_tool_qualifications(root, report)
+        # The pending ledger has no closure evidence/gap, but a produced
+        # regression artifact still inherits its compiler gap in its own JSON.
+        artifact_row = {"requirement_id": document["requirement_id"],
+                        "inherited_validation_gap": document["inherited_validation_gap"]}
+        check_tool_inheritance(0, artifact_row, document, root, registry, tools, report)
+        for relative, digest in sorted(document["source_hashes"].items()):
+            if sha256_file(_repo_artifact(root, relative)) != digest:
+                raise ValueError(f"pulse evidence source {relative} drifted from pinned sha256")
+    except (OSError, ValueError) as error:
+        report.fail(9, f"Pulse qualification: {error}")
 
 
 def argument_parser():
@@ -506,6 +690,7 @@ def main(argv=None):
     registry = load_registry(root, report)
     records = load_rows(root, report)
     validate_rows(records, hwrs, registry, root, report)
+    check_pulse_qualification(root, hwrs, records, registry, report)
 
     passing = sum(1 for _, row in records if is_passing(row["status"]))
     pending = len(records) - passing

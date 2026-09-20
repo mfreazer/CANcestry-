@@ -3,11 +3,11 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry MBSE Plan |
-| **Version** | 0.3.0 |
-| **Status** | Approved — H-Phase 1 baseline |
+| **Version** | 0.4.1 |
+| **Status** | Draft — H-04, pending Human Reviewer / QA approval |
 | **Owner** | System Engineer |
 | **Approver** | QA Lead, Release Manager |
-| **Last Review** | 2026-09-19 |
+| **Last Review** | 2026-09-20 |
 | **Repository location** | `docs/hw/mbse-plan.md` |
 | **Governing documents** | `docs/hw/HW-PLAN.md` v1.0.0, `docs/qa/hw-validation-matrix.md` v0.1.0 |
 
@@ -28,7 +28,25 @@ Requirements live **only** in `docs/hw/HwRS.md`. Capella requirement objects car
 - Safety-relevant component without a linked `HW-SF-*` or `HW-FR-*` ID.
 - `hwrs_id` property present in the model but absent from `HwRS.md`.
 - HwRS ID present in `HwRS.md` but not linked from any Capella element (dangling requirement).
-- PA element without an LA parent.
+- PA realization not resolving to a non-root LA component.
+- HW-SF-* requirement without a directed trace path to a logical component
+  carrying a `BooleanPropertyValue` named `safety_mechanism` with value true,
+  or the exact `safety_mechanism="true"` attribute. Raw `stereotype` /
+  `stereotypes` strings do **not** qualify (N1); they are not resolved profile
+  applications. The current seed uses the typed-Boolean alternative.
+  Requirement existence/name alone is not linkage; cycles and container
+  membership do not confer coverage, and broken references fail closed.
+- Regulatory authority represented as a functional actor instead of an OA
+  Constraint linked to HW-FR-003/004, HW-SF-005 and HW-NF-004.
+- SA Mode mappings that drift from the normative firmware FSM.
+
+The SA modes are architectural aliases, not additional firmware states:
+`idle → LISTEN_ONLY`, `active → ACTIVE`, `diagnosing → CONFIG`,
+`safe-latch → SAFE`. Each Mode carries a `firmware_fsm` link to
+`docs/system/mode-fault-state-machine.md#1-system-modes` and a
+`firmware_mode` property checked against the normative state list. Diagnostic
+access in SAFE and BOOT/OFF transients remain governed by the firmware FSM;
+no new firmware transitions or passive-latch recovery path are introduced.
 
 ## 3. Safety analysis path
 
@@ -36,7 +54,21 @@ FHA/FMEA/FTA in Capella safety viewpoints (ATICA optional, with documented fallb
 
 ## 4. Bridge to Modelica
 
-Mapping table (Capella LA component → CancestryLib block; port → connector; parametric constraint → parameter binding) maintained in `hw/model/bridge.csv`, schema-validated. CI check verifies every row resolves on both sides or is marked `not_simulated` with rationale. Fallback if automated generation proves impractical: manual mapping with the same CI check (HW-PLAN §6.3).
+`hw/model/bridge.json` is the schema-validated source of truth. CI obtains LA
+component names from capellambse (excluding the root container) and top-level
+Modelica `model` / `block` declarations from `hw/model/CancestryLib/`.
+Every LA component appears exactly once; each existing Modelica block is
+referenced exactly once. Unknown names, duplicates and omissions fail closed.
+The supported Modelica inventory is file-per-class with an explicit matching
+`within` clause; unsupported nested model declarations fail rather than being
+silently omitted. Comments, strings and package declarations are not models.
+
+`not_simulated` has a null target and one of `not-yet-modeled`,
+`out-of-scope-for-h02`, `emulated-by-other-means`, `not-simulatable`.
+A simulated row has rationale `n/a`. Every row retains a QA-readable
+`coverage_note`; mapping a stimulus does not claim that the supervisor's
+threshold/reset physics are simulated. Implements HW-SF-001..005,
+HW-FR-002, HW-FR-004, HW-FR-008 and HW-FR-009.
 
 ## 5. Model control
 
@@ -54,17 +86,25 @@ None outstanding as of v0.3.0. The `hwrs_id` property name is confirmed (QA ruli
 |---|---|---|
 | 0.1.0 | 2026-09-19 | Initial draft |
 | 0.2.0 | 2026-09-19 | QA review applied: concurrent edit policy for safety-relevant diagrams added (MBSE-F1); `hwrs_id` property name confirmed and CI check list expanded (MBSE-Q); external watchdog added to LA and PA level descriptions; Git LFS threshold quantified; FMEDA oracle gate referenced. |
-| 0.3.0 | 2026-09-19 | Capella seed & structural gate baseline (issue #35): recorded Trades T-01..T-04 in Appendix A; documented Capella model seed structure under `hw/model/capella/` and bridge specification `hw/model/bridge.csv`. |
+| 0.4.1 | 2026-09-20 | N1: remove the unqualified stereotype-string fallback; retain explicit/typed Boolean markers and real downstream trace checks. |
+| 0.4.0 | 2026-09-19 | H-04 #38: JSON bridge and structured trades; generated views, live 1:1 validation, safety-mechanism reachability, authority constraint and firmware-aligned SA modes. |
+| 0.3.0 | 2026-09-19 | Capella seed & structural gate baseline (issue #35): recorded Trades T-01..T-04 in Appendix A; documented Capella model seed structure under `hw/model/capella/` and bridge specification `hw/model/bridge.json`. |
 
 ---
 
 ## Appendix A. Architectural Trade Studies (T-01..T-04)
 
-Per HW-PLAN §6 and HAD §7, open architectural trades are recorded here with owner, decision criterion, and target resolution phase. Trades are recorded, not decided, in H-Phase 1.
+`hw/model/trades.json` is authoritative; this appendix is a generated view.
+Run `python3 ci/check_hw_contracts.py . --export` to regenerate it and the
+oracle views. CI rejects manual drift. Trades remain recorded, not decided:
+null selection, rejection rationale or weight means pending review, not an
+approved choice or equal weighting. Motivating HwRS IDs are in each record.
 
-| Trade ID | Description | Owner | Decision Criterion | Target Phase | Status |
-|---|---|---|---|---|---|
-| **T-01** | **Third CAN Controller**: On-chip 3rd instance (S32K-class) vs. SPI CAN-FD companion IC. | System Engineer | MCU selection, HAL driver complexity, SPI bandwidth, and BOM cost. | H-Phase 2 | Recorded |
-| **T-02** | **Watchdog Topology**: Internal IWDG only vs. Internal + External window supervisor IC. | System Engineer / QA Lead | ASIL-B single-fault coverage (HW-SF-005), FIT rate budget, and timebase tolerance. | H-Phase 2 | Recorded |
-| **T-03** | **Retention Store**: Supercap populate vs. DNP footprint / ceramic capacitor bank. | System Engineer | Holding retention voltage above $V_{\text{VBAT,min}}$ floor during worst-case loss-of-power event. | H-Phase 2 | Recorded |
-| **T-04** | **Termination Default**: Per-channel termination default state during SSN activation. | System Engineer | Bus topology compliance, stub reflections, and bus loading when node is unpowered. | H-Phase 2 | Recorded |
+<!-- BEGIN TRADES -->
+| Trade | Motivation | Owner / target | Options / rejection rationale | Selected option | Criteria / weight | Decision rationale |
+| --- | --- | --- | --- | --- | --- | --- |
+| T-01: Third CAN Controller | HW-FR-001; HW-FR-002 | System Engineer / H-Phase 2 | On-chip third CAN instance (S32K-class): not rejected; pending review<br>SPI CAN-FD companion IC: not rejected; pending review | Pending (recorded, not decided) | MCU/HAL compatibility: pending<br>HAL driver complexity: pending<br>SPI bandwidth: pending<br>BOM cost: pending | Decision and criterion weights remain pending SE/QA review in H-Phase 2; this record is not a component selection. |
+| T-02: Watchdog Topology | HW-SF-003; HW-SF-005; HW-FR-010 | System Engineer / QA Lead / H-Phase 2 | Internal IWDG only: Cannot satisfy HW-SF-003 / HW-FR-010: external watchdog is mandatory.<br>Internal IWDG plus external window supervisor IC: not rejected; pending review | Pending (recorded, not decided) | Single-fault coverage: pending<br>FIT rate budget: pending<br>Timebase tolerance: pending | Decision and criterion weights remain pending SE/QA review in H-Phase 2; this record is not a component selection. |
+| T-03: Retention Store | HW-SF-002; HW-FR-009 | System Engineer / H-Phase 2 | Populate supercap: not rejected; pending review<br>DNP supercap footprint with ceramic capacitor bank: not rejected; pending review | Pending (recorded, not decided) | VBAT retention floor at worst-case supply loss: pending | Decision and criterion weights remain pending SE/QA review in H-Phase 2; this record is not a component selection. |
+| T-04: Termination Default | HW-FR-002; HW-FR-003 | System Engineer / H-Phase 2 | Termination enabled by default: not rejected; pending review<br>Termination disabled by default: not rejected; pending review | Pending (recorded, not decided) | Bus topology compliance: pending<br>Stub reflections: pending<br>Unpowered bus loading: pending | Decision and criterion weights remain pending SE/QA review in H-Phase 2; this record is not a component selection. |
+<!-- END TRADES -->

@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cancestry.dev/schemas/hw/hw-oracle-registry-0.1.0.schema.json",
+  "title": "CANcestry hardware oracle-registry (v0.1.0)",
+  "description": "Implements HW-SF-001..005, HW-FR-003..010: authoritative oracle provenance and explicit validation gaps. JSON is the source of truth; registry.csv is a deterministic compatibility export.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "oracles"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0"
+    },
+    "oracles": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "oracle_id",
+          "description",
+          "validation_gap",
+          "class",
+          "source_citation",
+          "serves"
+        ],
+        "properties": {
+          "oracle_id": {
+            "type": "string",
+            "pattern": "^OR-\\d{3}$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "validation_gap": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "class": {
+            "enum": [
+              "analytical",
+              "standard",
+              "golden_measurement",
+              "independent_model"
+            ]
+          },
+          "source_citation": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\b(?:(?:19|20)\\d{2}|[A-Z]{2,}(?:[- ][A-Z]+)*[- ]?\\d{2,}(?:[-.:]\\d+)*)\\b"
+          },
+          "serves": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^HW-(?:SF|FR|NF)-\\d{3}$"
+            }
+          }
+        }
+      }
+    }
+  }
+}
