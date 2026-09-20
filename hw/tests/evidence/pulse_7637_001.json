@@ -1,32 +1,143 @@
 {
   "case_id": "pulse_7637_001",
-  "credibility_level": "CL2",
-  "evidence_of": "T1 block simulation of CancestryLib.Power.PulseISO7637_2 (ISO 7637-2 / ISO 16750-2 transient generator) against oracle OR-002: supply line pulses 1, 2a, 2b, 3a, 3b, 4, 5b verified for peak voltage amplitude, pulse duration, and rise/fall time parameters.",
+  "credibility_level": "CL0",
+  "evidence_of": "HW-FR-004 qualification is PENDING. The compiled stateless pulse source is exercised as a numerical regression only; successful peak/time/decay assertions do not establish a standard-qualified oracle or complete pulse coverage. Pulse 4 is an engineering dip fixture. Test B/5b has a corrected 35 V suppressed level but an incomplete source waveform. See issue #41. No HW-FR-004 closure or passing plot is authorized by this manifest.",
+  "inherited_validation_gap": "openmodelica: Compiler semantics outside independently validated output remain unqualified; OR-001/OR-002 regressions do not cover all translation and solver behavior.",
   "not_covered": [
-    "Physical EMC lab pulse generator impedance coupling: covered at T4 bench verification",
-    "Continuous multi-pulse burst train repetition rate thermal stress: covered at T1/T4 thermal sweep"
+    "DUT immunity and loaded source/protection response; Ri is unused metadata.",
+    "Pulse 4: current 13.5 V -> 6 V dip uses 1 ms fall, 20 ms dwell, 1 ms rise. No full ISO 16750-2:2012 \u00a74.6.3.2 starting profile, temperature dependence, battery ESR variation or alternator recovery. Qualification CL0, pending #41.",
+    "Pulse 5b: ISO 16750-2:2012 \u00a74.6.4.2.3 Figure 9 / Table 6 is normative. Us* corrected to 35 V, but separate unclamped Us, suppressed plateau, source-impedance placement, standard edge/duration definitions and repetition remain unqualified; pending #41.",
+    "Pulse 5a is not implemented; H-06.",
+    "Linear edges, excursion conventions and td/3 decay are fixture assumptions, not an independently qualified standard waveform oracle.",
+    "Pulse bursts, parasitics, EMC and T4 physical correlation remain pending."
   ],
   "oracle_id": "OR-002",
-  "pass": true,
-  "provisional": false,
+  "pass": false,
+  "provisional": true,
+  "pulses": {
+    "pulse1": {
+      "coverage": "partial",
+      "follow_up": "https://github.com/mfreazer/CANcestry-/issues/41",
+      "modeled": "Reduced unloaded voltage-source fixture; numeric peak and timing regression only.",
+      "not_modeled": [
+        "Standard-qualified complete waveform, pulse sequence, loaded DUT immunity and physical correlation."
+      ],
+      "oracle_confidence": "CL0 for qualification: numeric fixture agreement is not an independent standards qualification.",
+      "oracle_credibility": "CL0",
+      "provisional": true,
+      "status": "pending"
+    },
+    "pulse2a": {
+      "coverage": "partial",
+      "follow_up": "https://github.com/mfreazer/CANcestry-/issues/41",
+      "modeled": "Reduced unloaded voltage-source fixture; numeric peak and timing regression only.",
+      "not_modeled": [
+        "Standard-qualified complete waveform, pulse sequence, loaded DUT immunity and physical correlation."
+      ],
+      "oracle_confidence": "CL0 for qualification: numeric fixture agreement is not an independent standards qualification.",
+      "oracle_credibility": "CL0",
+      "provisional": true,
+      "status": "pending"
+    },
+    "pulse2b": {
+      "coverage": "partial",
+      "follow_up": "https://github.com/mfreazer/CANcestry-/issues/41",
+      "modeled": "Reduced unloaded voltage-source fixture; numeric peak and timing regression only.",
+      "not_modeled": [
+        "Standard-qualified complete waveform, pulse sequence, loaded DUT immunity and physical correlation."
+      ],
+      "oracle_confidence": "CL0 for qualification: numeric fixture agreement is not an independent standards qualification.",
+      "oracle_credibility": "CL0",
+      "provisional": true,
+      "status": "pending"
+    },
+    "pulse3a": {
+      "coverage": "partial",
+      "follow_up": "https://github.com/mfreazer/CANcestry-/issues/41",
+      "modeled": "Reduced unloaded voltage-source fixture; numeric peak and timing regression only.",
+      "not_modeled": [
+        "Standard-qualified complete waveform, pulse sequence, loaded DUT immunity and physical correlation."
+      ],
+      "oracle_confidence": "CL0 for qualification: numeric fixture agreement is not an independent standards qualification.",
+      "oracle_credibility": "CL0",
+      "provisional": true,
+      "status": "pending"
+    },
+    "pulse3b": {
+      "coverage": "partial",
+      "follow_up": "https://github.com/mfreazer/CANcestry-/issues/41",
+      "modeled": "Reduced unloaded voltage-source fixture; numeric peak and timing regression only.",
+      "not_modeled": [
+        "Standard-qualified complete waveform, pulse sequence, loaded DUT immunity and physical correlation."
+      ],
+      "oracle_confidence": "CL0 for qualification: numeric fixture agreement is not an independent standards qualification.",
+      "oracle_credibility": "CL0",
+      "provisional": true,
+      "status": "pending"
+    },
+    "pulse4": {
+      "coverage": "partial",
+      "follow_up": "https://github.com/mfreazer/CANcestry-/issues/41",
+      "modeled": "13.5 V -> 6 V linear fall in 0.001 s; 6 V dwell for 0.020 s; linear rise to 13.5 V in 0.001 s; nominal restored at 0.022 s and held thereafter.",
+      "not_modeled": [
+        "Temperature dependence.",
+        "Battery ESR variation / loaded source impedance.",
+        "Alternator recovery dynamics.",
+        "ISO 16750-2:2012 \u00a74.6.3.2 multi-stage starting profile and repeated starts."
+      ],
+      "oracle_confidence": "CL0: the modeled 1/20/1 ms dip has no independently qualified standard or measured oracle. Regression thresholds (2% peak, 5% edge, 2% duration) are numerical checks, not confidence or conformance.",
+      "oracle_credibility": "CL0",
+      "provisional": true,
+      "status": "pending"
+    },
+    "pulse5b": {
+      "coverage": "partial",
+      "follow_up": "https://github.com/mfreazer/CANcestry-/issues/41",
+      "modeled": "Legacy Us key represents Us*=35 V, corrected from ISO 16750-2:2012 \u00a74.6.4.2.3 Figure 9/Table 6. Current fixture uses a 5 ms full edge and td/3 decay with td=350 ms; Ri=0.5 ohm is unused metadata.",
+      "not_modeled": [
+        "Separate unclamped Us and centralized-clamp plateau/topology.",
+        "Standard edge/duration measurement definitions; td/3 is not a qualified oracle.",
+        "Loaded source impedance and protection response.",
+        "Five-pulse sequence at 60 s intervals; DUT response."
+      ],
+      "oracle_confidence": "CL0 for complete Test B qualification: citation and clamp level are corrected, but the current decay waveform is not Figure 9. Pending #41; never promote based on numeric regression alone.",
+      "oracle_credibility": "CL0",
+      "provisional": true,
+      "status": "pending"
+    }
+  },
   "requirement_id": "HW-FR-004",
+  "schema_version": "0.1.0",
   "sim_case": "hw/tests/cases/pulse_7637_001.simcase.json",
   "source_hashes": {
-    "hw/bom/bom.json": "sha256:779a79e7cc6649f7c345fc70ff97ca0b5c0fe615e1475a9ff6f423e1dbf41311",
-    "hw/bom/datasheets/extract-holdup-cap.json": "sha256:757e89cd3dfdaa2a84fd5b9afcb0eddd200749d77cdc712cfea9341cc7f360a7",
-    "hw/bom/datasheets/extract-mcu-vbat.json": "sha256:79692b46dfdddb3bd17ec2562f60521855b390cc8694deb0863a16bb4d121d3d",
-    "hw/model/CancestryLib/Power/PulseISO7637_2.mo": "sha256:97b5dd8f6ef73715e24c025e1cc2dc604141485d631470fd95f8b7b7b13b2610",
+    "ci/docker/Dockerfile": "sha256:49703d8b330e41c58e5411bdede3310aec55199e3fb77fc973189b9ee7358102",
+    "ci/docker/base-image.digest": "sha256:fbe0594ac4ef88a211f86be44892d6d24efaefd22b747fe6aca41f512e38614f",
+    "docs/hw/pulse-coverage.md": "sha256:3fc19c68415717e63f53ba2d9ee1ce91aec0ede17e7da206e6f8f9c5c57664fb",
+    "docs/hw/tool-qualification.md": "sha256:7a899dfc3b6487ddd1565691328057d55a0877ec655a771b2b0621107ee88660",
+    "hw/bom/datasheets/extract-iso16750-2-2012.json": "sha256:6cdbce66a512ecd2db050ed7f140e8b96664fb81480579ae804fe1404f37fc2b",
+    "hw/model/CancestryLib/Power/PulseISO7637_2.mo": "sha256:2b40bf045381ac11bbed7e00a2c05b9929154681eb62ef584be1506f149aad25",
     "hw/model/CancestryLib/Power/package.mo": "sha256:b764dcccf84d3660c855d2d9712ed63bf7ff3e617a7409fd72d4381a0d527c33",
     "hw/model/CancestryLib/package.mo": "sha256:53662fe968facb4cc3ca5d6ccb0ec8a7b7382224c0122ab5af19b748694e2372",
-    "hw/tests/cases/pulse_7637_001.simcase.json": "sha256:959b45e8adef19a19821753f4b462b9d6479c049f7fd0ac171dcd0df1ed53e04",
-    "hw/tests/oracles/or_002_pulse7637.py": "sha256:37d90204de7841ac84c1910fbac39f77a68251314823a051d36c7ef865b18a09",
-    "hw/tests/oracles/registry.csv": "sha256:b5b8e329987a1345b3ee05bc3c153d5850b9b8270e309ce8132e1a286a64380f",
-    "hw/tests/test_evidence_determinism.py": "sha256:a4f41abf27a7486faebf504446d73a81b5c1be1e403bf7fb64dbceb189801706",
-    "schemas/hw/hw-bom-0.1.0.schema.json": "sha256:31aecdd71fb0a2e76750e42aa94d726311457c31b62d3582bd933a4e5b356f27",
-    "schemas/hw/hw-sim-0.1.0.schema.json": "sha256:e08b1a7c6d112daac979f746636bca48ff5a98241b3f26252987e5ef546a62cf",
-    "schemas/hw/hw-traceability-0.1.0.schema.json": "sha256:ba495e4f3310e76464e22fb26f9b5b2c36f3baf88b338f194c8280528bab3ab4"
+    "hw/tests/cases/pulse_7637_001.simcase.json": "sha256:1a91231e94a8003aaa09e717cca43bc7757f6b0335f3c5de360bb158c5e2278e",
+    "hw/tests/oracles/or_002_pulse7637.py": "sha256:55f782e0e90facdd2d7231bdd85b2bacd30c657dfa7c66dcfd1dd182f6e628e2",
+    "hw/tests/oracles/registry.csv": "sha256:b9d2d2228742ca3bc0d412e20cb720b27d35e1692f4f67e88cffd903b70146d2",
+    "hw/tests/oracles/registry.json": "sha256:432a6ee5e340acca558e6382e4d6e083437d26b584944a70602a3662c326f269",
+    "hw/tests/test_evidence_determinism.py": "sha256:ea6ca280613c23e7f884352cfde985136ea20ca179d62317d61c5b190ad46d49",
+    "hw/tests/test_power_sim.py": "sha256:cad89a14d52c8c53d263197e90384231af6dca1617b150f322d709bb8cc91cb2",
+    "hw/tests/test_pulse_sim.py": "sha256:79254c33cb6a9dd8549cef78c546b2c440093a0bfc9f6f762cd1ed0b2877180f",
+    "schemas/hw/hw-datasheet-extract-0.1.0.schema.json": "sha256:cd9de8b653e8b774926eaa3953c7122ea64bd1d3ec64de906b48ec0465ac5eff",
+    "schemas/hw/hw-oracle-registry-0.1.0.schema.json": "sha256:7bd0a15770f2bae185600bd554198a791ab94dceb59b4d8084111d5bf01e6123",
+    "schemas/hw/hw-pulse-evidence-0.1.0.schema.json": "sha256:7e7754d2dca70f71e6865428baac766f1ef953584f5671520c73d15264dbf9b1",
+    "schemas/hw/hw-sim-0.1.0.schema.json": "sha256:efa2591e203a56f9fe3792d0bbdd891ce3b3b01bab52e2976b11ad417bd35f6a",
+    "schemas/hw/hw-traceability-0.1.0.schema.json": "sha256:136739030209f5b2db7955d2605951db59912f7dcc572d79a21d506a922b6f96"
   },
-  "tolerance_v": 0.01,
+  "status": "pending",
+  "tolerances": {
+    "decay_tau_relative": 0.1,
+    "duration_relative": 0.02,
+    "peak_relative": 0.02,
+    "time_to_peak_relative": 0.05
+  },
   "tool_pins": {
     "fmpy": "0.3.24",
     "numpy": "2.1.3",
@@ -34,8 +145,13 @@
     "python": ">=3.10"
   },
   "trace": {
-    "artifact": "build/hw/pulse_7637_001.trace.csv (per-run artifact, gitignored)",
+    "artifact": "build/hw/pulse_7637_001_<pulse>.trace.csv (per-run artifacts, gitignored)",
     "columns": "time_s,v_v",
-    "hashing": "sha256 of each run trace recorded in build/hw/pulse_7637_001.runlog.json (HwAGENTS.md rule 5: hashed traces, deterministic evidence)"
-  }
+    "hashing": "sha256 of every pulse trace, measured invariants and measured tool pins recorded in build/hw/pulse_7637_001.runlog.json"
+  },
+  "unexercised_parameters": [
+    "Ri_pulse1",
+    "Ri_pulse2a",
+    "Ri_pulse5b"
+  ]
 }

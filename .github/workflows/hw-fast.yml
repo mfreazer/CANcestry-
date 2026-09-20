@@ -117,6 +117,7 @@ jobs:
             -e CANCESTRY_HW_IMAGE \
             "$IMAGE" bash -lc '
               set -euo pipefail
+              trap "chmod -R a+rX build/hw 2>/dev/null || true" EXIT
               echo "== 1. Schema validation (software + hardware trees)"
               python3 ci/check_schemas_valid.py schemas || {
                 echo "::error::hw-fast gate 1 failed: schema validation"

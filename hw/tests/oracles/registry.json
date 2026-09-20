@@ -15,13 +15,13 @@
     },
     {
       "oracle_id": "OR-002",
-      "description": "ISO 7637-2 / 16750-2 tabulated pulse parameters",
+      "description": "Pulse reference data and reduced-source regression; qualification pending",
       "class": "standard",
       "serves": [
         "HW-FR-004"
       ],
-      "source_citation": "ISO 7637-2:2011; ISO 16750-2:2012; H-04 issue #38 specifies Pulse 5b Us=40 V, Ri=0.5 ohm, td=350 ms.",
-      "validation_gap": "Idealized unloaded pulse source only; source impedance coupling, full cranking shape, TVS response, parasitics, bursts and T4 correlation remain unvalidated."
+      "source_citation": "ISO 7637-2:2011 for pulses 1/2/3 only; ISO 16750-2:2012 §4.6.3.2 Figure 7/Table 3 (starting-profile target), §4.6.4.2.3 Figure 9/Table 6 pp. 12–13 (Test B); hw/bom/datasheets/extract-iso16750-2-2012.json.",
+      "validation_gap": "No qualified Pulse 4 starting-profile oracle or Test B source topology. The old 2011 §5.6.2/Table 11 citation and 40 V clamp were corrected; shape qualification remains pending #41. Aggregate HW-FR-004 evidence is pending (CL0), not passing; numeric regression is not physical conformance."
     },
     {
       "oracle_id": "OR-003",

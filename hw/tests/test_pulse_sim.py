@@ -1,186 +1,366 @@
-"""T1 transient simulation test for HW-FR-004 (ISO 7637-2 / 16750-2 pulses) (H-02, issue #35).
+"""H-04 real FMU numerical regression for HW-FR-004; qualification is pending.
 
-Pipeline (HW-PLAN section 7, C5): validates sim case ``hw/tests/cases/pulse_7637_001.simcase.json``,
-verifies ISO 7637-2 / 16750-2 pulse parameters (peak voltage, duration, rise time) against oracle OR-002
-(``hw/tests/oracles/or_002_pulse7637.py``), compiles and executes the FMU via ``omc`` / FMPy when active,
-and checks committed evidence artifact (``hw/tests/evidence/pulse_7637_001.json``).
-
-Requirements traced: HW-FR-004.
-Test ids: HW-SIM-PULSE-001 .. HW-SIM-PULSE-005.
+No snapshots: reference/fixture scalars bound measured output features.
+These checks do not qualify an incomplete pulse against a standard. Missing tools fail closed (only explicit local opt-out may skip).
+Negative fixtures run in hw-fast alongside the real compiler/executor tests.
 """
-
 from __future__ import annotations
 
-import hashlib
-import importlib.util
 import json
-import os
-import re
+import math
 import shutil
-import subprocess
-import sys
-from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-MODEL_ROOT = REPO_ROOT / "hw" / "model" / "CancestryLib"
-SIM_CASE_PATH = REPO_ROOT / "hw" / "tests" / "cases" / "pulse_7637_001.simcase.json"
-BOM_PATH = REPO_ROOT / "hw" / "bom" / "bom.json"
-SCHEMA_DIR = REPO_ROOT / "schemas" / "hw"
-EVIDENCE_DIR = REPO_ROOT / "hw" / "tests" / "evidence"
-ORACLE_PATH = REPO_ROOT / "hw" / "tests" / "oracles" / "or_002_pulse7637.py"
-BUILD_DIR = REPO_ROOT / "build" / "hw"
+from test_power_sim import (
+    REPO_ROOT, BUILD_DIR, EVIDENCE_DIR, _json, _load_module,
+    _require_toolchain, _validate_against_schema, build_fmu, measured_tool,
+    sha256_file, write_trace_artifacts,
+)
 
-FMI_TYPES = ("cs", "me_cs", "me")
-
-
-def _load_module(name, path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
+CASE_PATH = REPO_ROOT / 'hw/tests/cases/pulse_7637_001.simcase.json'
+ORACLE_PATH = REPO_ROOT / 'hw/tests/oracles/or_002_pulse7637.py'
+ORACLE = _load_module('or_002_pulse7637', ORACLE_PATH)
+PULSES = tuple(ORACLE.PULSE_PARAMETERS)
 
 
-def _json(path):
-    with open(path, "r", encoding="utf-8") as handle:
-        return json.load(handle)
+def feature_grid(pulse, solver):
+    """Fixed deterministic grids resolve each rise/decay, not a 1-us snapshot."""
+    p = ORACLE.get_pulse_params(pulse)
+    tr, td = p['tr'], p['td']
+    points = {tr*i/solver['rise_intervals'] for i in range(solver['rise_intervals']+1)}
+    intervals = max(solver['decay_intervals'], math.ceil(td / solver['step_s']))
+    points.update(tr + td*i/intervals for i in range(intervals+1))
+    points.update(tr + td + tr*i/solver['rise_intervals']
+                  for i in range(1, solver['rise_intervals']+1))
+    tail_intervals = max(1, math.ceil(tr / solver['step_s']))
+    points.update(td + 2*tr + tr*i/tail_intervals
+                  for i in range(1, tail_intervals+1))
+    times = sorted(points)
+    assert times[-1] <= solver['stop_s'], 'pulse exceeds sim-case stop ceiling'
+    assert max(b-a for a, b in zip(times, times[1:])) <= solver['step_s'] * (1+1e-9)
+    return times
 
 
-def sha256_file(path):
-    digest = hashlib.sha256()
-    with open(path, "rb") as handle:
-        for chunk in iter(lambda: handle.read(65536), b""):
-            digest.update(chunk)
-    return "sha256:%s" % digest.hexdigest()
+def finish_event_iteration(fmu):
+    """Bound FMI event iteration; a stalled/terminated FMU is never a pass."""
+    for _ in range(100):
+        needed, terminate, *_ = fmu.newDiscreteStates()
+        assert not terminate, 'pulse FMU requested premature termination'
+        if not needed:
+            return
+    raise AssertionError('pulse FMU event iteration did not converge')
 
 
-def _validate_against_schema(document, schema_name, what):
-    import jsonschema
+def execute_pulse(fmu, pulse, case, parameters=None):
+    """Execute the stateless pulse FMU via FMI 2.0 ModelExchange/FMPy.
 
-    schema = _json(SCHEMA_DIR / schema_name)
-    errors = sorted(
-        jsonschema.Draft202012Validator(schema).iter_errors(document),
-        key=lambda error: error.message)
-    problems = ["%s: %s" % (what, error.message) for error in errors]
-    if problems:
-        raise AssertionError("; ".join(problems))
+    OpenModelica 1.24 CS cannot step this zero-state source. ModelExchange
+    executes the same compiled equations, not a Python waveform substitute.
+    There are no differential/discrete state variables to integrate; fail
+    closed if that contract changes. Re-evaluate event relations at each
+    sample so finite edges are not hidden by cached branch conditions.
+    """
+    import fmpy
+    from fmpy.fmi2 import FMU2Model
 
-
-def load_sim_case():
-    return _json(SIM_CASE_PATH)
-
-
-def load_bom():
-    return _json(BOM_PATH)
-
-
-def load_oracle():
-    return _load_module("or_002_pulse7637", ORACLE_PATH)
-
-
-def _require_toolchain():
-    """Fail loudly when toolchain image is not active unless CANCESTRY_HW_ALLOW_SKIP=1."""
-    if os.environ.get("CANCESTRY_HW_ALLOW_SKIP") == "1":
-        pytest.skip("CANCESTRY_HW_ALLOW_SKIP=1: local development without "
-                    "the ci/docker toolchain image")
-    omc = shutil.which("omc")
-    if omc is None:
-        pytest.fail(
-            "omc (OpenModelica) not found on PATH. Run this test inside the "
-            "digest-pinned toolchain image (ci/docker/, "
-            ".github/workflows/hw-fast.yml).")
-    return omc
-
-
-# --------------------------------------------------------------------------
-# Fixtures
-# --------------------------------------------------------------------------
-
-@pytest.fixture(scope="session")
-def sim_case():
-    return load_sim_case()
-
-
-@pytest.fixture(scope="session")
-def bom():
-    return load_bom()
-
-
-@pytest.fixture(scope="session")
-def oracle():
-    return load_oracle()
+    description = fmpy.read_model_description(str(fmu))
+    # HW-FR-004 / N2: reject unsupported FMU-declared states before any
+    # extraction or native-code instantiation; this is the pulse path only.
+    assert description.modelExchange is not None, 'pulse FMU must support ModelExchange'
+    assert description.numberOfContinuousStates == 0, 'pulse evaluator requires a stateless FMU'
+    assert not any(v.variability == 'discrete' for v in description.modelVariables), \
+        'pulse evaluator does not support discrete state variables'
+    variables = {v.name: v.valueReference for v in description.modelVariables}
+    params = parameters or case['parameters']
+    assert set(params) <= variables.keys(), 'FMU omitted declared case parameters'
+    directory = fmpy.extract(str(fmu))
+    slave = FMU2Model(guid=description.guid, unzipDirectory=directory,
+                     modelIdentifier=description.modelExchange.modelIdentifier,
+                     instanceName=pulse)
+    times = feature_grid(pulse, case['solver'])
+    instantiated = False
+    try:
+        slave.instantiate()
+        instantiated = True
+        slave.setupExperiment(startTime=0.0, stopTime=times[-1])
+        slave.setReal([variables[name] for name in params], list(params.values()))
+        slave.setInteger([variables['pulse_selector']], [PULSES.index(pulse)+1])
+        slave.enterInitializationMode()
+        slave.exitInitializationMode()
+        finish_event_iteration(slave)
+        slave.enterContinuousTimeMode()
+        voltages = [float(slave.getReal([variables['v_out']])[0])]
+        for current in times[1:]:
+            slave.setTime(current)
+            slave.enterEventMode()
+            finish_event_iteration(slave)
+            slave.enterContinuousTimeMode()
+            voltages.append(float(slave.getReal([variables['v_out']])[0]))
+            _, terminate = slave.completedIntegratorStep()
+            assert not terminate, 'pulse FMU requested premature termination'
+        slave.terminate()
+        return times, voltages
+    finally:
+        if instantiated:
+            slave.freeInstance()
+        shutil.rmtree(directory)
 
 
-# --------------------------------------------------------------------------
-# Tests
-# --------------------------------------------------------------------------
+def assert_invariants(pulse, times, voltages, nominal, tolerances):
+    """Measure features from the simulated trace and compare to OR-002 scalars."""
+    import numpy as np
 
-def test_sim_case_and_bom_validate(sim_case, bom):
-    """HW-SIM-PULSE-001: pulse sim case and BOM extract are schema-valid."""
-    _validate_against_schema(sim_case, "hw-sim-0.1.0.schema.json", "pulse sim case")
-    _validate_against_schema(bom, "hw-bom-0.1.0.schema.json", "bom")
-
-
-def test_pulse_parameters_against_oracle(sim_case, oracle):
-    """HW-SIM-PULSE-002: pulse parameters match OR-002 tabulated standard parameters."""
-    params = sim_case["parameters"]
-    oracle_check = oracle.self_check()
-    assert oracle_check["pass"] is True, "oracle OR-002 self check failed"
-
-    pulses_to_check = [
-        ("pulse1", "Us_pulse1", "td_pulse1", "tr_pulse1"),
-        ("pulse2a", "Us_pulse2a", "td_pulse2a", "tr_pulse2a"),
-        ("pulse2b", "Us_pulse2b", "td_pulse2b", "tr_pulse2b"),
-        ("pulse3a", "Us_pulse3a", "td_pulse3a", "tr_pulse3a"),
-        ("pulse3b", "Us_pulse3b", "td_pulse3b", "tr_pulse3b"),
-        ("pulse4", "Us_pulse4", "td_pulse4", "tr_pulse4"),
-        ("pulse5b", "Us_pulse5b", "td_pulse5b", "tr_pulse5b"),
-    ]
-
-    for pulse_key, us_key, td_key, tr_key in pulses_to_check:
-        oracle_params = oracle.get_pulse_params(pulse_key)
-        assert us_key in params, f"Missing {us_key} in simcase parameters"
-        assert td_key in params, f"Missing {td_key} in simcase parameters"
-        assert tr_key in params, f"Missing {tr_key} in simcase parameters"
-
-        sim_us = params[us_key]
-        sim_td = params[td_key]
-        sim_tr = params[tr_key]
-
-        assert abs(sim_us - oracle_params["Us"]) <= 1e-6, f"{pulse_key} Us {sim_us} != oracle {oracle_params['Us']}"
-        assert abs(sim_td - oracle_params["td"]) <= 1e-9, f"{pulse_key} td {sim_td} != oracle {oracle_params['td']}"
-        assert abs(sim_tr - oracle_params["tr"]) <= 1e-12, f"{pulse_key} tr {sim_tr} != oracle {oracle_params['tr']}"
-
-
-def test_pulse_waveform_analytical_continuity(sim_case, oracle):
-    """HW-SIM-PULSE-003: analytical waveform generation across pulses 1, 2a, 2b, 3a, 3b, 4, 5b."""
-    v_nom = sim_case["parameters"]["V_nominal"]
-    for p_key in ("pulse1", "pulse2a", "pulse2b", "pulse3a", "pulse3b", "pulse4", "pulse5b"):
-        v_start = oracle.calculate_pulse_voltage(p_key, 0.0, v_nom)
-        p = oracle.get_pulse_params(p_key)
-        expected_peak = p["Us"] if p_key in ("pulse4", "pulse5b") else v_nom + p["Us"]
-        assert abs(v_start - expected_peak) <= 1e-6
+    t, v = np.asarray(times), np.asarray(voltages)
+    assert len(t) == len(v) and len(t) > 10, 'insufficient pulse samples'
+    assert np.all(np.isfinite(t)) and np.all(np.isfinite(v)), 'non-finite trace'
+    assert t[0] == 0 and np.all(np.diff(t) > 0), 'invalid trace time axis'
+    reference = ORACLE.expected_invariants(pulse, nominal)
+    direction = 1 if reference['peak_v'] > nominal else -1
+    excursion = direction * (v - nominal)
+    peak_index = int(np.argmax(excursion))
+    peak = float(v[peak_index])
+    measured_peak = peak if reference['absolute_peak'] else peak - nominal
+    expected_peak = reference['peak_reference_v']
+    assert abs(measured_peak - expected_peak) <= abs(expected_peak)*tolerances['peak_relative'], \
+        f'{pulse}: peak voltage invariant failed'
+    time_to_peak = float(t[peak_index])
+    expected_time = reference['time_to_peak_s']
+    assert abs(time_to_peak - expected_time) <= expected_time*tolerances['time_to_peak_relative'], \
+        f'{pulse}: time-to-peak invariant failed'
+    tau = None
+    if reference['decay_tau_s'] is not None:
+        # Log-slope fit on the tail, not a comparison to copied waveform samples.
+        window = ((t > expected_time + .15*reference['duration_s']) &
+                  (t < expected_time + .75*reference['duration_s']))
+        assert np.count_nonzero(window) > 10 and np.all(excursion[window] > 0), 'missing decay tail'
+        slope = float(np.polyfit(t[window] - expected_time, np.log(excursion[window]), 1)[0])
+        assert slope < 0, f'{pulse}: decay time constant invariant failed (non-decaying trace)'
+        tau = -1/slope
+        assert abs(tau-reference['decay_tau_s']) <= reference['decay_tau_s']*tolerances['decay_tau_relative'], \
+            f'{pulse}: decay time constant invariant failed'
+    # Detect shortened pulses and a missing return to nominal as well.
+    recovered = np.flatnonzero((t > time_to_peak) & (excursion <= .01*excursion[peak_index]))
+    assert len(recovered), f'{pulse}: missing recovery to nominal'
+    duration = float(t[recovered[0]]) - time_to_peak
+    expected_duration = reference['duration_s'] + (expected_time if tau is None else 0)
+    assert abs(duration - expected_duration) <= expected_duration*tolerances['duration_relative'], \
+        f'{pulse}: duration invariant failed'
+    assert abs(float(v[-1]) - nominal) <= 1e-6, f'{pulse}: final voltage is not nominal'
+    return {'peak_v': peak, 'time_to_peak_s': time_to_peak,
+            'decay_tau_s': tau, 'duration_s': duration, 'n_samples': len(t)}
 
 
-def test_fmu_build_and_sim(sim_case):
-    """HW-SIM-PULSE-004: build FMU headless via omc and simulate if toolchain active."""
-    omc = _require_toolchain()
-    assert omc is not None
+@pytest.fixture(scope='session')
+def pulse_case():
+    return _json(CASE_PATH)
 
 
-def test_evidence_consistent_and_tool_pins_held(sim_case):
-    """HW-SIM-PULSE-005: committed evidence artifact matches live source hashes."""
-    evidence_path = EVIDENCE_DIR / f"{sim_case['case_id']}.json"
-    assert evidence_path.is_file(), f"Evidence artifact {evidence_path} is missing"
-    document = _json(evidence_path)
-    assert document["pass"] is True
-    assert document["requirement_id"] == sim_case["requirement_id"]
-    assert document["oracle_id"] == sim_case["oracle_id"]
-    assert document["case_id"] == sim_case["case_id"]
+@pytest.fixture(scope='session')
+def pulse_fmu(pulse_case):
+    _require_toolchain()
+    return build_fmu(pulse_case, BUILD_DIR / pulse_case['case_id'], fmi_types=('me',))
 
-    for relative, digest in sorted(document["source_hashes"].items()):
-        source = REPO_ROOT / relative
-        assert source.is_file(), f"Evidence source {relative} is missing"
-        assert sha256_file(source) == digest, f"Evidence source {relative} drifted from pinned sha256"
+
+def test_case_parameters_and_tolerances(pulse_case):
+    _validate_against_schema(pulse_case, 'hw-sim-0.1.0.schema.json', 'pulse case')
+    assert ORACLE.self_check()['pass']
+    assert pulse_case['tolerances'] == {
+        'peak_relative': .02, 'time_to_peak_relative': .05,
+        'decay_tau_relative': .10, 'duration_relative': .02}
+    assert pulse_case['solver']['sampling'] == 'pulse_features'
+    for pulse in PULSES:
+        ref = ORACLE.get_pulse_params(pulse)
+        for key in ('Us', 'td', 'tr', 'Ri'):
+            name = f'{key}_{pulse}'
+            if key != 'Ri' or name in pulse_case['parameters']:
+                assert pulse_case['parameters'][name] == ref[key]
+    # ISO 16750-2:2012 §4.6.4.2.3 Figure 9/Table 6 (12 V Test B Us*=35 V).
+    assert (pulse_case['parameters']['Us_pulse5b'], pulse_case['parameters']['Ri_pulse5b'],
+            pulse_case['parameters']['td_pulse5b']) == (35.0, .5, .35)
+
+
+def test_fmu_pulse_invariants(pulse_fmu, pulse_case):
+    tool = measured_tool(_require_toolchain())
+    results, traces = {}, {}
+    for pulse in PULSES:
+        times, volts = execute_pulse(pulse_fmu, pulse, pulse_case)
+        result = assert_invariants(pulse, times, volts, pulse_case['parameters']['V_nominal'],
+                                   pulse_case['tolerances'])
+        run = write_trace_artifacts(f'{pulse_case["case_id"]}_{pulse}', times, volts,
+                                    result, tool, qualification_pending=True)
+        results[pulse], traces[pulse] = result, run['trace']
+    # Every numerical check must pass, but qualification remains pending.
+    (BUILD_DIR / 'pulse_7637_001.runlog.json').write_text(json.dumps({
+        'case_id': pulse_case['case_id'], 'pass': False, 'regression_pass': True,
+        'status': 'pending', 'provisional': True, 'credibility_level': 'CL0',
+        'tool_measured': tool,
+        'results': results, 'traces': traces,
+    }, sort_keys=True, indent=2)+'\n', encoding='utf-8')
+    pins = _json(EVIDENCE_DIR / 'pulse_7637_001.json')['tool_pins']
+    assert pins['openmodelica'] in tool['openmodelica']
+    assert tool['fmpy'] == pins['fmpy'] and tool['numpy'] == pins['numpy']
+
+
+@pytest.mark.parametrize('parameter,factor,message', [
+    ('Us_pulse1', 1.2, 'peak voltage'), ('tr_pulse1', 1.2, 'time-to-peak'),
+    ('td_pulse1', 1.2, 'decay time constant'),
+])
+def test_real_fmu_parameter_faults_are_detected(pulse_fmu, pulse_case, parameter, factor, message):
+    """Negative FMU fixtures prove the harness detects compiler/output drift."""
+    parameters = dict(pulse_case['parameters'])
+    parameters[parameter] *= factor
+    times, volts = execute_pulse(pulse_fmu, 'pulse1', pulse_case, parameters)
+    with pytest.raises(AssertionError, match=message):
+        assert_invariants('pulse1', times, volts, parameters['V_nominal'], pulse_case['tolerances'])
+
+
+def synthetic_trace(pulse_case, amplitude=1.0, peak_scale=1.0, decay_scale=1.0):
+    """Independent fabricated traces for invariant negatives, never evidence."""
+    times = feature_grid('pulse1', pulse_case['solver'])
+    p = ORACLE.get_pulse_params('pulse1')
+    peak_time, tau = p['tr']*peak_scale, p['td']/3*decay_scale
+    values = [13.5 + p['Us']*amplitude*(t/peak_time if t < peak_time else
+              math.exp(-(t-peak_time)/tau) if t < peak_time+p['td'] else 0)
+              for t in times]
+    return times, values
+
+
+@pytest.mark.parametrize('change,message', [
+    ({'amplitude': 1.021}, 'peak voltage'), ({'peak_scale': 1.2}, 'time-to-peak'),
+    ({'decay_scale': 1.101}, 'decay time constant'),
+])
+def test_invariant_negatives_without_toolchain(pulse_case, change, message):
+    times, values = synthetic_trace(pulse_case, **change)
+    with pytest.raises(AssertionError, match=message):
+        assert_invariants('pulse1', times, values, 13.5, pulse_case['tolerances'])
+
+
+def test_invariant_positive_without_toolchain(pulse_case):
+    times, values = synthetic_trace(pulse_case)
+    assert assert_invariants('pulse1', times, values, 13.5, pulse_case['tolerances'])['peak_v'] == -86.5
+
+
+def test_evidence_matches_sources(pulse_case):
+    document = _json(EVIDENCE_DIR / 'pulse_7637_001.json')
+    for key in ('case_id', 'requirement_id', 'oracle_id'):
+        assert document[key] == pulse_case[key]
+    _validate_against_schema(document, 'hw-pulse-evidence-0.1.0.schema.json', 'pulse evidence')
+    assert document['pass'] is False and document['provisional'] is True
+    assert document['status'] == 'pending' and document['credibility_level'] == 'CL0'
+    assert all(r['status'] == 'pending' for r in document['pulses'].values())
+    for relative, digest in document['source_hashes'].items():
+        assert sha256_file(REPO_ROOT / relative) == digest, f'evidence source drift: {relative}'
+
+
+@pytest.mark.parametrize('needed,terminate,message', [
+    (True, False, 'did not converge'), (False, True, 'premature termination'),
+    (False, False, None),
+])
+def test_event_iteration_fails_closed(needed, terminate, message):
+    class FakeFMU:
+        def newDiscreteStates(self):
+            return needed, terminate, False, False, False, 0.0
+    if message:
+        with pytest.raises(AssertionError, match=message):
+            finish_event_iteration(FakeFMU())
+    else:
+        finish_event_iteration(FakeFMU())
+
+
+@pytest.mark.parametrize('pulse', PULSES)
+def test_every_feature_grid_respects_declared_bounds(pulse_case, pulse):
+    times = feature_grid(pulse, pulse_case['solver'])
+    reference = ORACLE.get_pulse_params(pulse)
+    assert times[0] == 0
+    assert reference['tr'] in times
+    assert reference['tr'] + reference['td'] in times
+    assert times[-1] == pytest.approx(reference['td'] + 3*reference['tr'])
+    assert len(times) >= pulse_case['solver']['rise_intervals'] + pulse_case['solver']['decay_intervals']
+
+
+def test_feature_grid_fails_closed_on_truncated_time_ceiling(pulse_case):
+    with pytest.raises(AssertionError, match='stop ceiling'):
+        feature_grid('pulse2b', dict(pulse_case['solver'], stop_s=.1))
+
+
+def test_test_b_reference_matches_schema_validated_source(pulse_case):
+    """HW-FR-004: the corrected 35 V value comes from Table 6, not issue prose."""
+    extract = _json(REPO_ROOT / 'hw/bom/datasheets/extract-iso16750-2-2012.json')
+    _validate_against_schema(extract, 'hw-datasheet-extract-0.1.0.schema.json', 'ISO extract')
+    values = {entry['name']: entry['value'] for entry in extract['entries']}
+    p = ORACLE.get_pulse_params('pulse5b')
+    assert p['Us'] == values['Us_star_12V'] == pulse_case['parameters']['Us_pulse5b']
+    assert values['Ri_min_12V'] <= p['Ri'] <= values['Ri_max_12V']
+    assert values['td_min_12V'] <= p['td'] <= values['td_max_12V']
+    assert 'ISO 16750-2:2012 §4.6.4.2.3' in p['standard']
+    assert 'Figure 9 / Table 6' in p['standard']
+
+
+def test_pulse4_implemented_regions_are_explicit(pulse_fmu, pulse_case):
+    """HW-FR-004: verify the reported 1/20/1 ms fixture, not ISO conformance."""
+    times, voltages = execute_pulse(pulse_fmu, 'pulse4', pulse_case)
+    expected = [(0, 13.5), (.0005, 9.75), (.001, 6.0), (.011, 6.0),
+                (.021, 6.0), (.0215, 9.75), (.022, 13.5), (.023, 13.5)]
+    for time, voltage in expected:
+        index = min(range(len(times)), key=lambda i: abs(times[i]-time))
+        assert times[index] == pytest.approx(time, abs=1e-12)
+        assert voltages[index] == pytest.approx(voltage, abs=1e-8)
+
+
+@pytest.mark.parametrize('supports_me,states,variability,message', [
+    (False, 0, 'continuous', 'must support ModelExchange'),
+    (True, 1, 'continuous', 'requires a stateless FMU'),
+    (True, -1, 'continuous', 'requires a stateless FMU'),
+    (True, None, 'continuous', 'requires a stateless FMU'),
+    (True, 0, 'discrete', 'does not support discrete state variables'),
+])
+def test_pulse_rejects_stateful_metadata_before_native_execution(
+        monkeypatch, supports_me, states, variability, message):
+    """HW-FR-004 / N2: metadata fixtures, not claimed extra FMU simulations."""
+    import fmpy
+    import fmpy.fmi2
+
+    description = SimpleNamespace(
+        modelExchange=SimpleNamespace(modelIdentifier='fixture') if supports_me else None,
+        numberOfContinuousStates=states,
+        modelVariables=[SimpleNamespace(name='v_out', valueReference=0,
+                                        variability=variability)])
+    reader = Mock(return_value=description)
+    extract = Mock(side_effect=AssertionError('extraction must not be reached'))
+    native = Mock(side_effect=AssertionError('native execution must not be reached'))
+    monkeypatch.setattr(fmpy, 'read_model_description', reader)
+    monkeypatch.setattr(fmpy, 'extract', extract)
+    monkeypatch.setattr(fmpy.fmi2, 'FMU2Model', native)
+
+    with pytest.raises(AssertionError, match=message):
+        execute_pulse('fixture.fmu', 'pulse1', {'parameters': {}})
+    reader.assert_called_once_with('fixture.fmu')
+    extract.assert_not_called()
+    native.assert_not_called()
+
+
+def test_stateless_metadata_with_algebraic_output_reaches_extraction(monkeypatch):
+    """HW-FR-004 / N2: continuous-valued algebraic output is not a state."""
+    import fmpy
+    import fmpy.fmi2
+
+    description = SimpleNamespace(
+        modelExchange=SimpleNamespace(modelIdentifier='fixture'),
+        numberOfContinuousStates=0,
+        modelVariables=[SimpleNamespace(name='v_out', valueReference=0,
+                                        variability='continuous'),
+                        SimpleNamespace(name='gain', valueReference=1,
+                                        variability='fixed')])
+    extract = Mock(side_effect=RuntimeError('accepted metadata; stop before native code'))
+    native = Mock()
+    monkeypatch.setattr(fmpy, 'read_model_description', Mock(return_value=description))
+    monkeypatch.setattr(fmpy, 'extract', extract)
+    monkeypatch.setattr(fmpy.fmi2, 'FMU2Model', native)
+
+    with pytest.raises(RuntimeError, match='accepted metadata'):
+        execute_pulse('fixture.fmu', 'pulse1', {'parameters': {'gain': 1.0}})
+    extract.assert_called_once_with('fixture.fmu')
+    native.assert_not_called()

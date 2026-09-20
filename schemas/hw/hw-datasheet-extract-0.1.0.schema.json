@@ -109,7 +109,8 @@
             "enum": [
               "hwers",
               "datasheet",
-              "budget"
+              "budget",
+              "standard"
             ]
           },
           "citation_type": {

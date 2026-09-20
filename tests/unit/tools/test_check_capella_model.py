@@ -225,12 +225,11 @@ def test_safety_flag_must_be_typed_true(repo, capsys, change):
     run(repo, capsys, 'HW-SF-002 has no downstream LA safety_mechanism')
 
 
-@pytest.mark.parametrize('attr,value', [('safety_mechanism', 'true'),
-                                       ('stereotype', '<<safety_mechanism>>')])
-def test_attribute_and_stereotype_supported(repo, capsys, attr, value):
+def test_explicit_safety_attribute_supported(repo, capsys):
+    """HW-SF-002: the exact true attribute is still a supported Boolean marker."""
     def change(tree):
         element(tree, 'safety-retentiondomain').set('value', 'false')
-        element(tree, 'la-comp-retentiondomain').set(attr, value)
+        element(tree, 'la-comp-retentiondomain').set('safety_mechanism', 'true')
     xml_change(repo, change)
     run(repo, capsys)
 
@@ -318,3 +317,72 @@ def test_firmware_mode_removal_detected(repo, capsys):
 def test_missing_reader_fails_cli(repo, capsys, monkeypatch):
     monkeypatch.setattr(gate, 'CAPELLAMBSE_AVAILABLE', False)
     run(repo, capsys, 'capellambse python package is not installed')
+
+
+def test_bridge_la_without_row_fails_closed(repo, capsys):
+    """HW-SF-001: a contained but unmapped LA component fails rule 6, not lint."""
+    def add_component(tree):
+        child = etree.SubElement(element(tree, 'la-root-sys'), 'ownedLogicalComponents',
+                                 id='fixture-unmapped-la', name='UnmappedLA')
+        child.set(XSI, 'org.polarsys.capella.core.data.la:LogicalComponent')
+    xml_change(repo, add_component)
+    output = run(repo, capsys, "LA component 'UnmappedLA' must appear exactly once")
+    assert 'rule 6:' in output and 'found 0' in output and 'rule 2:' not in output
+
+
+def test_bridge_row_without_la_fails_closed(repo, capsys):
+    """HW-SF-001: a schema-shaped row cannot introduce a nonexistent LA name."""
+    bridge_change(repo, lambda rows: rows.append({
+        'la_component': 'GhostLA', 'modelica_block': None, 'status': 'not_simulated',
+        'rationale': 'not-yet-modeled', 'coverage_note': 'Negative fixture only.'}))
+    output = run(repo, capsys, 'GhostLA')
+    assert 'rule 6:' in output and 'is not one of' in output
+
+
+def test_bridge_duplicate_row_fails_closed(repo, capsys):
+    """HW-FR-008: duplicate a null-target row, isolating the LA cardinality rule."""
+    bridge_change(repo, lambda rows: rows.append(dict(rows[-1])))
+    output = run(repo, capsys, "LA component 'TestInterface' must appear exactly once")
+    assert 'rule 6:' in output and 'found 2' in output
+
+
+def test_safety_trace_to_unmarked_la_fails_closed(repo, capsys):
+    """HW-SF-002: preserve the real trace, remove the marker; prose cannot help."""
+    def remove_marker(tree):
+        marker = element(tree, 'safety-retentiondomain')
+        marker.getparent().remove(marker)
+        element(tree, 'la-comp-retentiondomain').set('description', 'safety_mechanism: true')
+        assert element(tree, 'trace-sf_002-retentiondomain').get('target') == '#la-comp-retentiondomain'
+    xml_change(repo, remove_marker)
+    output = run(repo, capsys, 'HW-SF-002 has no downstream LA safety_mechanism')
+    assert 'rule 7:' in output
+
+
+@pytest.mark.parametrize('attribute', ['stereotype', 'stereotypes'])
+@pytest.mark.parametrize('text', [
+    'safety_mechanism', '<<safety_mechanism>>', '«safety_mechanism»',
+    'unrelated, safety_mechanism', '<<unrelated>>, <<safety_mechanism>>',
+    'not a safety_mechanism', 'not, safety_mechanism',
+    'comment: safety_mechanism=true', 'safety_mechanism;unrelated',
+])
+def test_stereotype_strings_never_grant_safety_coverage(repo, capsys, attribute, text):
+    """HW-SF-002 / N1: the removed fallback cannot grant coverage in any spelling."""
+    def change(tree):
+        marker = element(tree, 'safety-retentiondomain')
+        marker.getparent().remove(marker)
+        element(tree, 'la-comp-retentiondomain').set(attribute, text)
+        assert element(tree, 'trace-sf_002-retentiondomain').get('target') == '#la-comp-retentiondomain'
+    xml_change(repo, change)
+    output = run(repo, capsys, 'HW-SF-002 has no downstream LA safety_mechanism')
+    assert 'rule 7:' in output
+
+
+def test_typed_safety_marker_does_not_depend_on_stereotype_strings(repo, capsys):
+    """HW-SF-002 / N1: only the real typed marker grants coverage here."""
+    def change(tree):
+        component = element(tree, 'la-comp-retentiondomain')
+        component.set('stereotype', 'not, safety_mechanism')
+        component.set('stereotypes', '<<unsupported>>, arbitrary prose')
+        assert element(tree, 'safety-retentiondomain').get('value') == 'true'
+    xml_change(repo, change)
+    run(repo, capsys)

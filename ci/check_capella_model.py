@@ -148,12 +148,14 @@ def check_pa_elements_have_la_parent(model, report):
 
 
 def is_safety_mechanism(component):
-    """A typed boolean/property or explicit stereotype, never truthy prose."""
+    """HW-SF-001..005: accept only the explicit Boolean marker contract.
+
+    N1: raw stereotype/stereotypes strings are not resolved Capella profile
+    applications. Do not infer a safety mechanism by parsing those strings.
+    The production model uses typed BooleanPropertyValue markers.
+    """
     elem = component._element
     if elem.get("safety_mechanism") == "true":
-        return True
-    stereotypes = elem.get("stereotype", "") + " " + elem.get("stereotypes", "")
-    if "safety_mechanism" in re.findall(r"[A-Za-z_]+", stereotypes):
         return True
     return any(p.name == "safety_mechanism" and
                p.xtype.endswith(":BooleanPropertyValue") and p.value is True

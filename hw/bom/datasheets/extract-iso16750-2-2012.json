@@ -1,0 +1,102 @@
+{
+  "kind": "datasheet_extract",
+  "schema_version": "0.1.0",
+  "source": {
+    "manufacturer": "ISO (standards publisher; not a component manufacturer)",
+    "document_id": "ISO 16750-2:2012(E), fourth edition 2012-11-01, §4.6.4.2.3, Figure 9 / Table 6, printed pp. 12–13",
+    "retrieval_date": "2026-09-19",
+    "source_pdf_hash": null,
+    "source_url": "https://files.infocentre.io/files/docs_clients/126_2007734326_746656_16750-2%20ISO%20Environmental%20conditions%20and%20testing%20for%20electrical....pdf"
+  },
+  "note": "HW-FR-004 source correction from PR #39 review. Numeric facts transcribed from the publicly mirrored standard using the document reader; raw PDF bytes could not be downloaded in the sandbox and are not retained, so no PDF digest is claimed. No new physical part or qualification result is created. The old ISO 7637-2:2011 §5.6.2 Table 11 attribution and 40 V level were incorrect for this normative 12 V Test B baseline.",
+  "entries": [
+    {
+      "name": "Us_star_12V",
+      "value": 35.0,
+      "unit": "V",
+      "condition": "Suppressed voltage Us* for a 12 V system; this is NOT the unclamped generator voltage Us.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.3, Figure 9 and Table 6, pp. 12–13 (12 V Test B)"
+    },
+    {
+      "name": "Us_min_12V",
+      "value": 79.0,
+      "unit": "V",
+      "condition": "Lower unclamped generator voltage. Table 6 footnote a pairs lower voltage with lower Ri unless otherwise agreed.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.3, Figure 9 and Table 6, pp. 12–13 (12 V Test B)"
+    },
+    {
+      "name": "Us_max_12V",
+      "value": 101.0,
+      "unit": "V",
+      "condition": "Upper unclamped generator voltage. Table 6 footnote a pairs upper voltage with upper Ri unless otherwise agreed.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.3, Figure 9 and Table 6, pp. 12–13 (12 V Test B)"
+    },
+    {
+      "name": "Ri_min_12V",
+      "value": 0.5,
+      "unit": "ohm",
+      "condition": "Lower source-resistance bound; not proof that the present unloaded model exercises impedance.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.3, Figure 9 and Table 6, pp. 12–13 (12 V Test B)"
+    },
+    {
+      "name": "Ri_max_12V",
+      "value": 4.0,
+      "unit": "ohm",
+      "condition": "Upper source-resistance bound.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.3, Figure 9 and Table 6, pp. 12–13 (12 V Test B)"
+    },
+    {
+      "name": "td_min_12V",
+      "value": 0.04,
+      "unit": "s",
+      "condition": "Lower pulse-duration bound; the measurement definition is in Figure 9, not a td/3 model time constant.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.3, Figure 9 and Table 6, pp. 12–13 (12 V Test B)"
+    },
+    {
+      "name": "td_max_12V",
+      "value": 0.4,
+      "unit": "s",
+      "condition": "Upper pulse-duration bound.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.3, Figure 9 and Table 6, pp. 12–13 (12 V Test B)"
+    },
+    {
+      "name": "rise_min",
+      "value": 0.005,
+      "unit": "s",
+      "condition": "Lower bound of the tabulated 10 ms with -5/+0 ms tolerance; not a claim that the reduced model uses the same edge measurement definition.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.3, Figure 9 and Table 6, pp. 12–13 (12 V Test B)"
+    },
+    {
+      "name": "rise_max",
+      "value": 0.01,
+      "unit": "s",
+      "condition": "Upper bound of the tabulated rising-slope parameter.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.3, Figure 9 and Table 6, pp. 12–13 (12 V Test B)"
+    },
+    {
+      "name": "minimum_pulse_count",
+      "value": 5,
+      "unit": "pulses",
+      "condition": "Minimum Test B repetition count.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.3, Figure 9 and Table 6, pp. 12–13 (12 V Test B)"
+    },
+    {
+      "name": "pulse_interval",
+      "value": 60.0,
+      "unit": "s",
+      "condition": "Interval between Test B pulses.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.3, Figure 9 and Table 6, pp. 12–13 (12 V Test B)"
+    }
+  ]
+}

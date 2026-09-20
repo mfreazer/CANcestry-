@@ -14,6 +14,7 @@ HW-TRACE-GATE-001..014.
 from __future__ import annotations
 
 import contextlib
+import csv
 import hashlib
 import importlib.util
 import io
@@ -55,12 +56,12 @@ REGISTRY_VALID = (
     "oracle_id,oracle,class,serves,validation_gap\n"
     "OR-001,RC hold-up / energy-balance closed form,(a),HW-SF-002,"
     "Idealized ODE gap; T2 SPICE or bench correlation\n"
-    "OR-002,ISO 7637-2 pulse parameters,(b),HW-FR-004,\n"
+    "OR-002,ISO 7637-2 pulse parameters,(b),HW-FR-004,Fixture pulse gap\n"
 )
 
 TRACE_HEADER = (
     "requirement_id,method,capella_element_id,credibility_level,oracle_id,"
-    "required_cl,status,evidence,evidence_sha256\n"
+    "required_cl,status,evidence,evidence_sha256,inherited_validation_gap\n"
 )
 
 EVIDENCE_REL = "hw/tests/evidence/holdup_001.json"
@@ -86,6 +87,23 @@ def make_repo(root, hwrs=HWRS_VALID, registry=REGISTRY_VALID, trace=None,
     """
     write(root / "docs" / "hw" / "HwRS.md", hwrs)
     write(root / "hw" / "tests" / "oracles" / "registry.csv", registry)
+    # Compose the authoritative JSON too; malformed legacy CSV still exercises
+    # the native compatibility checks before the JSON/exact-export guard.
+    records = []
+    classes = {"(a)": "analytical", "(b)": "standard", "(c)": "golden_measurement", "(d)": "independent_model"}
+    for record in csv.DictReader(io.StringIO(registry)):
+        if not all(record.get(key) is not None for key in
+                   ("oracle_id", "oracle", "class", "serves", "validation_gap")):
+            continue
+        records.append({"oracle_id": record["oracle_id"], "description": record["oracle"],
+                        "class": classes.get(record["class"], record["class"]),
+                        "serves": record["serves"].split(";"),
+                        "validation_gap": record["validation_gap"],
+                        "source_citation": "Fixture 2026"})
+    write(root / "hw/tests/oracles/registry.json", json.dumps({"schema_version": "0.1.0", "oracles": records}))
+    write(root / "schemas/hw/hw-oracle-registry-0.1.0.schema.json",
+          (REPO_ROOT / "schemas/hw/hw-oracle-registry-0.1.0.schema.json").read_text())
+    write(root / check_hw.QUALIFICATION_PATH, (REPO_ROOT / check_hw.QUALIFICATION_PATH).read_text())
     if trace is not None:
         write(root / "hw" / "tests" / "traceability.csv", trace)
     if with_schema:
@@ -104,6 +122,7 @@ def make_evidence(sources=None, requirement="HW-SF-002", oracle="OR-001",
         "oracle_id": oracle,
         "pass": passed,
         "requirement_id": requirement,
+        "tool_pins": {"capellambse": "0.6.17"},
         "source_hashes": {
             relative: sha256_bytes(text)
             for relative, text in sorted((sources or {}).items())
@@ -112,11 +131,13 @@ def make_evidence(sources=None, requirement="HW-SF-002", oracle="OR-001",
 
 
 def row(requirement, method, status, credibility="CL2", oracle="OR-001",
-        required_cl="CL3", evidence="", digest="", capella="CAP_PENDING"):
-    """One ledger row; the status field is always quoted (it holds commas)."""
-    values = (requirement, method, capella, credibility, oracle, required_cl,
-              '"%s"' % status, evidence, digest)
-    return ",".join(values) + "\n"
+        required_cl="CL3", evidence="", digest="", capella="CAP_PENDING", gap=""):
+    """One ledger row, using CSV escaping for status and inherited gap text."""
+    stream = io.StringIO(newline="")
+    csv.writer(stream, lineterminator="\n").writerow((
+        requirement, method, capella, credibility, oracle, required_cl,
+        status, evidence, digest, gap))
+    return stream.getvalue()
 
 
 def write_evidence(root, document):
@@ -162,7 +183,8 @@ def clean_row():
     return {"requirement_id": "HW-SF-002", "method": "sim",
             "capella_element_id": "CAP_PENDING", "credibility_level": "CL2",
             "oracle_id": "OR-001", "required_cl": "CL3",
-            "status": "sim-pending", "evidence": "", "evidence_sha256": ""}
+            "status": "sim-pending", "evidence": "", "evidence_sha256": "",
+            "inherited_validation_gap": ""}
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +309,7 @@ def test_gate_rejects_bad_status_and_vocabulary(tmp_path):
     make_repo(tmp_path, trace=trace)
     result = run_checker(tmp_path)
     assert result.returncode == 1
-    assert "not one of analysis, sim, t2, bench" in result.stdout
+    assert "not one of analysis, sim, virtual_bench, bench" in result.stdout
     assert "not in the honest-ledger vocabulary" in result.stdout
 
 
@@ -479,7 +501,7 @@ def test_gate_rejects_duplicate_pairs_and_bad_registry(tmp_path):
     make_repo(tmp_path, trace=trace, registry=bad_registry)
     result = run_checker(tmp_path)
     assert result.returncode == 1
-    assert "OR-xxx[letter]" in result.stdout
+    assert "OR-xxx" in result.stdout
 
 
 def test_gate_missing_inputs_and_usage(tmp_path):
@@ -542,10 +564,10 @@ def test_gate_remaining_error_paths(tmp_path):
     make_repo(tmp_path, trace=TRACE_HEADER + "HW-SF-002,sim\n")
     result = run_checker(tmp_path)
     assert result.returncode == 1
-    assert "has 2 fields, expected 9" in result.stdout
+    assert "has 2 fields, expected 10" in result.stdout
 
     # (c) empty required field in a ledger row.
-    make_repo(tmp_path, trace=TRACE_HEADER + "HW-SF-002,,,CL0,,CL3,draft,,\n")
+    make_repo(tmp_path, trace=TRACE_HEADER + "HW-SF-002,,,CL0,,CL3,draft,,,\n")
     result = run_checker(tmp_path)
     assert result.returncode == 1
     assert "empty 'method' field" in result.stdout
@@ -600,7 +622,7 @@ def test_gate_remaining_error_paths(tmp_path):
     make_repo(tmp_path, trace=trace)
     result = run_checker(tmp_path)
     assert result.returncode == 1
-    assert "OR-xxx[letter]" in result.stdout
+    assert "OR-xxx" in result.stdout
 
     # (i) fully-verified(CL3) without CL3 credibility.
     sources = {ORACLE_SOURCE: "oracle source\n"}
@@ -636,3 +658,347 @@ def test_cli_on_repository_tree(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["check_hw_traceability.py",
                                        str(REPO_ROOT)])
     assert check_hw.main() == 0
+
+
+# H-04: HW-SF-002 / HW-FR-004 inherited tool gaps and independent witnesses.
+def tool_gap(root, tool='openmodelica'):
+    report = check_hw.Report()
+    tools = check_hw.load_tool_qualifications(root, report)
+    assert report.ok, report.failures
+    return f"{tool}: {tools[tool]['gap']}"
+
+
+def install_tool_evidence(root, document, gap=''):
+    digest = write_evidence(root, document)
+    write(root / 'hw/tests/traceability.csv', TRACE_HEADER + row(
+        'HW-SF-002', 'virtual_bench', 'passing(sim,CL2,provisional)',
+        evidence=EVIDENCE_REL, digest=digest, gap=gap))
+
+
+@pytest.mark.parametrize('tcl,gap_value,passes', [
+    ('TCL1', '', True), ('TCL1', 'spurious gap', False),
+    ('TCL2', '', False), ('TCL2', 'wrong gap', False), ('TCL2', 'exact', True),
+    ('TCL3', '', False), ('TCL3', 'exact', True),
+])
+def test_tcl_gap_inheritance(tmp_path, tcl, gap_value, passes):
+    make_repo(tmp_path)
+    if tcl == 'TCL3':
+        path = tmp_path / check_hw.QUALIFICATION_PATH
+        path.write_text(path.read_text().replace('| TI2 | TD2 | TCL2 |', '| TI2 | TD3 | TCL3 |'))
+    document = make_evidence()
+    document['tool_pins'] = {'capellambse': '0.6.17'} if tcl == 'TCL1' else {
+        'openmodelica': '1.24', 'fmpy': '0.3.24', 'python': '>=3.10', 'numpy': '2.1.3'}
+    gap = tool_gap(tmp_path) if gap_value == 'exact' else gap_value
+    install_tool_evidence(tmp_path, document, gap)
+    result = run_checker(tmp_path)
+    assert result.returncode == (0 if passes else 1), result.stdout
+    if not passes:
+        assert 'inherited_validation_gap' in result.stdout
+
+
+def test_multiple_tool_gaps_are_sorted(tmp_path):
+    make_repo(tmp_path)
+    path = tmp_path / check_hw.QUALIFICATION_PATH
+    path.write_text(path.read_text().replace('<!-- END TOOL CLASSIFICATION -->',
+        '| auxiliary | Fixture compiler | TI2 | TD3 | TCL3 | Auxiliary gap. |\n<!-- END TOOL CLASSIFICATION -->'))
+    document = make_evidence()
+    document['tool_pins'] = {'openmodelica': '1.24', 'auxiliary': '1'}
+    install_tool_evidence(tmp_path, document, 'auxiliary: Auxiliary gap. | ' + tool_gap(tmp_path))
+    assert run_checker(tmp_path).returncode == 0
+
+
+@pytest.mark.parametrize('pins', [None, {}, {'python': '3.11'},
+                                 {'unknown': '1'}, {'renode': 'pending'},
+                                 {'openmodelica': ''}])
+def test_unqualified_or_missing_tool_pins_fail(tmp_path, pins):
+    make_repo(tmp_path)
+    document = make_evidence()
+    if pins is None:
+        document.pop('tool_pins')
+    else:
+        document['tool_pins'] = pins
+    install_tool_evidence(tmp_path, document)
+    result = run_checker(tmp_path)
+    assert result.returncode == 1
+    assert 'rule 8:' in result.stdout
+
+
+def test_modelica_artifact_cannot_hide_compiler(tmp_path):
+    source = {'hw/model/example.mo': 'model Example end Example;'}
+    make_repo(tmp_path, sources=source)
+    document = make_evidence(sources=source)
+    install_tool_evidence(tmp_path, document)
+    result = run_checker(tmp_path)
+    assert result.returncode == 1 and 'must declare the OpenModelica' in result.stdout
+
+
+def test_pending_row_has_no_inherited_artifact_gap(tmp_path):
+    make_repo(tmp_path, trace=TRACE_HEADER + row(
+        'HW-SF-002', 'bench', 'bench-pending', oracle='', gap='not an artifact'))
+    result = run_checker(tmp_path)
+    assert result.returncode == 1 and 'pending row' in result.stdout
+
+
+def test_legacy_method_and_nonexistent_cl_rejected(tmp_path):
+    make_repo(tmp_path, trace=TRACE_HEADER + row('HW-SF-002', 't2', 'sim-pending', credibility='CL4'))
+    result = run_checker(tmp_path)
+    assert result.returncode == 1 and 'method' in result.stdout and 'CL4' in result.stdout
+
+
+@pytest.mark.parametrize('change', [
+    lambda s: '',
+    lambda s: s.replace('tool_id | Tool / role and rationale', 'old_header | Tool'),
+    lambda s: s.replace('<!-- END TOOL CLASSIFICATION -->', '<!-- BEGIN TOOL CLASSIFICATION -->'),
+    lambda s: s.replace('| TI2 | TD2 | TCL2 |', '| TI2 | TD2 | TCL9 |'),
+    lambda s: s.replace('| TI2 | TD2 | TCL2 |', '| TI2 | TD1 | TCL2 |'),
+    lambda s: s.replace('openmodelica |', 'fmpy |'),
+    lambda s: s.replace('| openmodelica |', '| other_compiler |'),
+    lambda s: s.replace('| TI2 | TD2 | TCL2 | Compiler semantics outside independently validated output remain unqualified; OR-001/OR-002 regressions do not cover all translation and solver behavior. |', '| TI2 | TD2 | TCL2 | - |'),
+    lambda s: s.replace('| TI2 | TD1 | TCL1 | - |', '| TI2 | TD1 | TCL1 | not empty |'),
+    lambda s: s.replace('| TI2 | TD2 | TCL2 |', '| TI2 | TCL2 |'),
+])
+def test_qualification_table_fails_closed(tmp_path, change):
+    make_repo(tmp_path)
+    path = tmp_path / check_hw.QUALIFICATION_PATH
+    path.write_text(change(path.read_text()))
+    report = check_hw.Report()
+    assert check_hw.load_tool_qualifications(tmp_path, report) == {}
+    assert not report.ok
+
+
+def make_independent_witness(root):
+    sources = {ORACLE_SOURCE: 'independent analytical reference fixture\n',
+               'hw/tests/evidence/output.csv': 'time,v\n0,3.3\n1,3.2\n'}
+    make_repo(root, sources=sources)
+    output_hash = sha256_bytes(sources['hw/tests/evidence/output.csv'])
+    document = make_evidence(sources=sources)
+    document['tool_pins'] = {'openmodelica': '1.24', 'fmpy': '0.3.24'}
+    witness = {'oracle_id': 'OR-001', 'pass': True, 'scope': 'full_output',
+               'output_sha256': output_hash, 'independent_of': ['openmodelica'],
+               'source_hashes': {ORACLE_SOURCE: sha256_bytes(sources[ORACLE_SOURCE])},
+               'tool_pins': {'python': '3.11'}}
+    ref = {'tool': 'openmodelica', 'oracle_id': 'OR-001',
+           'output': 'hw/tests/evidence/output.csv', 'output_sha256': output_hash,
+           'witness': 'hw/tests/evidence/independent.json', 'witness_sha256': ''}
+    document['independent_tool_validation'] = [ref]
+    return document, ref, witness
+
+
+def publish_witness(root, document, ref, witness):
+    path = write(root / ref['witness'], json.dumps(witness, sort_keys=True))
+    ref['witness_sha256'] = sha256_bytes(path.read_text())
+    install_tool_evidence(root, document)
+
+
+def test_hashed_independent_full_output_witness_can_waive_tool_gap(tmp_path):
+    document, ref, witness = make_independent_witness(tmp_path)
+    publish_witness(tmp_path, document, ref, witness)
+    result = run_checker(tmp_path)
+    assert result.returncode == 0, result.stdout
+
+
+@pytest.mark.parametrize('change', [
+    lambda d, r, w: d['independent_tool_validation'].append(dict(r)),
+    lambda d, r, w: r.update(tool='unknown'),
+    lambda d, r, w: r.update(tool='fmpy'),
+    lambda d, r, w: r.update(oracle_id='OR-999'),
+    lambda d, r, w: r.update(oracle_id='OR-002'),  # wrong serves requirement
+    lambda d, r, w: d['source_hashes'].pop(r['output']),
+    lambda d, r, w: r.update(output_sha256='sha256:'+'f'*64),
+    lambda d, r, w: w.update(scope='partial'),
+    lambda d, r, w: w.update(**{'pass': False}),
+    lambda d, r, w: w.update(oracle_id='OR-002'),
+    lambda d, r, w: w.update(output_sha256='sha256:'+'f'*64),
+    lambda d, r, w: w.update(independent_of=['fmpy']),
+    lambda d, r, w: w.update(tool_pins={'openmodelica': '1.24'}),
+    lambda d, r, w: w.update(tool_pins={'unknown': '1'}),
+    lambda d, r, w: w.update(source_hashes={}),
+    lambda d, r, w: w['source_hashes'].update({ORACLE_SOURCE: 'sha256:'+'f'*64}),
+    lambda d, r, w: w['source_hashes'].update({'missing.py': 'sha256:'+'f'*64}),
+    lambda d, r, w: w.update(extra='not schema valid'),
+])
+def test_invalid_waivers_fail_closed(tmp_path, change):
+    document, ref, witness = make_independent_witness(tmp_path)
+    change(document, ref, witness)
+    publish_witness(tmp_path, document, ref, witness)
+    result = run_checker(tmp_path)
+    assert result.returncode == 1, result.stdout
+    assert 'rule 8:' in result.stdout
+
+
+def test_waiver_artifacts_must_match_hashes(tmp_path):
+    document, ref, witness = make_independent_witness(tmp_path)
+    publish_witness(tmp_path, document, ref, witness)
+    (tmp_path / ref['output']).write_text('tampered')
+    assert 'waiver output/witness hash mismatch' in run_checker(tmp_path).stdout
+    document, ref, witness = make_independent_witness(tmp_path)
+    publish_witness(tmp_path, document, ref, witness)
+    (tmp_path / ref['witness']).write_text('{}')
+    assert 'waiver output/witness hash mismatch' in run_checker(tmp_path).stdout
+
+
+@pytest.mark.parametrize('path', ['/tmp/outside', '../outside'])
+def test_artifact_path_escape_rejected(tmp_path, path):
+    with pytest.raises(ValueError, match='repository-relative'):
+        check_hw._repo_artifact(tmp_path, path)
+
+
+def test_symlink_escape_rejected(tmp_path):
+    (tmp_path / 'link').symlink_to(tmp_path.parent)
+    with pytest.raises(ValueError, match='escapes repository'):
+        check_hw._repo_artifact(tmp_path, 'link/outside')
+
+
+def test_authoritative_registry_and_export_drift(tmp_path):
+    make_repo(tmp_path, trace=TRACE_HEADER)
+    registry = tmp_path / 'hw/tests/oracles/registry.json'
+    document = json.loads(registry.read_text())
+    document['oracles'][0]['description'] = 'Changed registry text'
+    registry.write_text(json.dumps(document))
+    result = run_checker(tmp_path)
+    assert result.returncode == 1 and 'differs from authoritative' in result.stdout
+    registry.unlink()
+    result = run_checker(tmp_path)
+    assert result.returncode == 1 and 'Authoritative oracle registry' in result.stdout
+
+
+@pytest.mark.parametrize('document', [[], {'source_hashes': []}])
+def test_invalid_evidence_shape_rejected(tmp_path, document):
+    make_repo(tmp_path)
+    install_tool_evidence(tmp_path, document)
+    result = run_checker(tmp_path)
+    assert result.returncode == 1 and 'must be' in result.stdout
+
+
+@pytest.fixture
+def pulse_repo(tmp_path):
+    """Real HW-FR-004 source/metadata chain, isolated for promotion negatives."""
+    import shutil
+    for directory in ('hw', 'ci/docker', 'schemas/hw', 'docs/hw'):
+        shutil.copytree(REPO_ROOT / directory, tmp_path / directory,
+                        ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+    return tmp_path
+
+
+def change_pulse_manifest(root, change):
+    path = root / check_hw.PULSE_EVIDENCE_RELATIVE_PATH
+    document = json.loads(path.read_text())
+    change(document)
+    path.write_text(json.dumps(document))
+
+
+def test_pending_pulse_manifest_is_still_checked(pulse_repo):
+    result = run_checker(pulse_repo)
+    assert result.returncode == 0, result.stdout
+    assert 'passing 1, pending 3' in result.stdout
+
+
+@pytest.mark.parametrize('pulse', ['pulse4', 'pulse5b'])
+def test_partial_pulse_cannot_be_passing(pulse_repo, pulse):
+    change_pulse_manifest(pulse_repo, lambda d: d['pulses'][pulse].update(status='passing'))
+    result = run_checker(pulse_repo)
+    assert result.returncode == 1 and 'Pulse qualification' in result.stdout
+
+
+def test_partial_aggregate_cannot_be_passing(pulse_repo):
+    change_pulse_manifest(pulse_repo, lambda d: d.update(status='passing', **{'pass':True}, credibility_level='CL2'))
+    result = run_checker(pulse_repo)
+    assert result.returncode == 1 and 'Pulse qualification' in result.stdout
+
+
+@pytest.mark.parametrize('change', [
+    lambda d: d.update(**{'pass':True}),
+    lambda d: d.update(provisional=False),
+    lambda d: d.update(credibility_level='CL2'),
+    lambda d: d['pulses']['pulse4'].update(provisional=False),
+    lambda d: d['pulses'].pop('pulse5b'),
+    lambda d: d['pulses']['pulse5b'].update(extra='undeclared'),
+    lambda d: d.update(inherited_validation_gap='invented gap'),
+])
+def test_pulse_pending_contract_and_inherited_gap(pulse_repo, change):
+    change_pulse_manifest(pulse_repo, change)
+    assert run_checker(pulse_repo).returncode == 1
+
+
+def test_pending_pulse_sources_are_hash_checked(pulse_repo):
+    path = pulse_repo / 'hw/model/CancestryLib/Power/PulseISO7637_2.mo'
+    path.write_text(path.read_text()+'\n// source drift\n')
+    result = run_checker(pulse_repo)
+    assert result.returncode == 1 and 'pulse evidence source' in result.stdout
+
+
+def test_pending_pulse_requires_manifest(pulse_repo):
+    (pulse_repo / check_hw.PULSE_EVIDENCE_RELATIVE_PATH).unlink()
+    result = run_checker(pulse_repo)
+    assert result.returncode == 1 and 'Pulse qualification' in result.stdout
+
+
+@pytest.mark.parametrize('tamper', ['promote', 'remove', 'duplicate', 'credibility'])
+def test_pulse_ledger_must_agree_with_pending_manifest(pulse_repo, tamper):
+    path = pulse_repo / 'hw/tests/traceability.csv'
+    rows = list(csv.DictReader(io.StringIO(path.read_text())))
+    pulse = next(r for r in rows if r['oracle_id'] == 'OR-002')
+    if tamper == 'promote':
+        pulse['status'] = 'passing(sim,CL2,provisional)'
+        pulse['credibility_level'] = 'CL2'
+    elif tamper == 'remove':
+        rows.remove(pulse)
+    elif tamper == 'duplicate':
+        rows.append(dict(pulse))
+    else:
+        pulse['credibility_level'] = 'CL2'
+    with path.open('w', newline='') as handle:
+        writer = csv.DictWriter(handle, fieldnames=check_hw.CSV_HEADER)
+        writer.writeheader()
+        writer.writerows(rows)
+    result = run_checker(pulse_repo)
+    assert result.returncode == 1 and 'Pulse qualification' in result.stdout
+
+
+def test_complete_manifest_requires_matching_passing_ledger(pulse_repo):
+    # Synthetic metadata fixture, not a promotion of repository evidence.
+    def complete(document):
+        document.update(status='passing', credibility_level='CL2', **{'pass':True})
+        for pulse in document['pulses'].values():
+            pulse.update(coverage='complete', status='passing', oracle_credibility='CL2')
+    change_pulse_manifest(pulse_repo, complete)
+    result = run_checker(pulse_repo)
+    assert result.returncode == 1
+    assert 'passing pulse manifest and ledger' in result.stdout
+
+
+def test_complete_fixture_with_matching_ledger(pulse_repo):
+    # Exercise the future legitimate path without inventing real qualification.
+    def complete(document):
+        document.update(status='passing', credibility_level='CL2', **{'pass':True})
+        for pulse in document['pulses'].values():
+            pulse.update(coverage='complete', status='passing', oracle_credibility='CL2')
+    change_pulse_manifest(pulse_repo, complete)
+    evidence_path = pulse_repo / check_hw.PULSE_EVIDENCE_RELATIVE_PATH
+    document = json.loads(evidence_path.read_text())
+    path = pulse_repo / 'hw/tests/traceability.csv'
+    rows = list(csv.DictReader(io.StringIO(path.read_text())))
+    pulse = next(r for r in rows if r['oracle_id'] == 'OR-002')
+    pulse.update(status='passing(sim,CL2,provisional)', credibility_level='CL2',
+                 evidence=check_hw.PULSE_EVIDENCE_RELATIVE_PATH,
+                 evidence_sha256=check_hw.sha256_file(evidence_path),
+                 inherited_validation_gap=document['inherited_validation_gap'])
+    with path.open('w', newline='') as handle:
+        writer = csv.DictWriter(handle, fieldnames=check_hw.CSV_HEADER)
+        writer.writeheader()
+        writer.writerows(rows)
+    result = run_checker(pulse_repo)
+    assert result.returncode == 0, result.stdout
+
+
+@pytest.mark.parametrize('target', ['aggregate', 'pulse4', 'pulse5b'])
+@pytest.mark.parametrize('run_status', ['failing', 'failed'])
+def test_pulse_qualification_manifest_rejects_run_result_status(pulse_repo, target, run_status):
+    """HW-FR-004 / F3: failed runs cannot masquerade as qualification manifests."""
+    def change(document):
+        record = document if target == 'aggregate' else document['pulses'][target]
+        record['status'] = run_status
+    change_pulse_manifest(pulse_repo, change)
+    result = run_checker(pulse_repo)
+    assert result.returncode == 1
+    assert 'Pulse qualification' in result.stdout and 'is not one of' in result.stdout

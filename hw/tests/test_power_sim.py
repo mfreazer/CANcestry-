@@ -163,7 +163,7 @@ def _omc_version(omc):
         else "unknown"
 
 
-def build_fmu(sim_case, build_dir):
+def build_fmu(sim_case, build_dir, fmi_types=FMI_TYPES):
     """Build the FMU headless via omc; return the FMU path."""
     build_dir.mkdir(parents=True, exist_ok=True)
     model = sim_case["model"]
@@ -180,15 +180,16 @@ def build_fmu(sim_case, build_dir):
         'loadFile("%s");\n'
         "getErrorString();\n"
         'buildModelFMU(%s, version="2.0", fmuType="__FMU_TYPE__", '
-        'fileNamePrefix="cancestry_holdup");\n'
+        'fileNamePrefix="cancestry_%s");\n'
         "getErrorString();\n" % (
             package_dir / "package.mo",
             power_dir / "package.mo",
-            power_dir / "Holdup.mo",
+            power_dir / (model.rsplit(".", 1)[1] + ".mo"),
             model,
+            sim_case["case_id"],
         ))
     omc = _require_toolchain()
-    for fmi_type in FMI_TYPES:
+    for fmi_type in fmi_types:
         script.write_text(template.replace("__FMU_TYPE__", fmi_type),
                           encoding="utf-8")
         result = _run_omc(omc, str(script), build_dir)
@@ -230,7 +231,8 @@ def simulate_fmu(fmu, sim_case):
     return times, voltages
 
 
-def write_trace_artifacts(case_id, times, voltages, numerics, tool):
+def write_trace_artifacts(case_id, times, voltages, numerics, tool, *,
+                          qualification_pending=False):
     """Per-run artifacts (gitignored build/): hashed trace + run log."""
     build_dir = REPO_ROOT / "build" / "hw"
     build_dir.mkdir(parents=True, exist_ok=True)
@@ -249,6 +251,12 @@ def write_trace_artifacts(case_id, times, voltages, numerics, tool):
             "sha256": sha256_file(trace_path),
         },
     }
+    if qualification_pending:
+        # HW-FR-004: never briefly publish a passing artifact before replacing
+        # it with pending status; write the honest disposition the first time.
+        run_log.update(status="pending", provisional=True, credibility_level="CL0",
+                       regression_pass=True)
+        run_log["pass"] = False
     run_log_path = build_dir / ("%s.runlog.json" % case_id)
     run_log_path.write_text(
         json.dumps(run_log, sort_keys=True, indent=2) + "\n", encoding="utf-8")
@@ -354,7 +362,7 @@ def test_sim_case_and_bom_validate(sim_case, bom):
         extract = part["datasheet_ref"].get("extract")
         if extract:
             document = _json(REPO_ROOT / extract)
-            _validate_against_schema(document, "hw-bom-0.1.0.schema.json",
+            _validate_against_schema(document, "hw-datasheet-extract-0.1.0.schema.json",
                                      "extract %s" % extract)
 
 

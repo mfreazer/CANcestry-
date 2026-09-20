@@ -1,0 +1,421 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cancestry.dev/schemas/hw/hw-pulse-evidence-0.1.0.schema.json",
+  "title": "HW-FR-004 pulse evidence qualification, not numerical regression status",
+  "description": "H-04 review: partial/unqualified pulse coverage cannot be passing. This is a source-evidence contract; no plot-data infrastructure or rendering is introduced (tracked separately in #36). Review F3: this reusable document records qualification disposition, not an individual simulation/run verdict. The absence of 'failing' is intentional: pending means qualification is not established; passing requires complete qualified coverage. A failed regression is a nonzero pytest/CI failure and cannot supply accepted passing evidence; it must not be relabeled as a pending run in this manifest. Persisting a failing run or rendering its result requires a separate run-result/plot-data contract with explicit failure semantics. This two-state manifest must not be used to encode those run results.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "case_id",
+    "requirement_id",
+    "oracle_id",
+    "status",
+    "pass",
+    "provisional",
+    "credibility_level",
+    "evidence_of",
+    "not_covered",
+    "sim_case",
+    "source_hashes",
+    "tool_pins",
+    "inherited_validation_gap",
+    "tolerances",
+    "trace",
+    "unexercised_parameters",
+    "pulses"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0"
+    },
+    "case_id": {
+      "const": "pulse_7637_001"
+    },
+    "requirement_id": {
+      "const": "HW-FR-004"
+    },
+    "oracle_id": {
+      "const": "OR-002"
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "passing"
+      ],
+      "description": "Qualification state only, not a run-result status. 'failing' is deliberately excluded: failed execution remains a test/CI failure, not a qualification-manifest verdict. Pending is absence of qualification, never an alias for an observed passing or failing run."
+    },
+    "pass": {
+      "type": "boolean"
+    },
+    "provisional": {
+      "type": "boolean"
+    },
+    "credibility_level": {
+      "enum": [
+        "CL0",
+        "CL1",
+        "CL2",
+        "CL3"
+      ]
+    },
+    "evidence_of": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "not_covered": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "sim_case": {
+      "const": "hw/tests/cases/pulse_7637_001.simcase.json"
+    },
+    "source_hashes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^sha256:[0-9a-f]{64}$"
+      }
+    },
+    "tool_pins": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "inherited_validation_gap": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "tolerances": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "peak_relative",
+        "time_to_peak_relative",
+        "decay_tau_relative",
+        "duration_relative"
+      ],
+      "properties": {
+        "peak_relative": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "time_to_peak_relative": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "decay_tau_relative": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "duration_relative": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact",
+        "columns",
+        "hashing"
+      ],
+      "properties": {
+        "artifact": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "columns": {
+          "const": "time_s,v_v"
+        },
+        "hashing": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      }
+    },
+    "unexercised_parameters": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "pulses": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pulse1",
+        "pulse2a",
+        "pulse2b",
+        "pulse3a",
+        "pulse3b",
+        "pulse4",
+        "pulse5b"
+      ],
+      "properties": {
+        "pulse1": {
+          "$ref": "#/$defs/pulse_coverage"
+        },
+        "pulse2a": {
+          "$ref": "#/$defs/pulse_coverage"
+        },
+        "pulse2b": {
+          "$ref": "#/$defs/pulse_coverage"
+        },
+        "pulse3a": {
+          "$ref": "#/$defs/pulse_coverage"
+        },
+        "pulse3b": {
+          "$ref": "#/$defs/pulse_coverage"
+        },
+        "pulse4": {
+          "$ref": "#/$defs/pulse_coverage"
+        },
+        "pulse5b": {
+          "$ref": "#/$defs/pulse_coverage"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "pulse_coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "coverage",
+        "status",
+        "provisional",
+        "oracle_credibility",
+        "modeled",
+        "not_modeled",
+        "oracle_confidence",
+        "follow_up"
+      ],
+      "properties": {
+        "coverage": {
+          "enum": [
+            "partial",
+            "complete"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "passing"
+          ],
+          "description": "Qualification state only, not a run-result status. 'failing' is deliberately excluded: failed execution remains a test/CI failure, not a qualification-manifest verdict. Pending is absence of qualification, never an alias for an observed passing or failing run."
+        },
+        "provisional": {
+          "type": "boolean"
+        },
+        "oracle_credibility": {
+          "enum": [
+            "CL0",
+            "CL1",
+            "CL2",
+            "CL3"
+          ]
+        },
+        "modeled": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "not_modeled": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          }
+        },
+        "oracle_confidence": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "follow_up": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://github.com/mfreazer/CANcestry-/issues/\\d+$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "coverage": {
+                "const": "partial"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "const": "pending"
+              },
+              "provisional": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "passing"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "coverage": {
+                "const": "complete"
+              },
+              "oracle_credibility": {
+                "enum": [
+                  "CL1",
+                  "CL2",
+                  "CL3"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "passing"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "pass": {
+            "const": true
+          },
+          "credibility_level": {
+            "enum": [
+              "CL1",
+              "CL2",
+              "CL3"
+            ]
+          },
+          "pulses": {
+            "properties": {
+              "pulse1": {
+                "properties": {
+                  "status": {
+                    "const": "passing"
+                  },
+                  "coverage": {
+                    "const": "complete"
+                  }
+                }
+              },
+              "pulse2a": {
+                "properties": {
+                  "status": {
+                    "const": "passing"
+                  },
+                  "coverage": {
+                    "const": "complete"
+                  }
+                }
+              },
+              "pulse2b": {
+                "properties": {
+                  "status": {
+                    "const": "passing"
+                  },
+                  "coverage": {
+                    "const": "complete"
+                  }
+                }
+              },
+              "pulse3a": {
+                "properties": {
+                  "status": {
+                    "const": "passing"
+                  },
+                  "coverage": {
+                    "const": "complete"
+                  }
+                }
+              },
+              "pulse3b": {
+                "properties": {
+                  "status": {
+                    "const": "passing"
+                  },
+                  "coverage": {
+                    "const": "complete"
+                  }
+                }
+              },
+              "pulse4": {
+                "properties": {
+                  "status": {
+                    "const": "passing"
+                  },
+                  "coverage": {
+                    "const": "complete"
+                  }
+                }
+              },
+              "pulse5b": {
+                "properties": {
+                  "status": {
+                    "const": "passing"
+                  },
+                  "coverage": {
+                    "const": "complete"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "pass": {
+            "const": false
+          },
+          "provisional": {
+            "const": true
+          },
+          "credibility_level": {
+            "const": "CL0"
+          }
+        }
+      }
+    }
+  ]
+}

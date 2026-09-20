@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Virtual Bench Plan |
-| **Version** | 0.4.0 |
+| **Version** | 0.4.1 |
 | **Status** | Draft — H-04, pending QA approval |
 | **Owner** | System Engineer |
 | **Co-author** | QA Lead (oracle rule, credibility scheme) |
@@ -55,7 +55,7 @@ closure is claimed by this renumbering.
 | ID | Oracle | Class | Serves | Validation Gap | Source citation |
 | --- | --- | --- | --- | --- | --- |
 | OR-001 | RC hold-up / energy-balance closed form | analytical | HW-SF-002, HW-SF-004, HW-FR-009 | Idealized ODE; ESR temperature dependence, leakage nonlinearity, and real brownout shapes not modeled. T2 action: correlate with vendor SPICE or bench measurement. | HwRS.md v0.2.0 (2026), HW-SF-002 / HW-FR-009: C dV/dt = -I; or_001_holdup.py independent closed form and RK4 self-check. |
-| OR-002 | ISO 7637-2 / 16750-2 tabulated pulse parameters | standard | HW-FR-004 | Idealized unloaded pulse source only; source impedance coupling, full cranking shape, TVS response, parasitics, bursts and T4 correlation remain unvalidated. | ISO 7637-2:2011; ISO 16750-2:2012; H-04 issue #38 specifies Pulse 5b Us=40 V, Ri=0.5 ohm, td=350 ms. |
+| OR-002 | Pulse reference data and reduced-source regression; qualification pending | standard | HW-FR-004 | No qualified Pulse 4 starting-profile oracle or Test B source topology. The old 2011 §5.6.2/Table 11 citation and 40 V clamp were corrected; shape qualification remains pending #41. Aggregate HW-FR-004 evidence is pending (CL0), not passing; numeric regression is not physical conformance. | ISO 7637-2:2011 for pulses 1/2/3 only; ISO 16750-2:2012 §4.6.3.2 Figure 7/Table 3 (starting-profile target), §4.6.4.2.3 Figure 9/Table 6 pp. 12–13 (Test B); hw/bom/datasheets/extract-iso16750-2-2012.json. |
 | OR-003 | ISO 11898-2 bit-timing and level tables | standard | HW-FR-003, HW-FR-007 | Bus model and physical ISO 11898-2 conformance measurements pending. | ISO 11898-2:2016 and HwRS.md HW-FR-003 / HW-FR-007. |
 | OR-004 | ISO 26262-5 Annex D worked example (FMEDA tool gate) | standard | HW-SF-005 | FMEDA calculator and independent Annex D regression not implemented. | ISO 26262-5:2018 Annex D worked example; calculator qualification pending. |
 | OR-005 | Independent netlist query (KiCad) vs schematic author intent | independent_model | HW-SF-001, HW-FR-008 | Netlist query and independent schematic-intent comparison pending ECAD. | HwRS.md v0.2.0 (2026), HW-SF-001 / HW-FR-008; independent KiCad netlist query planned, no netlist yet. |
@@ -108,8 +108,8 @@ must provide an independently derived oracle before any ledger pass.
 | `hw/model/CancestryLib/Power/Holdup.mo` | Discharge, ESR vs temperature, nonlinear leakage | OR-001 (constant-current discharge only) | OR-001 plus vendor-SPICE / golden measurement | T1 → T4 | Constant ESR/leakage and ideal brownout shapes; model-boundary trigger. No claim of vendor or bench correlation. |
 | `hw/model/CancestryLib/Power/Holdup.mo` | **Planned case `holdup_charge_001.simcase.json`: R_path and diode forward bias (iCh > 0)** | OR-001 excludes the conducting charge branch | **OR-001 extended with an independent piecewise charging solution** | **analysis (T0), then T1 regression** | R_path is a budget and unexercised in holdup_001. Charge turn-on/recharge analysis and case are future work, not implemented or passed by H-04. |
 | `hw/model/CancestryLib/Power/Holdup.mo` | Supervisor threshold / real brownout and reset sequences | OR-001 discharge; OR-008 planned threshold reference | OR-008 plus golden brownout/reset traces | T2 → T4 | Supervisor threshold spread and firmware/reset-domain behavior are outside this plant; model-boundary and oracle-absence triggers. |
-| `hw/model/CancestryLib/Power/PulseISO7637_2.mo` | Peak, time-to-peak, decay constant of unloaded source | OR-002 tabulated parameters | OR-002 plus independent waveform/generator measurement | T1 → T4 | Idealized source, no TVS or load coupling; sub-nanosecond sampling needed for fast pulses. Discretization and model-boundary triggers. |
-| `hw/model/CancestryLib/Power/PulseISO7637_2.mo` | Full cranking profile; unsuppressed load-dump pulse 5a | OR-002 reduced cranking / suppressed 5b only | Extended OR-002 with qualified standard/golden waveform | T1 → T4 (H-06) | Multi-stage Ua/Us/t7/t8 cranking and unsuppressed 5a energy/clamping behavior are not closed by the present reduced source. H-06 owns the missing transient fidelity. |
+| `hw/model/CancestryLib/Power/PulseISO7637_2.mo` | Peak/time/decay numerical regression; NOT qualification | OR-002 reference/fixture data (CL0 qualification) | Independently qualified OR-002 source waveform per #41, then T4 | T1 → T4 | Pulse manifest and ledger are pending; numeric regression success cannot promote incomplete coverage. |
+| `hw/model/CancestryLib/Power/PulseISO7637_2.mo` | Full cranking profile; unsuppressed load-dump pulse 5a | OR-002 reduced cranking / suppressed 5b only | Extended OR-002 with qualified standard/golden waveform | T1 → T4 (#41 / H-06) | Pulse 4 is a 1/20/1 ms engineering dip, not a qualified starting profile; 5b source topology remains pending #41 despite corrected 35 V clamp/source citation. Unsuppressed 5a remains H-06. |
 
 Bus, thermal and supervisor-specific physics models do not yet exist. Their
 future fidelity work remains in the bench-trigger planning; this table must
@@ -126,6 +126,7 @@ None outstanding as of v0.3.0.
 |---|---|---|
 | 0.1.0 | 2026-09-19 | Initial draft |
 | 0.2.0 | 2026-09-19 | QA review applied: rebuild and retention policy added (VB-F1); sub-step discrete event injection clarified for HW-SF-004 (VB-Q1); OR-005b class (c) golden-measurement upgrade path added (VB-Q2); oracle registry expanded with OR-007, OR-008, OR-009 to serve HW-SF-003, HW-SF-004, HW-FR-010. |
+| 0.4.1 | 2026-09-19 | H-04 review: correct OR-002 source and withdraw aggregate pulse qualification to pending; track full Pulse 4/Test B qualification in #41. |
 | 0.4.0 | 2026-09-19 | H-04 #38: schema-validated JSON oracle registry, generated CSV/table, explicit pending-oracle gaps, OR-010 renumbering and tabulated fidelity/charge-path roadmap. |
 | 0.3.0 | 2026-09-19 | Residual state reconciliation (issue #35): declared `hw/tests/oracles/registry.csv` source of truth for oracles and added `validation_gap` column to rendered view (§4); added Model fidelity roadmap (§8.1) defining T1 idealizations, trigger classes, and closure steps per `CancestryLib` model. |
 

@@ -3,84 +3,179 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Tool Qualification Plan and Evidence |
-| **Version** | 0.1.0 |
-| **Status** | Approved — H-Phase 1 baseline |
+| **Version** | 0.2.3 |
+| **Status** | Draft — H-04, pending QA and Human Reviewer approval |
 | **Owner** | System Engineer |
 | **Approver** | QA Lead |
-| **Last Review** | 2026-09-19 |
+| **Last Review** | 2026-09-20 |
 | **Repository location** | `docs/hw/tool-qualification.md` |
-| **Governing documents** | `docs/hw/HW-PLAN.md` v1.0.0 §7/§10.5, ISO 26262-8:2018 §13 |
+| **Governing documents** | ISO 26262-8:2018 §13; hardware policy |
 
----
+## 1. Purpose and scope
 
-## 1. Purpose and Scope
+Implements verification discipline for HW-SF-001..005, HW-FR-004 and
+HW-FR-009. Tool confidence is not model credibility or hardware qualification.
+Independent regressions bound the behavior exercised; they do not qualify all
+compiler semantics or establish physical CL3 correlation.
 
-This document defines the evaluation, classification, and qualification of software tools used in the CANcestry hardware program, in accordance with ISO 26262-8:2018 §13 (*Evaluation of software tools*).
+## 2. Classification scheme
 
-Per HW-PLAN §7 and §10.5, any tool that produces verification evidence cited in the hardware safety case shall be evaluated for Tool Impact (TI), Tool Error Detection (TD), and Tool Confidence Level (TCL). Tools assigned TCL2 or TCL3 require formal qualification evidence.
+- **TI1**: confidence that tool malfunction cannot introduce or fail to detect
+  errors in a safety-related item. **TI2**: all other cases.
+- **TD1 / TD2 / TD3**: high / medium / low confidence in detecting malfunction
+  and erroneous output.
+- **TCL1**: TI1, or TI2 with TD1. **TCL2**: TI2 with TD2.
+  **TCL3**: TI2 with TD3. TCL2/TCL3 require qualification evidence.
 
----
+## 3. Controlled classification table
 
-## 2. Tool Classification Scheme (ISO 26262-8 §13.4)
+This table is machine-read by `ci/check_hw_traceability.py`. Tool IDs match
+keys in an evidence artifact's `tool_pins`. `python` and `numpy` are recorded
+runtime dependencies, not independently classified evidence-producing tools.
+An unknown producer, pending classification, missing table or empty TCL2+
+gap fails closed. `-` represents an empty tool gap for TCL1 only.
 
-### 2.1 Tool Impact (TI)
-- **TI1**: There is no argument that the tool cannot introduce or fail to detect errors in a safety-related item.
-- **TI2**: All other cases (e.g. simulation or static check tools whose output is independently verified by automated test gates).
-
-### 2.2 Tool Error Detection (TD)
-- **TD1**: High degree of confidence that a malfunction and its corresponding erroneous output will be detected.
-- **TD2**: Medium degree of confidence.
-- **TD3**: Low degree of confidence.
-
-### 2.3 Tool Confidence Level (TCL)
-- **TCL1**: Combination of (TI1, TD1/TD2/TD3) or (TI2, TD1) — no tool qualification required.
-- **TCL2 / TCL3**: Formal qualification required via qualification test suite, evaluation of tool development process, or validation of tool output.
-
----
-
-## 3. Tool Classification Table
-
-| Tool | Role / Usage | TI | TD | TCL | Status / Qualification Method |
+<!-- BEGIN TOOL CLASSIFICATION -->
+| tool_id | Tool / role and rationale | TI | TD | TCL | validation_gap |
 |---|---|---|---|---|---|
-| **OpenModelica** | Compiles Modelica plant models (`CancestryLib`) into FMI 2.0/3.0 FMUs for T1 simulation. | TI2 | TD1 | **TCL1** | Qualified by regression against independent analytical/tabulated oracles (OR-001, OR-002) in CI. |
-| **FMPy** | Executes compiled FMUs and extracts time-series simulation traces during CI test runs. | TI2 | TD1 | **TCL1** | Qualified by regression against independent analytical/tabulated oracles (OR-001, OR-002) in CI. |
-| **`capellambse`** | Reads Eclipse Capella Arcadia models; enforces structural integrity and linkage gates in CI (`ci/check_capella_model.py`). | TI2 | TD1 | **TCL1** | Qualified as a model reader by unit tests and negative fixture suites in CI. |
-| **Python FMEDA Calculator** | Computes quantitative SPFM, LFM, and PMHF metrics from BOM and FIT database. | TI1 | TD1 | **Pending (H-03)** | Qualification gated on reproducing the ISO 26262-5 Annex D worked example (oracle OR-004) to published precision. |
-| **Renode** | Virtual target emulator running real ARM ELF for T2 co-simulation. | TI2 | TD1 | **Pending (H-04)** | Qualification gated on replaying Phase 12 fault injection suite against golden physical traces. |
+| openmodelica | OpenModelica compiles Modelica into FMUs. A compiler bug can silently change simulation semantics, introducing errors into safety-related artifacts. OR-001/OR-002 regressions cover only exercised semantics. | TI2 | TD2 | TCL2 | Compiler semantics outside independently validated output remain unqualified; OR-001/OR-002 regressions do not cover all translation and solver behavior. |
+| fmpy | Bounded, independently oracle-checked FMU execution/readout only, subject to the reclassification precondition in §3.1. TD1 is conditional on detection coverage for the exact claimed outputs; this is not a claim that FMPy cannot introduce errors. | TI2 | TD1 | TCL1 | - |
+| capellambse | capellambse is a model reader, not a safety-case producer. Live structural checks and negative fixtures detect missed linkage/parse errors. | TI2 | TD1 | TCL1 | - |
+| fmeda | FMEDA calculator is not implemented; independent ISO 26262-5 Annex D gate required before use. | pending | pending | pending | No qualification evidence. |
+| renode | Renode is not implemented by H-04; fault replay and golden-trace correlation required before use. | pending | pending | pending | No qualification evidence. |
+<!-- END TOOL CLASSIFICATION -->
 
----
+### 3.1 FMPy reclassification precondition (F1, normative)
 
-## 4. Qualification Evidence Records
+Implements HW-SF-002 / HW-FR-004. **TCL1 is conditional on the bounded use
+above, not an intrinsic property of FMPy.** FMPy is TI2: an executor, master
+algorithm or reader can introduce errors as well as fail to detect them.
+The present TD1 argument is limited to outputs actually checked by independent
+oracles and negative fixtures. OR-001 checks the declared hold-up trajectory;
+OR-002 currently supports numerical regression only, not a qualified passing
+pulse claim. A version pin or a green regression alone is not a TD1 argument
+for other behavior or a broader safety claim.
 
-### 4.1 Record 1: OpenModelica + FMPy vs. Analytical Oracle OR-001
-- **Target Toolchain**: OpenModelica 1.24 + FMPy 0.3.24
-- **Verification Case**: `hw/tests/cases/holdup_001.simcase.json`
-- **Requirement Traced**: HW-SF-002, HW-FR-009
-- **Oracle**: OR-001 (`hw/tests/oracles/or_001_holdup.py`), Class (a) RC hold-up / energy-balance closed form.
-- **Qualification Evidence**: Headless FMU compilation and simulation in `hw/tests/test_power_sim.py`. The simulated $V_{\text{BAT}}(t)$ voltage trace matches the closed-form analytical solution within the declared tolerance ($0.001\text{ V}$) across a 150 ms transient event.
-- **Evidence Artifact**: `hw/tests/evidence/holdup_001.json` (sha256-pinned).
+**Before extending that use, reassess and, where TD1 is no longer established,
+reclassify FMPy to TCL2 (TI2/TD2), or TCL3 if only TD3 is justified.** This
+precondition applies before accepting any new safety-related evidence that
+relies on FMPy numerical integration, state/event handling, interpolation or
+resampling, co-simulation/master coupling, or trace/result transformation
+outside the independently checked output scope. A new FMU/model, execution
+mode, solver/configuration or tool version also requires review of that scope;
+a nominally unchanged reader role must not silently inherit the old argument.
 
-### 4.2 Record 2: OpenModelica + FMPy vs. Standard Tabulated Oracle OR-002
-- **Target Toolchain**: OpenModelica 1.24 + FMPy 0.3.24
-- **Verification Case**: `hw/tests/cases/pulse_7637_001.simcase.json`
-- **Requirement Traced**: HW-FR-004
-- **Oracle**: OR-002 (`hw/tests/oracles/or_002_pulse7637.py`), Class (b) ISO 7637-2 / ISO 16750-2 tabulated parameters.
-- **Qualification Evidence**: Simulation and verification of transient pulses 1, 2a, 2b, 3a, 3b, 4, and 5b in `hw/tests/test_pulse_sim.py`. Simulated peak voltages, pulse durations, and rise/fall times match the standard tables within declared tolerances ($\le 0.01\text{ V}$, $\le 1\ \mu\text{s}$).
-- **Evidence Artifact**: `hw/tests/evidence/pulse_7637_001.json` (sha256-pinned).
+The maintainer/QA review must, **before promotion or consumption as passing
+evidence**:
 
----
+1. Identify the changed producing role, relevant failure modes and all output
+   semantics the safety claim relies on; justify TI/TD with independent
+   oracle coverage and positive/negative tests for that exact configuration.
+2. Record the disposition in this section and the controlled table. If TD1
+   cannot be demonstrated, TCL1 must not remain by default: apply TCL2/TCL3
+   with an explicit validation gap (or leave classification/evidence pending
+   until the assessment is complete).
+3. Pin the configuration, reissue affected source/evidence hashes and apply
+   §5's enforced TCL2/TCL3 gap inheritance. No passing claim may omit that gap
+   merely because the earlier, narrower FMPy role was TCL1.
 
-## 5. Validation Gap Inheritance Rule
+This is a precondition on reuse, not retrospective tool qualification or a
+promotion of the currently pending pulse evidence. OpenModelica remains TCL2.
 
-> **Validation Gap Inheritance Rule (Normative):**
-> Any hardware requirement closed using evidence produced by a qualified software tool inherits the tool's declared **validation gap** (recorded in `hw/tests/oracles/registry.csv`).
-> 
-> The validation gap explicitly defines the physical, thermal, or modeling boundaries that the simulation does not cover. Inherited validation gaps are tracked in the hardware traceability ledger (`hw/tests/traceability.csv`) and must be resolved by physical measurement (T4) or golden-board correlation prior to final CL3 verification exit.
+## 4. Qualification regression records
 
----
+### 4.1 OpenModelica + FMPy against OR-001
 
-## 6. Change Log
+- Requirement: HW-SF-002; supports HW-FR-009.
+- Pins: OpenModelica 1.24, FMPy 0.3.24, NumPy 2.1.3.
+- Case: `hw/tests/cases/holdup_001.simcase.json`.
+- Harness: `hw/tests/test_power_sim.py`, actual headless FMU compilation and
+  FMPy simulation against the independently derived closed form.
+- Acceptance: VBAT trace error ≤ 0.001 V; retention floor held for the declared
+  150 ms event. The tolerance and budget parameters remain provisional.
+- Manifest: `hw/tests/evidence/holdup_001.json`. Per-run trace/hash and measured
+  tool versions: `build/hw/holdup_001.runlog.json` (CI artifact, not Git data).
+- Gap: charge branch/R_path, nonlinear leakage, temperature-dependent ESR,
+  reset-domain behavior and physical brownout correlation are not validated.
+
+### 4.2 OpenModelica + FMPy against OR-002: regression only, qualification pending
+
+- Requirement: HW-FR-004. Same tool pins; case
+  `hw/tests/cases/pulse_7637_001.simcase.json`.
+- `hw/tests/test_pulse_sim.py` executes the compiled stateless source via
+  FMI ModelExchange/FMPy, with deterministic feature grids and bounded event
+  iteration. **N2 code pointer:**
+  [`execute_pulse()`](../../hw/tests/test_pulse_sim.py) reads the model
+  description, then requires `modelExchange is not None`,
+  `numberOfContinuousStates == 0`, and no model variable with
+  `variability == 'discrete'`, **before** `fmpy.extract()` or `FMU2Model`
+  instantiation. The rejection is of FMU-declared state/unsupported execution
+  modes; it is not an independent proof against hidden compiler defects.
+  Negative metadata fixtures assert that extraction/native construction are
+  never reached for unsupported descriptions; a zero-state, continuous-valued
+  algebraic output is accepted past the guard. These fixtures are not extra
+  physical/FMU simulation evidence; real positive/faulted regressions also run.
+- This rejection boundary is **pulse-specific**. The stateful hold-up path
+  [`simulate_fmu()`](../../hw/tests/test_power_sim.py) is not covered by it;
+  its bounded TCL1 argument relies on the independent OR-001 trajectory
+  comparison in §4.1. Broader solver/master/output uses still trigger §3.1;
+  neither this pointer nor green pulse tests grant FMPy unconditional TCL1.
+- Invariants: fixture peak within 2%, time-to-peak within 5%, and applicable
+  td/3 decay constant within 10%, with duration/recovery checks. These are
+  regression tolerances, **not** a standard-qualified oracle or confidence
+  intervals. Pulse 4's actual 1 ms / 20 ms / 1 ms engineering dip is also
+  asserted at its region boundaries.
+- Normative Test B / legacy 5b source: **ISO 16750-2:2012 §4.6.4.2.3,
+  Figure 9 / Table 6, pp. 12–13**. Suppressed level corrected to **Us* = 35 V**
+  from the validated source extract. The old 2011 Table 11 citation and 40 V
+  level were errors, not acceptable qualification limits. Remaining source
+  topology/timing correctness is tracked by [#41](https://github.com/mfreazer/CANcestry-/issues/41).
+- Manifest: `hw/tests/evidence/pulse_7637_001.json`, **pending / pass=false /
+  provisional=true / CL0**, schema-enforced for incomplete pulse coverage.
+  Per-pulse and aggregate run logs separately record `regression_pass`; they
+  also carry pending qualification status, never a misleading passing verdict.
+- Exact modeled/unmodeled scope, source links and confidence disposition:
+  [pulse-coverage.md](pulse-coverage.md). Pulse 4 and 5b cannot be promoted
+  from pending until independently qualified; no T4/DUT immunity claim exists.
+
+## 5. Validation-gap inheritance (normative)
+
+The hardware ledger `hw/tests/traceability.csv` adds
+`inherited_validation_gap`. For each artifact, the checker derives producers
+from `tool_pins` and computes the sorted, exact `tool_id: validation_gap` text
+for every TCL2/TCL3 producer. Multiple gaps are joined with ` | `.
+TCL1-only evidence and pending ledger rows must have an empty field. A
+produced pending pulse artifact records its own `inherited_validation_gap`,
+which the checker validates even without a closure-evidence ledger link.
+The OR-002 row uses `virtual_bench` (CL0, sim-pending); this method names the automated
+bench harness and does not turn T1 source-model evidence into T2 integration.
+The software ledger and its checker are unchanged.
+
+Naming an oracle is **not** an independent-validation waiver. A full-output
+waiver requires a schema-validated `independent_tool_validation` reference
+in the artifact: a registered oracle serving the same requirement, an actual
+output pinned in `source_hashes`, and an independently hashed witness report
+with `pass: true`, `scope: full_output`, matching output digest, nonempty
+hashed source provenance, and independence from the producer. The witness
+must not list that producer or another unqualified tool in its own pins.
+QA still reviews the independence claim; hash matching is not an authorship
+proof. An absent or partial witness retains the tool's gap; a malformed
+waiver fails the gate. A valid full-output waiver removes only that tool's
+gap, never the oracle's/model's physical validation gap.
+
+The current OR-001/OR-002 regressions deliberately **do not claim a full-output
+waiver**. The passing OR-001 ledger row and the pending OR-002 JSON artifact
+retain the OpenModelica gap. The OR-002 ledger row itself has no closure
+evidence and no inherited gap. OR-001 remains provisional pending T4 for CL3;
+OR-002 has no qualified passing claim. Oracle/model gaps remain in
+`hw/tests/oracles/registry.json` and each evidence manifest's `not_covered`.
+
+## 6. Change log
 
 | Version | Date | Change |
 |---|---|---|
-| 0.1.0 | 2026-09-19 | Initial release (issue #35): TCL classification table for OpenModelica, FMPy, capellambse, FMEDA calculator, and Renode; qualification evidence records for OR-001 and OR-002; validation gap inheritance rule defined. |
+| 0.2.3 | 2026-09-20 | N2: identify the actual pre-instantiation pulse FMU state checks and negative fixtures; distinguish the OR-001 stateful hold-up scope. No unconditional FMPy confidence or pulse-qualification promotion. |
+| 0.2.2 | 2026-09-20 | Review F1: make the bounded FMPy TD1/TCL1 argument conditional; require role/configuration reassessment and TCL2/TCL3 reclassification before unvalidated producing uses enter passing evidence. |
+| 0.2.1 | 2026-09-19 | H-04 review: correct normative Test B source and 35 V suppressed level; withdraw pulse qualification to pending/CL0; enforce partial-coverage/source/ledger agreement and artifact-level tool inheritance. |
+| 0.2.0 | 2026-09-19 | H-04 #38: OpenModelica TCL2 (TI2/TD2); FMPy and capellambse bounded TCL1 roles confirmed; corrected TI definitions; checked gap inheritance and independent-witness contract; real pulse invariants and explicit qualification limits. |
+| 0.1.0 | 2026-09-19 | H-02 classification and OR-001/OR-002 regression records. |

@@ -3,11 +3,11 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry MBSE Plan |
-| **Version** | 0.4.0 |
+| **Version** | 0.4.1 |
 | **Status** | Draft — H-04, pending Human Reviewer / QA approval |
 | **Owner** | System Engineer |
 | **Approver** | QA Lead, Release Manager |
-| **Last Review** | 2026-09-19 |
+| **Last Review** | 2026-09-20 |
 | **Repository location** | `docs/hw/mbse-plan.md` |
 | **Governing documents** | `docs/hw/HW-PLAN.md` v1.0.0, `docs/qa/hw-validation-matrix.md` v0.1.0 |
 
@@ -30,7 +30,10 @@ Requirements live **only** in `docs/hw/HwRS.md`. Capella requirement objects car
 - HwRS ID present in `HwRS.md` but not linked from any Capella element (dangling requirement).
 - PA realization not resolving to a non-root LA component.
 - HW-SF-* requirement without a directed trace path to a logical component
-  carrying a typed `safety_mechanism=true` property or explicit stereotype.
+  carrying a `BooleanPropertyValue` named `safety_mechanism` with value true,
+  or the exact `safety_mechanism="true"` attribute. Raw `stereotype` /
+  `stereotypes` strings do **not** qualify (N1); they are not resolved profile
+  applications. The current seed uses the typed-Boolean alternative.
   Requirement existence/name alone is not linkage; cycles and container
   membership do not confer coverage, and broken references fail closed.
 - Regulatory authority represented as a functional actor instead of an OA
@@ -83,6 +86,7 @@ None outstanding as of v0.3.0. The `hwrs_id` property name is confirmed (QA ruli
 |---|---|---|
 | 0.1.0 | 2026-09-19 | Initial draft |
 | 0.2.0 | 2026-09-19 | QA review applied: concurrent edit policy for safety-relevant diagrams added (MBSE-F1); `hwrs_id` property name confirmed and CI check list expanded (MBSE-Q); external watchdog added to LA and PA level descriptions; Git LFS threshold quantified; FMEDA oracle gate referenced. |
+| 0.4.1 | 2026-09-20 | N1: remove the unqualified stereotype-string fallback; retain explicit/typed Boolean markers and real downstream trace checks. |
 | 0.4.0 | 2026-09-19 | H-04 #38: JSON bridge and structured trades; generated views, live 1:1 validation, safety-mechanism reachability, authority constraint and firmware-aligned SA modes. |
 | 0.3.0 | 2026-09-19 | Capella seed & structural gate baseline (issue #35): recorded Trades T-01..T-04 in Appendix A; documented Capella model seed structure under `hw/model/capella/` and bridge specification `hw/model/bridge.json`. |
 
