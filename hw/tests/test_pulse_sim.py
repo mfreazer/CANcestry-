@@ -3,6 +3,12 @@
 No snapshots: reference/fixture scalars bound measured output features.
 These checks do not qualify an incomplete pulse against a standard. Missing tools fail closed (only explicit local opt-out may skip).
 Negative fixtures run in hw-fast alongside the real compiler/executor tests.
+
+H-06 (#49) adds pulse 5a (ISO 16750-2:2012 §4.6.4.2.2 Test A, Figure 8 /
+Table 5) invariant checks. They may pass as regression invariants against
+the OR-002 5a engineering tabulation; they do NOT constitute standards
+qualification, which remains deferred to #41 (honest split: numeric
+regression green, qualification pending).
 """
 from __future__ import annotations
 
@@ -180,6 +186,10 @@ def test_case_parameters_and_tolerances(pulse_case):
     # ISO 16750-2:2012 §4.6.4.2.3 Figure 9/Table 6 (12 V Test B Us*=35 V).
     assert (pulse_case['parameters']['Us_pulse5b'], pulse_case['parameters']['Ri_pulse5b'],
             pulse_case['parameters']['td_pulse5b']) == (35.0, .5, .35)
+    # ISO 16750-2:2012 §4.6.4.2.2 Figure 8/Table 5 (12 V Test A; H-06): unclamped
+    # lower Us bound paired with the lower Ri bound per footnote a.
+    assert (pulse_case['parameters']['Us_pulse5a'], pulse_case['parameters']['Ri_pulse5a'],
+            pulse_case['parameters']['td_pulse5a']) == (79.0, .5, .35)
 
 
 def test_fmu_pulse_invariants(pulse_fmu, pulse_case):
@@ -297,6 +307,79 @@ def test_test_b_reference_matches_schema_validated_source(pulse_case):
     assert values['td_min_12V'] <= p['td'] <= values['td_max_12V']
     assert 'ISO 16750-2:2012 §4.6.4.2.3' in p['standard']
     assert 'Figure 9 / Table 6' in p['standard']
+
+
+def test_test_a_reference_matches_schema_validated_source(pulse_case):
+    """HW-FR-004 / H-06: the 5a fixture values come from Table 5, not issue prose.
+
+    The OR-002 pulse5a tabulation is an engineering fixture pending #41 shape
+    qualification; agreement with the schema-validated extract is a citation
+    and range check (HwAGENTS rule 2 chain), never a standards-conformance
+    verdict. Citation disposition: the H-06 issue body cited Table 6 for 5a;
+    the normative source places Test A parameters in Table 5.
+    """
+    extract = _json(REPO_ROOT / 'hw/bom/datasheets/extract-iso16750-2-2012.json')
+    _validate_against_schema(extract, 'hw-datasheet-extract-0.1.0.schema.json', 'ISO extract')
+    values = {entry['name']: entry['value'] for entry in extract['entries']}
+    p = ORACLE.get_pulse_params('pulse5a')
+    # Table 5 footnote a pairing: the fixture takes the lower unclamped Us
+    # bound together with the lower Ri bound.
+    assert p['Us'] == values['Us_pulse5a_min_12V'] == pulse_case['parameters']['Us_pulse5a']
+    assert values['Us_pulse5a_min_12V'] <= p['Us'] <= values['Us_pulse5a_max_12V']
+    assert values['Ri_pulse5a_min_12V'] <= p['Ri'] <= values['Ri_pulse5a_max_12V']
+    assert values['td_pulse5a_min_12V'] <= p['td'] <= values['td_pulse5a_max_12V']
+    assert values['tr_pulse5a_min'] <= p['tr'] <= values['tr_pulse5a_max']
+    assert pulse_case['parameters']['tr_pulse5a'] == p['tr']
+    assert 'ISO 16750-2:2012 §4.6.4.2.2' in p['standard']
+    assert 'Figure 8 / Table 5' in p['standard']
+    # The extract itself carries the pending flag for the whole 5a block.
+    assert any('shape_qualification_pending: true' in entry['condition']
+               for entry in extract['entries'] if entry['name'].endswith('pulse5a_min_12V'))
+
+
+def synthetic_pulse5a_trace(pulse_case, amplitude=1.0, peak_scale=1.0, decay_scale=1.0):
+    """Independent fabricated pulse 5a traces for invariant checks, never evidence.
+
+    Mirrors the reduced-model 5a convention (absolute unclamped level, linear
+    edge over tr, td/3 exponential decay, snap back to nominal after td). The
+    amplitude scales the 65.5 V excursion above nominal: at the 79 V absolute
+    reference a 2.5% excursion fault (+1.64 V) exceeds the declared 2% peak
+    tolerance (+-1.58 V) and must be detected.
+    """
+    times = feature_grid('pulse5a', pulse_case['solver'])
+    p = ORACLE.get_pulse_params('pulse5a')
+    peak_time, tau = p['tr']*peak_scale, p['td']/3*decay_scale
+    excursion = (p['Us'] - 13.5)*amplitude
+    values = [13.5 + excursion*(t/peak_time if t < peak_time else
+              math.exp(-(t-peak_time)/tau) if t < peak_time+p['td'] else 0)
+              for t in times]
+    return times, values
+
+
+def test_pulse5a_invariants_positive_without_toolchain(pulse_case):
+    """H-06 (#49): 5a invariant regression against OR-002 — NOT qualification.
+
+    Peak vs the OR-002 5a tabulation within the declared 2%, rise
+    (time-to-peak) within 5% and td/3 decay within 10%. Passing here does
+    not constitute standards qualification: shape qualification is deferred
+    to #41 and every HW-FR-004 ledger/evidence status remains pending.
+    """
+    times, values = synthetic_pulse5a_trace(pulse_case)
+    result = assert_invariants('pulse5a', times, values, 13.5, pulse_case['tolerances'])
+    assert result['peak_v'] == 79.0
+    assert result['time_to_peak_s'] == pytest.approx(0.005)
+    assert result['decay_tau_s'] == pytest.approx(0.35/3, rel=0.1)
+
+
+@pytest.mark.parametrize('change,message', [
+    ({'amplitude': 1.025}, 'peak voltage'), ({'peak_scale': 1.2}, 'time-to-peak'),
+    ({'decay_scale': 1.101}, 'decay time constant'),
+])
+def test_pulse5a_invariant_negatives_without_toolchain(pulse_case, change, message):
+    """H-06: fabricated 5a drift is detected fail-closed; detection is not qualification."""
+    times, values = synthetic_pulse5a_trace(pulse_case, **change)
+    with pytest.raises(AssertionError, match=message):
+        assert_invariants('pulse5a', times, values, 13.5, pulse_case['tolerances'])
 
 
 def test_pulse4_implemented_regions_are_explicit(pulse_fmu, pulse_case):

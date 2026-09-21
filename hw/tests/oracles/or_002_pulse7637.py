@@ -16,7 +16,20 @@ Table 6 ranges, but the present td/3 source lacks the suppressed plateau,
 the standard edge/duration measurement definitions and loaded topology.
 Correcting the citation/peak does NOT qualify this shape. Pulse 4 is an
 engineering dip fixture (1 ms / 20 ms / 1 ms), not a standard starting profile.
-Do not promote either case, or the aggregate evidence, from pending.
+
+H-06 (#49) adds the pulse5a tabulation for the unsuppressed load dump
+(Test A): ISO 16750-2:2012, fourth edition, §4.6.4.2.2, Figure 8 / Table 5,
+printed pp. 11–12 — unclamped Us 79..101 V, Ri 0.5..4 ohm, td 40..400 ms,
+tr 10 ms -5/+0, 10 pulses at 1 min intervals for the 12 V system, confirmed
+against the normative extract (hw/bom/datasheets/extract-iso16750-2-2012.json).
+The 5a tabulation is an engineering fixture pending #41 shape qualification:
+the reduced td/3 source lacks Figure 8's 0.9(Us−UA)+UA / 0.1(Us−UA)+UA
+edge/duration measurement definitions, the unclamped-generator topology,
+exercised Ri, the 10-pulse repetition and loaded DUT response. The fixture
+operating point is the Table 5 lower Us bound (79 V) paired with the lower
+Ri bound per footnote a.
+
+Do not promote any case, or the aggregate evidence, from pending.
 """
 
 # Reference/engineering fixture values for the reduced 12 V source; not a qualification verdict.
@@ -77,6 +90,14 @@ PULSE_PARAMETERS = {
         "Ri": 0.5,         # Ohm
         "standard": "ISO 16750-2:2012 §4.6.4.2.3, Figure 9 / Table 6, pp. 12–13; shape qualification pending #41",
     },
+    "pulse5a": {
+        "name": "ISO 16750-2 Pulse 5a (Unsuppressed load dump transient, Test A)",
+        "Us": 79.0,        # V; unclamped generator level, Table 5 lower bound (footnote a pairs it with the lower Ri)
+        "td": 0.35,        # s; selected within 40..400 ms, shape still unqualified
+        "tr": 0.005,       # s (5 ms); within the tabulated 10 ms -5/+0 rising slope
+        "Ri": 0.5,         # Ohm; unexercised metadata in the unloaded reduced source
+        "standard": "ISO 16750-2:2012 §4.6.4.2.2, Figure 8 / Table 5, pp. 11–12 (Test A); shape qualification pending #41",
+    },
 }
 
 
@@ -91,28 +112,32 @@ def expected_invariants(pulse_name, v_nominal=13.5):
     """Scalar regression expectations, NOT a standards-qualification verdict.
 
     The H-02 source convention treats Us as an excursion for pulses 1/2/3
-    and an absolute level for 4/5b. td/3 is the existing reduced exponential
+    and an absolute level for 4/5b/5a. td/3 is the existing reduced exponential
     approximation (95% decay over td), not an assertion that the standard
     specifies an exact exponential time constant. Both are validation gaps.
     """
     p = get_pulse_params(pulse_name)
-    absolute = pulse_name in ("pulse4", "pulse5b")
+    absolute = pulse_name in ("pulse4", "pulse5b", "pulse5a")
     peak = p["Us"] if absolute else v_nominal + p["Us"]
     return {"peak_v": peak, "peak_reference_v": p["Us"],
             "absolute_peak": absolute, "time_to_peak_s": p["tr"],
             "decay_tau_s": p["td"] / 3 if pulse_name in
-                           ("pulse1", "pulse2a", "pulse5b") else None,
+                           ("pulse1", "pulse2a", "pulse5b", "pulse5a") else None,
             "duration_s": p["td"]}
 
 
 def self_check():
     """Fixture integrity only; not independent qualification of the pulse shape."""
     assert set(PULSE_PARAMETERS) == {"pulse1", "pulse2a", "pulse2b", "pulse3a",
-                                     "pulse3b", "pulse4", "pulse5b"}
+                                     "pulse3b", "pulse4", "pulse5b", "pulse5a"}
     for key, params in PULSE_PARAMETERS.items():
         assert params["Us"] != 0 and params["td"] > params["tr"] > 0
         assert params["Ri"] >= 0 and params["standard"]
     # ISO 16750-2:2012 §4.6.4.2.3 Table 6: Us* corrected to 35 V; shape stays pending.
     assert (PULSE_PARAMETERS["pulse5b"]["Us"], PULSE_PARAMETERS["pulse5b"]["Ri"],
             PULSE_PARAMETERS["pulse5b"]["td"]) == (35.0, 0.5, 0.35)
+    # ISO 16750-2:2012 §4.6.4.2.2 Table 5 (H-06): 5a fixture is the unclamped
+    # lower Us bound with the footnote a lower-Ri pairing; shape stays pending #41.
+    assert (PULSE_PARAMETERS["pulse5a"]["Us"], PULSE_PARAMETERS["pulse5a"]["Ri"],
+            PULSE_PARAMETERS["pulse5a"]["td"]) == (79.0, 0.5, 0.35)
     return {"pass": True, "count": len(PULSE_PARAMETERS)}

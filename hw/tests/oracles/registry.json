@@ -20,8 +20,8 @@
       "serves": [
         "HW-FR-004"
       ],
-      "source_citation": "ISO 7637-2:2011 for pulses 1/2/3 only; ISO 16750-2:2012 §4.6.3.2 Figure 7/Table 3 (starting-profile target), §4.6.4.2.3 Figure 9/Table 6 pp. 12–13 (Test B); hw/bom/datasheets/extract-iso16750-2-2012.json.",
-      "validation_gap": "No qualified Pulse 4 starting-profile oracle or Test B source topology. The old 2011 §5.6.2/Table 11 citation and 40 V clamp were corrected; shape qualification remains pending #41. Aggregate HW-FR-004 evidence is pending (CL0), not passing; numeric regression is not physical conformance."
+      "source_citation": "ISO 7637-2:2011 for pulses 1/2/3 only; ISO 16750-2:2012 §4.6.3.2 Figure 7/Table 3 (starting-profile target), §4.6.4.2.2 Figure 8/Table 5 pp. 11–12 (Test A, legacy pulse 5a; H-06 scope note), §4.6.4.2.3 Figure 9/Table 6 pp. 12–13 (Test B, legacy pulse 5b); hw/bom/datasheets/extract-iso16750-2-2012.json.",
+      "validation_gap": "No qualified Pulse 4 starting-profile oracle and no qualified Test A or Test B source topology. The old 2011 §5.6.2/Table 11 citation and 40 V clamp were corrected; H-06 (#49) adds a pulse 5a (Test A) engineering tabulation — unclamped Us=79 V Table 5 lower-bound fixture — whose waveform shape remains unqualified, pending #41. Aggregate HW-FR-004 evidence is pending (CL0), not passing; numeric regression is not physical conformance."
     },
     {
       "oracle_id": "OR-003",

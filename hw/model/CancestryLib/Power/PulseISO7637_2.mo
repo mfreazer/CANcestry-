@@ -4,7 +4,8 @@ model PulseISO7637_2
 
    Generates supply transient test pulses for 12 V automotive electrical
    systems per ISO 7637-2 (pulses 1, 2a, 2b, 3a, 3b) and ISO 16750-2
-   (cranking pulse 4, suppressed load dump pulse 5b).
+   (cranking pulse 4, suppressed load dump pulse 5b, unsuppressed load
+   dump pulse 5a per Test A).
 
    Witnessed by oracle OR-002 (ISO 7637-2 / 16750-2 tabulated pulse parameters,
    hw/tests/oracles/); provides regression stimuli for HwRS HW-FR-004; aggregate qualification is pending.
@@ -14,8 +15,9 @@ model PulseISO7637_2
      Us_pulse1..5b: peak transient voltage offsets or levels
      td_pulse1..5b: pulse durations
      tr_pulse1..5b: finite leading-edge time to peak
+     Us/td/tr/Ri_pulse5a: pulse 5a (Test A) unclamped-level parameters (H-06)
 
-   Coverage table (HW-FR-004; H-04 #38):
+   Coverage table (HW-FR-004; H-04 #38; H-06 #49):
      Pulse 1: covered (negative transient)
      Pulse 2a: covered (inductive load switching)
      Pulse 2b: covered (inductive load switching, slower)
@@ -25,8 +27,14 @@ model PulseISO7637_2
               dwell 20 ms, recover in 1 ms (nominal at 22 ms).
               No temperature dependence, battery ESR shift, alternator recovery
               or full multi-stage starting profile; qualification CL0 (#41)
-     Pulse 5a: deferred to H-06 (load-dump without suppression); no qualified
-               unsuppressed-source or protection-network oracle exists yet
+     Pulse 5a: PENDING. H-06 reduced fixture for ISO 16750-2:2012 section
+               4.6.4.2.2 (Test A, without centralized load dump suppression),
+               Figure 8 / Table 5: unclamped level Us=79 V (Table 5 lower
+               bound with the footnote a lower-Ri pairing), 5 ms linear edge,
+               td/3 decay over 350 ms. No Figure 8 0.9/0.1 edge/duration
+               measurement definitions, no unclamped-generator topology, Ri
+               unexercised, no 10-pulse repetition, no loaded DUT response;
+               qualification CL0, shape qualification deferred to #41
      Pulse 5b: PENDING. Legacy Us parameter means suppressed Us*=35 V,
                per ISO 16750-2:2012 section 4.6.4.2.3, Figure 9 / Table 6.
                Clamp/decay topology and standard timing definitions remain
@@ -78,7 +86,15 @@ model PulseISO7637_2
 
   parameter Real Ri_pulse5b(unit = "Ohm") = 0.5 "Source resistance metadata; unloaded model does not exercise Ri";
 
-  // Selector: 0=nominal, 1=pulse 1, 2=pulse 2a, 3=pulse 2b, 4=pulse 3a, 5=pulse 3b, 6=pulse 4, 7=pulse 5b
+  // Pulse 5a: Unsuppressed load dump transient (H-06, ISO 16750-2:2012 Test A)
+  parameter Real Us_pulse5a(unit = "V") = 79.0 "Unclamped generator level per ISO 16750-2:2012 section 4.6.4.2.2 Table 5 lower bound (footnote a pairs it with the lower Ri); fixture bound via sim case; shape pending #41";
+  parameter Real td_pulse5a(unit = "s") = 0.35 "Pulse 5a duration (350 ms), selected within the Table 5 40..400 ms range";
+  parameter Real tr_pulse5a(unit = "s") = 0.005 "Pulse 5a rise time (5 ms), within the tabulated 10 ms -5/+0 rising slope";
+
+  parameter Real Ri_pulse5a(unit = "Ohm") = 0.5 "Source resistance metadata; unloaded model does not exercise Ri";
+
+  // Selector: 0=nominal, 1=pulse 1, 2=pulse 2a, 3=pulse 2b, 4=pulse 3a, 5=pulse 3b, 6=pulse 4, 7=pulse 5b, 8=pulse 5a
+  // (H-06: pulse 5a is appended as selector 8 so the existing 1..7 mapping stays stable.)
   parameter Integer pulse_selector = 1 "Active pulse type";
 
   Real v_out(unit = "V") "Generated transient output voltage";
@@ -89,6 +105,7 @@ model PulseISO7637_2
   Real v_pulse3b(unit = "V") "Pulse 3b waveform";
   Real v_pulse4(unit = "V") "Pulse 4 waveform";
   Real v_pulse5b(unit = "V") "Pulse 5b waveform";
+  Real v_pulse5a(unit = "V") "Pulse 5a waveform (H-06)";
 
 equation
   // HW-FR-004 contract correction: exercise the already-declared tr values.
@@ -119,6 +136,13 @@ equation
   v_pulse5b = V_nominal + (Us_pulse5b - V_nominal) * (if time < 0 then 0
     else if time < tr_pulse5b then time / tr_pulse5b
     else if time < tr_pulse5b + td_pulse5b then exp(-(time - tr_pulse5b) / (td_pulse5b / 3.0)) else 0);
+  // H-06 pulse 5a branch: the same H-02 reduced-shape convention (absolute
+  // level, linear edge, td/3 exponential decay, return to nominal after td),
+  // bound to the unclamped Test A level. This is a regression fixture, not a
+  // qualified ISO 16750-2:2012 Figure 8 waveform; shape qualification is #41.
+  v_pulse5a = V_nominal + (Us_pulse5a - V_nominal) * (if time < 0 then 0
+    else if time < tr_pulse5a then time / tr_pulse5a
+    else if time < tr_pulse5a + td_pulse5a then exp(-(time - tr_pulse5a) / (td_pulse5a / 3.0)) else 0);
 
   // Muxed output according to pulse_selector
   v_out = if pulse_selector == 1 then v_pulse1
@@ -128,12 +152,13 @@ equation
           else if pulse_selector == 5 then v_pulse3b
           else if pulse_selector == 6 then v_pulse4
           else if pulse_selector == 7 then v_pulse5b
+          else if pulse_selector == 8 then v_pulse5a
           else V_nominal;
 
 annotation (
   Documentation(info = "<html>
 <h4>ISO 7637-2 / ISO 16750-2 Pulse Generator</h4>
-<p>Reduced unloaded source for HW-FR-004, checked against OR-002 scalar invariants. See the coverage table and explicit validation gaps in the model docstring. This does not demonstrate DUT immunity or full standard waveform conformance. Pulse 4 and 5b qualification remain pending in issue #41; Pulse 5a is deferred to H-06.</p>
+<p>Reduced unloaded source for HW-FR-004, checked against OR-002 scalar invariants. See the coverage table and explicit validation gaps in the model docstring. This does not demonstrate DUT immunity or full standard waveform conformance. Pulse 4 and 5b qualification remain pending in issue #41; pulse 5a (Test A, H-06 #49) lands as a reduced unclamped-level fixture whose shape qualification is likewise deferred to issue #41 (no promotion).</p>
 </html>"
 ));
 end PulseISO7637_2;
