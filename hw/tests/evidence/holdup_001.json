@@ -15,7 +15,7 @@
   "source_hashes": {
     "ci/docker/Dockerfile": "sha256:49703d8b330e41c58e5411bdede3310aec55199e3fb77fc973189b9ee7358102",
     "ci/docker/base-image.digest": "sha256:fbe0594ac4ef88a211f86be44892d6d24efaefd22b747fe6aca41f512e38614f",
-    "docs/hw/tool-qualification.md": "sha256:3842872210c99da0674ff89ccac9494c5fb766ed4a24551ac8fb6f9c54399870",
+    "docs/hw/tool-qualification.md": "sha256:62987ef08d8ab15a81266d62aa8d316b7125fc57ae2766613e03aa1426502880",
     "hw/bom/bom.json": "sha256:779a79e7cc6649f7c345fc70ff97ca0b5c0fe615e1475a9ff6f423e1dbf41311",
     "hw/bom/datasheets/extract-holdup-cap.json": "sha256:b6b75ce57d0a27690e7cba788380c74d5b408385e24f9ce2990cbf2785b5686f",
     "hw/bom/datasheets/extract-mcu-vbat.json": "sha256:755fa5d3a31e36811f6f112f4ea6f764f14d4f47c01f76c78720b1b289eab518",

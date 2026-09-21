@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Tool Qualification Plan and Evidence |
-| **Version** | 0.2.5 |
-| **Status** | Draft — H-04, pending QA and Human Reviewer approval |
+| **Version** | 0.2.6 |
+| **Status** | Draft — H-04/H-06, pending QA and Human Reviewer approval |
 | **Owner** | System Engineer |
 | **Approver** | QA Lead |
 | **Last Review** | 2026-09-21 |
@@ -82,6 +82,24 @@ evidence**:
 
 This is a precondition on reuse, not retrospective tool qualification or a
 promotion of the currently pending pulse evidence. OpenModelica remains TCL2.
+
+**H-06 disposition (issue #49, v0.2.6): pulse 5a configuration.** The H-06
+selector-8 branch recompiles the `PulseISO7637_2` FMU (new equation branch and
+four new parameters), so this precondition was applied before the
+configuration was consumed. Review outcome: the producing role is unchanged —
+the same pinned OpenModelica 1.24 build and FMPy 0.3.24 ModelExchange path,
+the same zero-state/no-discrete guard, the same deterministic feature grids
+and the same bounded OR-002 numerical-regression outputs (peak, time-to-peak,
+td/3 decay, duration) now including the `pulse5a` invariants with their own
+positive and negative fixtures. No safety claim relies on new FMPy output
+semantics (no integration, event, coupling, interpolation or transformation
+scope is added: the source stays stateless and algebraic), and the pulse 5a
+evidence is consumed strictly as pending/CL0 with a `pending_reason` deferring
+to #41 — never as passing evidence. FMPy therefore remains TCL1 for this
+configuration under the same bounded argument, OpenModelica remains TCL2, and
+the 5a case manifest inherits the OpenModelica gap verbatim. The controlled
+table above is unchanged; this paragraph is the §3.1-required disposition
+record.
 
 ## 4. Qualification regression records
 
@@ -169,8 +187,31 @@ FMU/configuration/version, or a future use. Those uses remain subject to the
   from the validated source extract. The old 2011 Table 11 citation and 40 V
   level were errors, not acceptable qualification limits. Remaining source
   topology/timing correctness is tracked by [#41](https://github.com/mfreazer/CANcestry-/issues/41).
+- H-06 (issue #49) adds the pulse 5a configuration to this record. Normative
+  Test A / legacy 5a source: **ISO 16750-2:2012 §4.6.4.2.2, Figure 8 /
+  Table 5, pp. 11–12** (unsuppressed load dump; the standard itself does not
+  use the legacy 5a/5b names). Citation disposition: the H-06 issue body
+  cited Table 6 for 5a; the normative source places the Test A parameters in
+  Table 5, and the extract/oracle/sim-case chain transcribes Table 5. The
+  fixture operating point is the footnote-a lower/lower pairing — unclamped
+  **Us = 79 V** with **Ri = 0.5 Ω** (unused metadata), **td = 350 ms**,
+  **tr = 5 ms** — bound only through
+  `hw/bom/datasheets/extract-iso16750-2-2012.json` (`shape_qualification_pending:
+  true`) and `hw/tests/cases/pulse_7637_001.simcase.json` (selector 8). The
+  qualification evidence for this configuration is the OR-002 `pulse5a`
+  numerical regression (peak 2%, time-to-peak 5%, td/3 decay 10%, duration
+  2%) with positive and negative invariant fixtures — regression only: the
+  Figure 8 waveform shape, its 0.9(Us−UA)+UA / 0.1(Us−UA)+UA edge/duration
+  definitions, the unclamped-generator topology, exercised Ri and the
+  ten-pulse repetition remain unqualified and are deferred to
+  [#41](https://github.com/mfreazer/CANcestry-/issues/41). No promotion.
 - Manifest: `hw/tests/evidence/pulse_7637_001.json`, **pending / pass=false /
-  provisional=true / CL0**, schema-enforced for incomplete pulse coverage.
+  provisional=true / CL0**, schema-enforced for incomplete pulse coverage;
+  since H-06 it records all eight pulses and pins the 5a artifacts by hash.
+  The 5a case manifest `hw/tests/evidence/pulse_5a_001.json` carries the same
+  disposition plus the schema-mandatory `pending_reason` referencing #41, and
+  its pending placeholder view `hw/tests/evidence/pulse_5a_001.plot.json` →
+  `renders/pulse_5a_001.svg` inherits it without improvement (rules 13–14).
   Per-pulse and aggregate run logs separately record `regression_pass`; they
   also carry pending qualification status, never a misleading passing verdict.
 - Exact modeled/unmodeled scope, source links and confidence disposition:
@@ -213,6 +254,7 @@ OR-002 has no qualified passing claim. Oracle/model gaps remain in
 
 | Version | Date | Change |
 |---|---|---|
+| 0.2.6 | 2026-09-21 | H-06 #49: record the pulse 5a (ISO 16750-2:2012 Test A, §4.6.4.2.2 Figure 8 / Table 5) configuration in §4.2 as OR-002 regression-only evidence with the Table 5-vs-Table 6 citation disposition; add the §3.1 disposition review for the recompiled selector-8 FMU (unchanged bounded FMPy TCL1 scope, OpenModelica stays TCL2, gap inherited verbatim by the new pulse_5a_001 case manifest and its pending placeholder view). Controlled §3 table untouched. No qualification promotion; shape qualification deferred to #41. |
 | 0.2.5 | 2026-09-21 | N2 audit (PR #43): pin the hold-up build/execution to explicit CoSimulation, add the §4.1.1 execution-mode audit and the updated fmpy row, test the mode gate and real-FMU interface, and retain FMPy TCL1 only for the bounded OR-001 output-detection argument. Merged on top of 0.2.4. No FMPy gap waiver or pulse promotion. |
 | 0.2.4 | 2026-09-20 | H-05 #44: add cancestry-render-modelica to the controlled table as TCL1 (pure renderer over validated data) with the rationale for the bounded role. |
 | 0.2.3 | 2026-09-20 | N2: identify the actual pre-instantiation pulse FMU state checks and negative fixtures; distinguish the OR-001 stateful hold-up scope. No unconditional FMPy confidence or pulse-qualification promotion. |
