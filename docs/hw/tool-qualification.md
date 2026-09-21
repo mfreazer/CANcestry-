@@ -3,11 +3,11 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Tool Qualification Plan and Evidence |
-| **Version** | 0.2.4 |
+| **Version** | 0.2.5 |
 | **Status** | Draft — H-04, pending QA and Human Reviewer approval |
 | **Owner** | System Engineer |
 | **Approver** | QA Lead |
-| **Last Review** | 2026-09-20 |
+| **Last Review** | 2026-09-21 |
 | **Repository location** | `docs/hw/tool-qualification.md` |
 | **Governing documents** | ISO 26262-8:2018 §13; hardware policy |
 
@@ -39,7 +39,7 @@ gap fails closed. `-` represents an empty tool gap for TCL1 only.
 | tool_id | Tool / role and rationale | TI | TD | TCL | validation_gap |
 |---|---|---|---|---|---|
 | openmodelica | OpenModelica compiles Modelica into FMUs. A compiler bug can silently change simulation semantics, introducing errors into safety-related artifacts. OR-001/OR-002 regressions cover only exercised semantics. | TI2 | TD2 | TCL2 | Compiler semantics outside independently validated output remain unqualified; OR-001/OR-002 regressions do not cover all translation and solver behavior. |
-| fmpy | Bounded, independently oracle-checked FMU execution/readout only, subject to the reclassification precondition in §3.1. TD1 is conditional on detection coverage for the exact claimed outputs; this is not a claim that FMPy cannot introduce errors. | TI2 | TD1 | TCL1 | - |
+| fmpy | Bounded, independently oracle-checked FMU execution/readout only: OR-001 uses explicit CoSimulation `doStep` scheduling and OR-002 uses the guarded zero-state ModelExchange evaluator. Subject to §3.1; TD1 is conditional on detection coverage for the exact claimed outputs, not a claim that FMPy cannot introduce errors. | TI2 | TD1 | TCL1 | - |
 | capellambse | capellambse is a model reader, not a safety-case producer. Live structural checks and negative fixtures detect missed linkage/parse errors. | TI2 | TD1 | TCL1 | - |
 | cancestry-render-modelica | Pure-Python SVG renderer (H-05): it draws only what a schema-validated plot-data file declares, verifies the pinned source-evidence hash before drawing, and refuses to run on a broken hash chain or an unknown vocabulary. A defect can at worst fail to display a validated claim; it cannot introduce or alter a numerical result. | TI1 | TD1 | TCL1 | - |
 | fmeda | FMEDA calculator is not implemented; independent ISO 26262-5 Annex D gate required before use. | pending | pending | pending | No qualification evidence. |
@@ -98,6 +98,44 @@ promotion of the currently pending pulse evidence. OpenModelica remains TCL2.
   tool versions: `build/hw/holdup_001.runlog.json` (CI artifact, not Git data).
 - Gap: charge branch/R_path, nonlinear leakage, temperature-dependent ESR,
   reset-domain behavior and physical brownout correlation are not validated.
+
+#### 4.1.1 N2 execution-mode audit and conditional TD1 disposition
+
+Implements HW-SF-002 / HW-FR-009. The qualified hold-up configuration is now
+explicit rather than inferred from FMPy's default selection: the
+[`pipeline()`](../../hw/tests/test_power_sim.py) builds only OpenModelica
+`fmuType="cs"`; [`simulate_fmu()`](../../hw/tests/test_power_sim.py) reads the
+FMU description, requires its `coSimulation` interface, and calls FMPy with
+`fmi_type="CoSimulation"`. The real-FMU test asserts that interface and its
+actual retention-voltage evolution. The [hold-up model](../../hw/model/CancestryLib/Power/Holdup.mo)
+declares `der(vC)`, so the plant is stateful even though its state is advanced
+inside the compiled CoSimulation FMU. A metadata fixture proves that a missing
+CoSimulation interface cannot reach `fmpy.simulate_fmu()`; another fixture
+proves that a stateful FMU is passed to FMPy with the explicit mode. Those
+fixtures are execution-mode unit tests, not additional FMU simulations.
+
+The pinned [FMPy 0.3.24 source](https://github.com/CATIA-Systems/FMPy/blob/ea96560c1b4f17f7360406c534991d72f00fa7bf/src/fmpy/simulation.py#L700-L789)
+dispatches that explicit mode to `simulateCS()`, not `simulateME()`; its
+[CoSimulation loop](https://github.com/CATIA-Systems/FMPy/blob/ea96560c1b4f17f7360406c534991d72f00fa7bf/src/fmpy/simulation.py#L1196-L1325)
+schedules `fmu.doStep()` and records output. Consequently, the hold-up plant is
+stateful, but FMPy is not selected as the ModelExchange/CVode numerical solver
+for this configuration: integration of that state is inside the compiled
+CoSimulation FMU. FMPy can still introduce scheduling or readout errors, so
+this is not a "stateless reader" claim and it does not remove the
+OpenModelica compiler gap.
+
+`test_trace_matches_oracle()` compares every returned OR-001 `(time, v)` sample
+with the independently derived closed form and rejects a maximum absolute
+trajectory error greater than the sim-case-declared 0.001 V; the oracle also
+self-checks its closed form against independent fixed-step RK4. Together with
+the explicit mode/metadata checks, this supports the documented **conditional
+TD1/TCL1** detection argument only for this pinned 1.24/0.3.24,
+CoSimulation, one-FMU, no-coupling hold-up output and its stated tolerance. It
+does not detect hidden compiler defects, establish an independent-validation
+waiver, qualify an unobserved output, or extend to ModelExchange integration,
+events, coupling, interpolation/resampling, transformations, a different
+FMU/configuration/version, or a future use. Those uses remain subject to the
+§3.1 reclassification precondition.
 
 ### 4.2 OpenModelica + FMPy against OR-002: regression only, qualification pending
 
@@ -175,6 +213,7 @@ OR-002 has no qualified passing claim. Oracle/model gaps remain in
 
 | Version | Date | Change |
 |---|---|---|
+| 0.2.5 | 2026-09-21 | N2 audit (PR #43): pin the hold-up build/execution to explicit CoSimulation, add the §4.1.1 execution-mode audit and the updated fmpy row, test the mode gate and real-FMU interface, and retain FMPy TCL1 only for the bounded OR-001 output-detection argument. Merged on top of 0.2.4. No FMPy gap waiver or pulse promotion. |
 | 0.2.4 | 2026-09-20 | H-05 #44: add cancestry-render-modelica to the controlled table as TCL1 (pure renderer over validated data) with the rationale for the bounded role. |
 | 0.2.3 | 2026-09-20 | N2: identify the actual pre-instantiation pulse FMU state checks and negative fixtures; distinguish the OR-001 stateful hold-up scope. No unconditional FMPy confidence or pulse-qualification promotion. |
 | 0.2.2 | 2026-09-20 | Review F1: make the bounded FMPy TD1/TCL1 argument conditional; require role/configuration reassessment and TCL2/TCL3 reclassification before unvalidated producing uses enter passing evidence. |
