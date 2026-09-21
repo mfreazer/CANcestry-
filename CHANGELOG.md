@@ -420,3 +420,5 @@ Release notes and announcement: [`docs/releases/v0.3.0-rc.1.md`](docs/releases/v
 v0.2.0 corrective baseline: schemas, traceability skeleton and the test
 strategy recorded in `docs/qa/test-strategy.md`; portable event core, codec
 engine and recipe engine implemented with host unit tests.
+
+[0.3.0-rc.1]: https://github.com/mfreazer/CANcestry-/releases/tag/v0.3.0-rc.1
