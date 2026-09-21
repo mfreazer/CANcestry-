@@ -32,7 +32,7 @@
     "schemas/hw/hw-datasheet-extract-0.1.0.schema.json": "sha256:cd9de8b653e8b774926eaa3953c7122ea64bd1d3ec64de906b48ec0465ac5eff",
     "schemas/hw/hw-oracle-registry-0.1.0.schema.json": "sha256:7bd0a15770f2bae185600bd554198a791ab94dceb59b4d8084111d5bf01e6123",
     "schemas/hw/hw-sim-0.1.0.schema.json": "sha256:efa2591e203a56f9fe3792d0bbdd891ce3b3b01bab52e2976b11ad417bd35f6a",
-    "schemas/hw/hw-traceability-0.1.0.schema.json": "sha256:136739030209f5b2db7955d2605951db59912f7dcc572d79a21d506a922b6f96"
+    "schemas/hw/hw-traceability-0.1.0.schema.json": "sha256:5d2e23704dd7b2125b534fd85f1930cca12df40b8d321e2cc8822aac0808afeb"
   },
   "tolerance_v": 0.001,
   "tool_pins": {

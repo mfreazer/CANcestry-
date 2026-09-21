@@ -309,7 +309,8 @@ def test_gate_rejects_bad_status_and_vocabulary(tmp_path):
     make_repo(tmp_path, trace=trace)
     result = run_checker(tmp_path)
     assert result.returncode == 1
-    assert "not one of analysis, sim, virtual_bench, bench" in result.stdout
+    assert ("not one of analysis, sim, virtual_bench, protocol, bench"
+            in result.stdout)
     assert "not in the honest-ledger vocabulary" in result.stdout
 
 

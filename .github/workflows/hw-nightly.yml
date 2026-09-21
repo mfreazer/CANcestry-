@@ -1,0 +1,101 @@
+# H-03 nightly hardware evidence job (issue #36, commit 6; HW-PLAN §7/§8.2).
+#
+# The fast PR gate deliberately does not re-render: it verifies the committed
+# bytes against hw/tests/evidence/renders/manifest.json. Only this job proves
+# that the committed renderers still reproduce the committed SVGs from the
+# pinned plot-data files, which is the only place renderer drift can be
+# detected (docs/hw/visual-evidence-plan.md section 6, HwAGENTS.md rule 13).
+#
+# It reuses the same digest-pinned toolchain image as hw-fast (ci/docker/), and
+# re-verifies the base-image digest pin before building so a re-pushed base
+# image fails this job instead of silently changing rendered evidence.
+#
+# --strict is what makes a missing renderer a setup failure: an unavailable
+# renderer means the drift check could not run, and a check that could not run
+# is not a check that passed.
+
+name: hw-nightly
+
+concurrency:
+  group: hw-nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+on:
+  schedule:
+    # Daily at 03:17 UTC: off the top of the hour to avoid the scheduler rush.
+    - cron: "17 3 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  hw-nightly:
+    name: renderer determinism (--rerender --strict)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the base-image digest pin (ci/docker/base-image.digest)
+        id: pin
+        run: |
+          set -euo pipefail
+          PIN_LINES="$(grep -Ev '^[[:space:]]*(#|$)' ci/docker/base-image.digest)"
+          REF="$(printf '%s\n' "$PIN_LINES" | sed -n '1p' | tr -d '[:space:]')"
+          PINNED="$(printf '%s\n' "$PIN_LINES" | sed -n '2p' | tr -d '[:space:]')"
+          RESOLVED="$(docker buildx imagetools inspect \
+            --format '{{json .Manifest}}' "$REF" | jq -r '.digest')"
+          test -n "$RESOLVED" && test "$RESOLVED" != "null" || {
+            echo "::error::could not resolve a manifest digest for $REF"
+            exit 1
+          }
+          if [ "$PINNED" != "$RESOLVED" ]; then
+            echo "::error::${REF} no longer resolves to the pinned digest ${PINNED}; the registry now serves ${RESOLVED}. Re-pin ci/docker/base-image.digest through a documented, QA-visible change instead."
+            exit 1
+          fi
+          echo "image-digest=${RESOLVED}" >> "$GITHUB_OUTPUT"
+
+      - name: Build the toolchain image (ci/docker)
+        run: |
+          set -euo pipefail
+          docker build \
+            -t "cancestry/hw-nightly:${GITHUB_SHA}" \
+            ci/docker/ 2>&1 | tee /tmp/hw-nightly-build.log
+
+      - name: Verify renderer determinism
+        env:
+          CANCESTRY_HW_IMAGE: ${{ steps.pin.outputs.image-digest }}
+        run: |
+          set -euo pipefail
+          IMAGE="cancestry/hw-nightly:${GITHUB_SHA}"
+          set +e
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/work" -w /work \
+            -e CANCESTRY_HW_IMAGE \
+            "$IMAGE" bash -lc '
+              set -euo pipefail
+              echo "== Re-render every committed plot and require byte-identical output"
+              python3 ci/check_hw_evidence.py --root . --rerender --strict || {
+                echo "::error::hw-nightly failed: a committed renderer no longer reproduces its committed artifact"
+                exit 1
+              }
+            ' 2>&1 | tee /tmp/hw-nightly-output.log
+          DOCKER_STATUS="${PIPESTATUS[0]}"
+          if [ "$DOCKER_STATUS" -ne 0 ]; then
+            {
+              echo "## hw-nightly output tail"
+              echo '```text'
+              tail -160 /tmp/hw-nightly-output.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::$(tail -80 /tmp/hw-nightly-output.log | tr '\n' ' ' | tr -d '\r')"
+          fi
+          exit "$DOCKER_STATUS"
+
+      - name: Upload run artifacts
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: hw-nightly-${{ github.sha }}
+          path: |
+            /tmp/hw-nightly-output.log
+            /tmp/hw-nightly-build.log
+          if-no-files-found: ignore

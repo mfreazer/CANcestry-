@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480" role="img">
+<!-- cancestry-provenance
+plot_id=holdup_decay_001
+plot_version=0.1.0
+plot_data_hash=sha256:b65c9683db2523dc17cea6cdcdfd9d5452400b391597a472462e5a7b9a1c9498
+status=passing
+method=sim
+credibility_level=CL2
+provisional=true
+source_evidence_path=hw/tests/evidence/holdup_001.json
+source_evidence_hash=sha256:05113287759304cd87e6a6112bd6ac230acfda6a0fdb51d92097f263254d68dd
+oracle_id=OR-001
+renderer_tool=cancestry-render-fixture
+renderer_tool_version=0.1.0
+renderer_tool_digest=sha256:b1208aa109510321e3b853ad4981a39430eb1700d56f425d7461562063fb77ee
+-->
+<title>HW-SF-002 hold-up decay: model vs OR-001</title>
+<desc>Rendered from hw/tests/evidence/holdup_001.json by cancestry-render-fixture 0.1.0.</desc>
+<rect x="0" y="0" width="640" height="480" fill="#ffffff"/>
+<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse"><path d="M0,0 L6,6" stroke="#000000" stroke-width="0.4"/></pattern></defs>
+<polygon points="60.000,80.000 112.000,113.735 164.000,147.471 216.000,181.206 268.000,214.942 320.000,248.677 372.000,282.412 424.000,316.148 476.000,349.883 528.000,383.619 580.000,417.354 580.000,420.000 528.000,386.265 476.000,352.529 424.000,318.794 372.000,285.058 320.000,251.323 268.000,217.588 216.000,183.852 164.000,150.117 112.000,116.381 60.000,82.646" fill="url(#hatch)" stroke="#000000" stroke-width="0.5"/><polyline points="60.000,81.191 112.000,114.926 164.000,148.661 216.000,182.397 268.000,216.132 320.000,249.868 372.000,283.603 424.000,317.339 476.000,351.074 528.000,384.809 580.000,418.545" fill="none" stroke="#000000" stroke-width="1.5"/><polyline points="60.000,81.323 112.000,115.058 164.000,148.794 216.000,182.529 268.000,216.265 320.000,250.000 372.000,283.735 424.000,317.471 476.000,351.206 528.000,384.942 580.000,418.677" fill="none" stroke="#000000" stroke-width="1.5" stroke-dasharray="6 3"/>
+<text x="12" y="464" font-family="monospace" font-size="11" fill="#000000">HW-SF-002 hold-up decay: model vs OR-001</text>
+<text x="12" y="478" font-family="monospace" font-size="11" fill="#000000"></text>
+<text x="12" y="492" font-family="monospace" font-size="11" fill="#000000">EVIDENCE   holdup_decay_001@0.1.0</text>
+<text x="12" y="506" font-family="monospace" font-size="11" fill="#000000">STATUS     passing(sim,CL2,provisional)</text>
+<text x="12" y="520" font-family="monospace" font-size="11" fill="#000000">SOURCE     hw/tests/evidence/holdup_001.json sha256:05113287759304cd87e6a6112bd6ac230acfda6a0fdb51d92097f263254d68dd</text>
+<text x="12" y="534" font-family="monospace" font-size="11" fill="#000000">PLOT-DATA  sha256:b65c9683db2523dc17cea6cdcdfd9d5452400b391597a472462e5a7b9a1c9498</text>
+<text x="12" y="548" font-family="monospace" font-size="11" fill="#000000">ORACLE     OR-001</text>
+<text x="12" y="562" font-family="monospace" font-size="11" fill="#000000">RENDERER   cancestry-render-fixture 0.1.0</text>
+</svg>

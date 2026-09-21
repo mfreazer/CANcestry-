@@ -27,9 +27,10 @@
         "analysis",
         "sim",
         "virtual_bench",
+        "protocol",
         "bench"
       ],
-      "description": "analysis (T0), sim (T1 block simulation), virtual_bench (automated T1/T2 harness; does not increase evidence tier), bench (T4 physical correlation). Legacy t2 is not a valid method."
+      "description": "analysis (T0), sim (T1 block simulation), virtual_bench (automated T1/T2 harness; does not increase evidence tier), protocol (T3 protocol conformance), bench (T4 physical correlation). Legacy t2 is not a valid method. Kept in lockstep with schemas/hw/hw-plot-data-0.1.0.schema.json and the METHODS tuple in ci/check_hw_traceability.py."
     },
     "capella_element_id": {
       "type": "string",
@@ -43,7 +44,7 @@
         "CL2",
         "CL3"
       ],
-      "description": "Credibility achieved by the evidence of this row (virtual-bench-plan \u00a75). CL0 for rows without evidence yet."
+      "description": "Credibility achieved by the evidence of this row (virtual-bench-plan \u00a75). CL0: no credibility established; placeholder pending first analysis or simulation. Kept in lockstep with schemas/hw/hw-plot-data-0.1.0.schema.json."
     },
     "oracle_id": {
       "type": "string",

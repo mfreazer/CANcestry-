@@ -81,8 +81,11 @@ REQUIRED_CREDIBILITY = re.compile(r"^CL([1-3])$")
 ORACLE_ID = re.compile(r"^OR-\d{3}$")
 EVIDENCE_SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 
-# Verification methods (HW-PLAN section 10.8: analysis, sim(CLn), bench).
-METHODS = ("analysis", "sim", "virtual_bench", "bench")
+# Verification methods (HW-PLAN sections 10.1/10.8: analysis (T0), sim (T1),
+# virtual_bench (T1/T2 harness), protocol (T3 conformance), bench (T4)).
+# Kept in lockstep with schemas/hw/hw-traceability-0.1.0.schema.json and
+# schemas/hw/hw-plot-data-0.1.0.schema.json (issue #36, H-03).
+METHODS = ("analysis", "sim", "virtual_bench", "protocol", "bench")
 
 # Honest-ledger status vocabulary (HwAGENTS.md rule 4).
 STATUS_LITERALS = (
