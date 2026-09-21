@@ -385,7 +385,15 @@ def check_series_semantics(series, relative, report):
 
 def check_tolerance_band(document, series, relative, report):
     band = document.get("tolerance_band")
+    tolerance_roles = [name for name, s in series.items()
+                       if s.get("role") in ("tolerance_lower", "tolerance_upper")]
     if band is None:
+        if tolerance_roles:
+            report.error("plot-data-semantics",
+                         "%s: series %s declared with tolerance role but no "
+                         "tolerance_band is defined "
+                         "(HwAGENTS.md rule 14: tolerance bands are binding contracts)"
+                         % (relative, ", ".join(sorted(tolerance_roles))))
         return
     resolved = {}
     for key, role in (("lower_series", "tolerance_lower"),
@@ -629,6 +637,20 @@ def check_plot(root, entry, plot_path, document, schema, report, options):
     check_comment(comment, expected, svg_relative, report)
     if comment is not None:
         check_footer(svg_text, comment, svg_relative, report)
+    if "tolerance_band" not in document:
+        if 'fill="url(#hatch' in svg_text:
+            report.error("visual-semantics",
+                         "%s: SVG contains a hatched tolerance band "
+                         "polygon but no tolerance_band is declared in plot-data "
+                         "(HwAGENTS.md rule 14: tolerance bands are binding contracts)"
+                         % svg_relative)
+    else:
+        if 'fill="url(#hatch' not in svg_text:
+            report.error("visual-semantics",
+                         "%s: plot-data declares tolerance_band but SVG has no "
+                         "matching hatched tolerance band polygon "
+                         "(HwAGENTS.md rule 14)"
+                         % svg_relative)
     svg_hash = sha256_file(svg_path)
     if svg_hash != entry["expected_svg_sha256"]:
         report.error("manifest-drift",

@@ -131,7 +131,7 @@ def make_evidence(sources=None, requirement="HW-SF-002", oracle="OR-001",
 
 
 def row(requirement, method, status, credibility="CL2", oracle="OR-001",
-        required_cl="CL3", evidence="", digest="", capella="CAP_PENDING", gap=""):
+        required_cl="CL3", evidence="", digest="", capella="la-comp-retentiondomain", gap=""):
     """One ledger row, using CSV escaping for status and inherited gap text."""
     stream = io.StringIO(newline="")
     csv.writer(stream, lineterminator="\n").writerow((
@@ -1003,3 +1003,66 @@ def test_pulse_qualification_manifest_rejects_run_result_status(pulse_repo, targ
     result = run_checker(pulse_repo)
     assert result.returncode == 1
     assert 'Pulse qualification' in result.stdout and 'is not one of' in result.stdout
+
+
+@pytest.mark.parametrize('placeholder', ['CAP_PENDING', 'LA_PENDING'])
+def test_passing_row_rejects_capella_placeholder(tmp_path, placeholder):
+    """H-05 hardening: passing rows must not carry placeholders (Rule 4 / honest ledger)."""
+    sources = {ORACLE_SOURCE: "oracle source\n"}
+    make_repo(tmp_path, sources=sources)
+    doc = make_evidence(sources=sources)
+    evidence_path = write(tmp_path / EVIDENCE_REL, json.dumps(doc, sort_keys=True))
+    digest = sha256_bytes(evidence_path.read_text(encoding="utf-8"))
+    trace = TRACE_HEADER + row("HW-SF-002", "sim", "passing(sim,CL2,provisional)",
+                              evidence=EVIDENCE_REL, digest=digest,
+                              capella=placeholder)
+    write(tmp_path / "hw" / "tests" / "traceability.csv", trace)
+    result = run_checker(tmp_path)
+    assert result.returncode == 1
+    assert "passing row carries placeholder" in result.stdout
+
+
+@pytest.mark.parametrize('placeholder', ['CAP_PENDING', 'LA_PENDING'])
+def test_pending_row_permits_capella_placeholder(tmp_path, placeholder):
+    """Pending rows are permitted to carry placeholders while MBSE linkage is underway."""
+    make_repo(tmp_path)
+    trace = TRACE_HEADER + row("HW-SF-002", "sim", "sim-pending", capella=placeholder)
+    write(tmp_path / "hw" / "tests" / "traceability.csv", trace)
+    result = run_checker(tmp_path)
+    assert result.returncode == 0, result.stdout
+
+
+def test_unknown_capella_element_id_fails_closed(tmp_path):
+    """When Capella model exists, unresolvable element IDs fail closed."""
+    make_repo(tmp_path)
+    mock_capella = '<?xml version="1.0" encoding="UTF-8"?><Project id="p1"><Component id="real-comp"/></Project>'
+    write(tmp_path / "hw/model/capella/cancestry.capella", mock_capella)
+    trace = TRACE_HEADER + row("HW-SF-002", "sim", "sim-pending", capella="non-existent-comp")
+    write(tmp_path / "hw" / "tests" / "traceability.csv", trace)
+    result = run_checker(tmp_path)
+    assert result.returncode == 1
+    assert "does not match any element ID in the Capella model" in result.stdout
+
+
+def test_corrupted_capella_model_fails_closed(tmp_path):
+    """B4: unparseable Capella model must fail closed, not silently skip cross-check."""
+    make_repo(tmp_path)
+    corrupted_capella = '<?xml version="1.0" encoding="UTF-8"?><unclosed_tag id="broken"'
+    write(tmp_path / "hw/model/capella/cancestry.capella", corrupted_capella)
+    trace = TRACE_HEADER + row("HW-SF-002", "sim", "sim-pending", capella="real-comp")
+    write(tmp_path / "hw" / "tests" / "traceability.csv", trace)
+    result = run_checker(tmp_path)
+    assert result.returncode == 1
+    assert "Capella model present at" in result.stdout and "failed to parse" in result.stdout
+
+
+def test_known_capella_element_id_passes(tmp_path):
+    """When Capella model exists, matching element IDs pass."""
+    make_repo(tmp_path)
+    mock_capella = '<?xml version="1.0" encoding="UTF-8"?><Project id="p1"><Component id="la-comp-retentiondomain"/></Project>'
+    write(tmp_path / "hw/model/capella/cancestry.capella", mock_capella)
+    trace = TRACE_HEADER + row("HW-SF-002", "sim", "sim-pending", capella="la-comp-retentiondomain")
+    write(tmp_path / "hw" / "tests" / "traceability.csv", trace)
+    result = run_checker(tmp_path)
+    assert result.returncode == 0, result.stdout
+
