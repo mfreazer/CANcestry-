@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://cancestry.dev/schemas/hw/hw-pulse-evidence-0.1.0.schema.json",
   "title": "HW-FR-004 pulse evidence qualification, not numerical regression status",
-  "description": "H-04 review: partial/unqualified pulse coverage cannot be passing. This is a source-evidence contract; no plot-data infrastructure or rendering is introduced (tracked separately in #36). Review F3: this reusable document records qualification disposition, not an individual simulation/run verdict. The absence of 'failing' is intentional: pending means qualification is not established; passing requires complete qualified coverage. A failed regression is a nonzero pytest/CI failure and cannot supply accepted passing evidence; it must not be relabeled as a pending run in this manifest. Persisting a failing run or rendering its result requires a separate run-result/plot-data contract with explicit failure semantics. This two-state manifest must not be used to encode those run results.",
+  "description": "H-04 review: partial/unqualified pulse coverage cannot be passing. This is a source-evidence contract; no plot-data infrastructure or rendering is introduced (tracked separately in #36). Review F3: this reusable document records qualification disposition, not an individual simulation/run verdict. The absence of 'failing' is intentional: pending means qualification is not established; passing requires complete qualified coverage. A failed regression is a nonzero pytest/CI failure and cannot supply accepted passing evidence; it must not be relabeled as a pending run in this manifest. Persisting a failing run or rendering its result requires a separate run-result/plot-data contract with explicit failure semantics. This two-state manifest must not be used to encode those run results. H-06 (issue #49) extends the contract with the pulse_5a_001 case manifest for the ISO 16750-2:2012 Test A (legacy pulse 5a) reduced fixture: the same fail-closed qualification rules apply unchanged, a pending_reason referencing issue #41 is mandatory for that case, its pulses map carries exactly the pulse5a coverage record, and the shared simulation case remains hw/tests/cases/pulse_7637_001.simcase.json (the 5a branch runs as pulse_selector 8 of the same compiled FMU). The pulse_7637_001 aggregate manifest additionally requires the pulse5a record and pins the 5a artifact by hash; no case may claim passing without complete qualified coverage of every pulse it records.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -30,7 +30,11 @@
       "const": "0.1.0"
     },
     "case_id": {
-      "const": "pulse_7637_001"
+      "enum": [
+        "pulse_7637_001",
+        "pulse_5a_001"
+      ],
+      "description": "pulse_7637_001 is the aggregate HW-FR-004 pulse manifest; pulse_5a_001 is the H-06 (issue #49) pulse 5a / ISO 16750-2:2012 Test A case manifest executed under the same shared simulation case."
     },
     "requirement_id": {
       "const": "HW-FR-004"
@@ -58,6 +62,12 @@
         "CL2",
         "CL3"
       ]
+    },
+    "pending_reason": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S",
+      "description": "Mandatory for the pulse_5a_001 case manifest (H-06, issue #49) and must reference the deferral issue (https://github.com/mfreazer/CANcestry-/issues/41). Prohibited as a blanket field on the aggregate manifest by the case pairing rule; the aggregate manifest states its pending disposition in evidence_of/not_covered instead. Optional (but ignored for pairing) elsewhere."
     },
     "evidence_of": {
       "type": "string",
@@ -162,15 +172,7 @@
     "pulses": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "pulse1",
-        "pulse2a",
-        "pulse2b",
-        "pulse3a",
-        "pulse3b",
-        "pulse4",
-        "pulse5b"
-      ],
+      "description": "Per-pulse coverage records. Which pulses are required is decided by the case_id pairing rule in allOf: the pulse_7637_001 aggregate manifest must carry all eight records; the pulse_5a_001 case manifest must carry exactly pulse5a.",
       "properties": {
         "pulse1": {
           "$ref": "#/$defs/pulse_coverage"
@@ -191,6 +193,9 @@
           "$ref": "#/$defs/pulse_coverage"
         },
         "pulse5b": {
+          "$ref": "#/$defs/pulse_coverage"
+        },
+        "pulse5a": {
           "$ref": "#/$defs/pulse_coverage"
         }
       }
@@ -398,6 +403,16 @@
                     "const": "complete"
                   }
                 }
+              },
+              "pulse5a": {
+                "properties": {
+                  "status": {
+                    "const": "passing"
+                  },
+                  "coverage": {
+                    "const": "complete"
+                  }
+                }
               }
             }
           }
@@ -413,6 +428,68 @@
           },
           "credibility_level": {
             "const": "CL0"
+          }
+        }
+      }
+    },
+    {
+      "description": "H-06 (issue #49) case pairing: each case_id binds a fixed coverage scope and fail-closed disposition. pulse_5a_001 must stay pending, carry a pending_reason pointing at issue #41, and record exactly the pulse5a coverage entry; any other case_id (pulse_7637_001) must carry all eight pulse records and must not use the blanket pending_reason field.",
+      "if": {
+        "properties": {
+          "case_id": {
+            "const": "pulse_5a_001"
+          }
+        },
+        "required": [
+          "case_id"
+        ]
+      },
+      "then": {
+        "required": [
+          "pending_reason"
+        ],
+        "properties": {
+          "pending_reason": {
+            "pattern": "issues/41"
+          },
+          "pass": {
+            "const": false
+          },
+          "provisional": {
+            "const": true
+          },
+          "credibility_level": {
+            "const": "CL0"
+          },
+          "status": {
+            "const": "pending"
+          },
+          "pulses": {
+            "required": [
+              "pulse5a"
+            ],
+            "maxProperties": 1
+          }
+        }
+      },
+      "else": {
+        "not": {
+          "required": [
+            "pending_reason"
+          ]
+        },
+        "properties": {
+          "pulses": {
+            "required": [
+              "pulse1",
+              "pulse2a",
+              "pulse2b",
+              "pulse3a",
+              "pulse3b",
+              "pulse4",
+              "pulse5b",
+              "pulse5a"
+            ]
           }
         }
       }

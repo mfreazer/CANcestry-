@@ -261,8 +261,64 @@ def test_evidence_matches_sources(pulse_case):
     assert document['pass'] is False and document['provisional'] is True
     assert document['status'] == 'pending' and document['credibility_level'] == 'CL0'
     assert all(r['status'] == 'pending' for r in document['pulses'].values())
+    # H-06 (#49): the aggregate records pulse 5a and pins the case manifest
+    # plus its pending placeholder plot-data by hash (rule 9, transitive).
+    assert set(document['pulses']) == set(PULSES)
+    assert 'pulse5a' in document['pulses']
+    assert document['not_covered'] == pulse_case['not_covered']
     for relative, digest in document['source_hashes'].items():
         assert sha256_file(REPO_ROOT / relative) == digest, f'evidence source drift: {relative}'
+    for relative in ('hw/tests/evidence/pulse_5a_001.json',
+                     'hw/tests/evidence/pulse_5a_001.plot.json'):
+        assert relative in document['source_hashes'], f'aggregate must pin {relative}'
+
+
+def test_5a_evidence_matches_sources(pulse_case):
+    """HW-FR-004 / H-06 (#49): the pulse_5a_001 case manifest stays fail-closed.
+
+    Invariant check on the qualification record, not a qualification: the
+    manifest must remain pending / pass=false / CL0 / provisional, defer to
+    issue #41 through pending_reason, carry exactly the pulse5a coverage
+    record, mirror the aggregate's record and tool pins verbatim, and re-pin
+    its live sources by hash. Nothing here authorizes a promotion.
+    """
+    document = _json(EVIDENCE_DIR / 'pulse_5a_001.json')
+    aggregate = _json(EVIDENCE_DIR / 'pulse_7637_001.json')
+    _validate_against_schema(document, 'hw-pulse-evidence-0.1.0.schema.json',
+                             'pulse 5a evidence')
+    assert document['case_id'] == 'pulse_5a_001'
+    assert document['requirement_id'] == pulse_case['requirement_id'] == 'HW-FR-004'
+    assert document['oracle_id'] == pulse_case['oracle_id'] == 'OR-002'
+    assert document['sim_case'] == 'hw/tests/cases/pulse_7637_001.simcase.json'
+    assert document['pass'] is False and document['provisional'] is True
+    assert document['status'] == 'pending' and document['credibility_level'] == 'CL0'
+    assert 'issues/41' in document['pending_reason']
+    assert set(document['pulses']) == {'pulse5a'}
+    record = document['pulses']['pulse5a']
+    assert record['coverage'] == 'partial' and record['status'] == 'pending'
+    assert record['provisional'] is True and record['oracle_credibility'] == 'CL0'
+    assert record['follow_up'] == 'https://github.com/mfreazer/CANcestry-/issues/41'
+    # The aggregate and the case manifest must never disagree about 5a.
+    assert aggregate['pulses']['pulse5a'] == record
+    assert document['tool_pins'] == aggregate['tool_pins']
+    assert document['inherited_validation_gap'] == aggregate['inherited_validation_gap']
+    assert document['tolerances'] == pulse_case['tolerances']
+    assert document['unexercised_parameters'] == ['Ri_pulse5a']
+    # Rule 9 mirror: every pinned source must match its live bytes.
+    for relative, digest in document['source_hashes'].items():
+        assert sha256_file(REPO_ROOT / relative) == digest, f'5a evidence source drift: {relative}'
+    # The view inherits the disposition: plot-data pins this manifest and may
+    # not improve its status (HwAGENTS rule 13; check_hw_evidence enforces the
+    # full chain including the rendered bytes).
+    plot = _json(EVIDENCE_DIR / 'pulse_5a_001.plot.json')
+    _validate_against_schema(plot, 'hw-plot-data-0.1.0.schema.json', 'pulse 5a plot-data')
+    assert plot['source_evidence_path'] == 'hw/tests/evidence/pulse_5a_001.json'
+    assert plot['source_evidence_hash'] == sha256_file(EVIDENCE_DIR / 'pulse_5a_001.json')
+    assert plot['status'] == 'pending' and plot['provisional'] is True
+    assert plot['credibility_level'] == 'CL0' and plot['oracle_id'] == 'OR-002'
+    assert plot['source_requirement'] == 'HW-FR-004'
+    assert {series['role'] for series in plot['series']} == {
+        'tolerance_lower', 'tolerance_upper'}, 'pending placeholder carries no data series'
 
 
 @pytest.mark.parametrize('needed,terminate,message', [
