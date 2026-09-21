@@ -374,10 +374,12 @@ def load_tool_qualifications(root, report):
 CAPELLA_MODEL_RELATIVE = os.path.join("hw", "model", "capella", "cancestry.capella")
 
 
-def load_capella_element_ids(root):
+def load_capella_element_ids(root, report=None):
     """Load all element IDs declared in the Capella model if present.
 
     Returns a set of element id strings, or None if the model file is absent.
+    If the file is present but unparseable, reports a failure so the gate fails
+    closed rather than silently disabling cross-validation (finding B4).
     Uses xml.etree.ElementTree so it runs dependency-free without capellambse.
     """
     capella_path = os.path.join(root, CAPELLA_MODEL_RELATIVE)
@@ -387,8 +389,14 @@ def load_capella_element_ids(root):
         import xml.etree.ElementTree as ET
         tree = ET.parse(capella_path)
         return {elem.attrib["id"] for elem in tree.iter() if "id" in elem.attrib}
-    except Exception:
-        return None
+    except Exception as exc:
+        if report is not None:
+            report.fail(2, "Capella model present at %s but failed to parse: %s "
+                           "(fail-closed cross-validation)" %
+                           (CAPELLA_MODEL_RELATIVE, exc))
+            return set()
+        raise ValueError("Capella model present at %s but failed to parse: %s" %
+                         (capella_path, exc))
 
 
 def _repo_artifact(root, relative):
@@ -530,7 +538,7 @@ def check_evidence(number, row, root, report, registry, tools):
 def validate_rows(records, hwrs, registry, root, report):
     """Rules 2-7 on the parsed rows."""
     tools = load_tool_qualifications(root, report)
-    capella_ids = load_capella_element_ids(root)
+    capella_ids = load_capella_element_ids(root, report)
     for number, row in records:
         requirement_id = row["requirement_id"]
         method = row["method"]
@@ -546,13 +554,13 @@ def validate_rows(records, hwrs, registry, root, report):
         if capella_id in CAPELLA_PLACEHOLDERS:
             if is_passing(status):
                 report.fail(2, "line %d: %s / %s: passing row carries placeholder "
-                            "capella_element_id %r (honest ledger: passing evidence "
-                            "requires resolved Capella linkage)" %
+                            "capella_element_id %r (honest ledger / HwAGENTS rule 4: "
+                            "passing evidence requires resolved Capella linkage)" %
                             (number, requirement_id, method, capella_id))
         elif capella_ids is not None:
             if capella_id not in capella_ids:
-                report.fail(2, "line %d: %s / %s: capella_element_id %r does not exist "
-                            "in the Capella model (%s)" %
+                report.fail(2, "line %d: %s / %s: capella_element_id %r does not match "
+                            "any element ID in the Capella model (%s)" %
                             (number, requirement_id, method, capella_id,
                              CAPELLA_MODEL_RELATIVE))
 

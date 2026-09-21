@@ -1041,7 +1041,19 @@ def test_unknown_capella_element_id_fails_closed(tmp_path):
     write(tmp_path / "hw" / "tests" / "traceability.csv", trace)
     result = run_checker(tmp_path)
     assert result.returncode == 1
-    assert "does not exist in the Capella model" in result.stdout
+    assert "does not match any element ID in the Capella model" in result.stdout
+
+
+def test_corrupted_capella_model_fails_closed(tmp_path):
+    """B4: unparseable Capella model must fail closed, not silently skip cross-check."""
+    make_repo(tmp_path)
+    corrupted_capella = '<?xml version="1.0" encoding="UTF-8"?><unclosed_tag id="broken"'
+    write(tmp_path / "hw/model/capella/cancestry.capella", corrupted_capella)
+    trace = TRACE_HEADER + row("HW-SF-002", "sim", "sim-pending", capella="real-comp")
+    write(tmp_path / "hw" / "tests" / "traceability.csv", trace)
+    result = run_checker(tmp_path)
+    assert result.returncode == 1
+    assert "Capella model present at" in result.stdout and "failed to parse" in result.stdout
 
 
 def test_known_capella_element_id_passes(tmp_path):
