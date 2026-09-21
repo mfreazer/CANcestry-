@@ -3,11 +3,11 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Hardware Agent Policy |
-| **Version** | 1.1.2 |
-| **Status** | Rule 13 (H-03) pending QA; existing rules remain load-bearing |
+| **Version** | 1.1.3 |
+| **Status** | Rule 13 (H-03) and Rule 14 (H-05) binding; existing rules remain load-bearing |
 | **Owner** | System Engineer |
 | **Approver** | QA Lead |
-| **Last Review** | 2026-09-20 |
+| **Last Review** | 2026-09-21 |
 | **Repository location** | `HwAGENTS.md` (repository root) |
 | **Governing document** | `docs/hw/HW-PLAN.md` v1.0.0 |
 | **Applies to** | `hw/`, `docs/hw/`, `schemas/hw/`, future `hw/ecad/`, and `@cancestry-hw-agent` |
@@ -62,12 +62,26 @@
     PR with the prefix `renderer-drift:`. The renderer-drift manifest is
     renders/manifest.json.
 
+14. **Tolerance bands are binding contracts.** A shaded or hatched tolerance
+    band in a rendered visual is a binding verification contract, never an
+    aesthetic illustration or decorative fill. A visual shall display a
+    tolerance band only when backed by an explicit `tolerance_band` definition
+    in the plot-data file referencing validated `tolerance_lower` and
+    `tolerance_upper` series that share an x-axis and are non-inverted. When
+    requirement tolerances are scalar feature limits (e.g. peak voltage or
+    rise time) rather than continuous per-sample envelopes, the visual shall
+    encode them as labelled glyph markers with explicit tolerances in the
+    evidence metadata—never as a synthesized continuous band. Drawing an
+    undeclared or ungrounded band is a gate error and shall be rejected at
+    review.
+
 ---
 
 ## Change Log
 
 | Version | Date | Change |
 |---|---|---|
+| 1.1.3 | 2026-09-21 | H-05 #44 hardening: Rule 14 added (tolerance bands are binding contracts, not decorative fill; undeclared or scalar bands rejected); placeholder fail-closed gate. |
 | 1.1.2 | 2026-09-20 | H-03 #36: Rule 13 added (visual evidence is a view of a hashed plot-data file, never the proof); checker `ci/check_hw_evidence.py` and `docs/hw/visual-evidence-plan.md` bind it. |
 | 1.1.1 | 2026-09-19 | H-04 #38: Rule 3 source-of-truth path migrated to JSON; CSV remains a deterministic export. |
 | 1.1.0 | 2026-09-19 | QA findings HwA-F1..F4:<br>• Rule 1: HwRS IDs only.<br>• Rule 2: `hw/bom/datasheets/` extracts.<br>• Rule 3: Oracle registry CSV source of truth.<br>• Rule 4: `provisional` and `fully-verified(CL3)` statuses.<br>• Rule 10: ECAD gate named to H-Phase 3 start. |

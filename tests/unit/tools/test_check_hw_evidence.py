@@ -1017,3 +1017,39 @@ def test_pending_view_of_passing_evidence_is_an_error(tmp_path):
     result = repo.run()
     assert result.code == 1
     assert "source evidence records pass=true" in result.out
+
+
+def test_t29_tolerance_roles_without_tolerance_band(tmp_path):
+    """Rule 14: series with tolerance roles require an explicit tolerance_band."""
+    repo = build(tmp_path)
+    def remove_band(document):
+        document.pop("tolerance_band", None)
+    repo.mutate_plot_data_bytes(remove_band)
+    result = repo.run()
+    assert result.code == 1
+    assert "no tolerance_band is defined" in result.out or "tolerance_band" in result.out
+
+
+def test_t30_svg_hatch_without_tolerance_band(tmp_path):
+    """Rule 14: SVG must not contain a hatched band when tolerance_band is not declared."""
+    repo = build(tmp_path)
+    def remove_band(document):
+        document.pop("tolerance_band", None)
+        document["series"] = [s for s in document["series"]
+                              if s["role"] not in ("tolerance_lower", "tolerance_upper")]
+    repo.mutate_plot_data_bytes(remove_band)
+    result = repo.run()
+    assert result.code == 1
+    assert "SVG contains a hatched tolerance band" in result.out
+
+
+def test_t31_svg_missing_hatch_with_tolerance_band(tmp_path):
+    """Rule 14: SVG must contain hatched band polygon when tolerance_band is declared."""
+    repo = build(tmp_path)
+    svg_text = repo.read(SVG_REL).replace('fill="url(#hatch)"', 'fill="none"')
+    repo.write(SVG_REL, svg_text)
+    repo.recompute_manifest()
+    result = repo.run()
+    assert result.code == 1
+    assert "plot-data declares tolerance_band but SVG has no matching" in result.out
+

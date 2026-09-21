@@ -3,13 +3,13 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Visual Evidence Plan |
-| **Version** | 0.1.0 |
-| **Status** | Draft — H-03, pending QA approval |
+| **Version** | 0.1.1 |
+| **Status** | Draft — H-05 hardening, pending QA approval |
 | **Owner** | System Engineer |
 | **Approver** | QA Lead |
-| **Last Review** | 2026-09-20 |
+| **Last Review** | 2026-09-21 |
 | **Repository location** | `docs/hw/visual-evidence-plan.md` |
-| **Governing documents** | `docs/hw/HW-PLAN.md` v1.0.0 (sections 10.1–10.3, 10.8), `HwAGENTS.md` rule 13 |
+| **Governing documents** | `docs/hw/HW-PLAN.md` v1.0.0 (sections 10.1–10.3, 10.8), `HwAGENTS.md` rule 13, rule 14 |
 
 ## 1. Principle
 
@@ -214,7 +214,7 @@ make it visible rather than to silently re-render:
 - **No color-only encoding.** Every series declares `non_color_encoding` with a
   `line_style` and a `marker`; the schema requires it and the renderer must use
   it. Distinguishability must survive greyscale printing.
-- **Greyscale-safe band.** The tolerance band is hatched, not tinted.
+- **Greyscale-safe band and binding contract.** The tolerance band is hatched, not tinted. A shaded band represents a binding verification contract (`HwAGENTS.md` rule 14) backed by validated series and shall never be drawn for scalar feature limits.
 - **Status is textual.** Status is carried by the footer text and a banner, not
   by red/green alone.
 - **Limits and faults are labelled.** Threshold, floor and fault markers carry
@@ -249,4 +249,5 @@ make it visible rather than to silently re-render:
 
 | Version | Date | Change |
 |---|---|---|
+| 0.1.1 | 2026-09-21 | H-05 #44 hardening: Rule 14 binding tolerance band rule integrated into plan §3 and §7; scalar feature limits distinguished from continuous envelopes. |
 | 0.1.0 | 2026-09-20 | H-03 #36: initial plan — hash chain, plot-data contract, footer/comment contract, failure rendering, renderer drift, accessibility, traceability integration. |
