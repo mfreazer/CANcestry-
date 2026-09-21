@@ -371,6 +371,26 @@ def load_tool_qualifications(root, report):
         return {}
 
 
+CAPELLA_MODEL_RELATIVE = os.path.join("hw", "model", "capella", "cancestry.capella")
+
+
+def load_capella_element_ids(root):
+    """Load all element IDs declared in the Capella model if present.
+
+    Returns a set of element id strings, or None if the model file is absent.
+    Uses xml.etree.ElementTree so it runs dependency-free without capellambse.
+    """
+    capella_path = os.path.join(root, CAPELLA_MODEL_RELATIVE)
+    if not os.path.isfile(capella_path):
+        return None
+    try:
+        import xml.etree.ElementTree as ET
+        tree = ET.parse(capella_path)
+        return {elem.attrib["id"] for elem in tree.iter() if "id" in elem.attrib}
+    except Exception:
+        return None
+
+
 def _repo_artifact(root, relative):
     """Keep evidence/witness sources inside the checked repository."""
     path = Path(relative)
@@ -510,6 +530,7 @@ def check_evidence(number, row, root, report, registry, tools):
 def validate_rows(records, hwrs, registry, root, report):
     """Rules 2-7 on the parsed rows."""
     tools = load_tool_qualifications(root, report)
+    capella_ids = load_capella_element_ids(root)
     for number, row in records:
         requirement_id = row["requirement_id"]
         method = row["method"]
@@ -517,12 +538,23 @@ def validate_rows(records, hwrs, registry, root, report):
         oracle_id = row["oracle_id"]
         credibility = row["credibility_level"]
         required_cl = row["required_cl"]
+        capella_id = row["capella_element_id"]
 
-        # CAP_PENDING/LA_PENDING are intentional H-01 placeholders. They
-        # pass the non-empty ledger check but are not resolved against a
-        # Capella model (there is no H-01 model to orphan-check yet).
-        if row["capella_element_id"] in CAPELLA_PLACEHOLDERS:
-            pass
+        # H-05 hardening: placeholder fail-closed gate and Capella element cross-validation.
+        # CAP_PENDING / LA_PENDING were H-01 placeholders while no Capella model existed.
+        # Now that the model exists, passing rows must link to a real model element.
+        if capella_id in CAPELLA_PLACEHOLDERS:
+            if is_passing(status):
+                report.fail(2, "line %d: %s / %s: passing row carries placeholder "
+                            "capella_element_id %r (honest ledger: passing evidence "
+                            "requires resolved Capella linkage)" %
+                            (number, requirement_id, method, capella_id))
+        elif capella_ids is not None:
+            if capella_id not in capella_ids:
+                report.fail(2, "line %d: %s / %s: capella_element_id %r does not exist "
+                            "in the Capella model (%s)" %
+                            (number, requirement_id, method, capella_id,
+                             CAPELLA_MODEL_RELATIVE))
 
         for violation in row_schema_violations(row, root):
             report.fail(2, "line %d: %s" % (number, violation))
