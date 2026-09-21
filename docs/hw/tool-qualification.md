@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Tool Qualification Plan and Evidence |
-| **Version** | 0.2.3 |
+| **Version** | 0.2.4 |
 | **Status** | Draft — H-04, pending QA and Human Reviewer approval |
 | **Owner** | System Engineer |
 | **Approver** | QA Lead |
@@ -41,6 +41,7 @@ gap fails closed. `-` represents an empty tool gap for TCL1 only.
 | openmodelica | OpenModelica compiles Modelica into FMUs. A compiler bug can silently change simulation semantics, introducing errors into safety-related artifacts. OR-001/OR-002 regressions cover only exercised semantics. | TI2 | TD2 | TCL2 | Compiler semantics outside independently validated output remain unqualified; OR-001/OR-002 regressions do not cover all translation and solver behavior. |
 | fmpy | Bounded, independently oracle-checked FMU execution/readout only, subject to the reclassification precondition in §3.1. TD1 is conditional on detection coverage for the exact claimed outputs; this is not a claim that FMPy cannot introduce errors. | TI2 | TD1 | TCL1 | - |
 | capellambse | capellambse is a model reader, not a safety-case producer. Live structural checks and negative fixtures detect missed linkage/parse errors. | TI2 | TD1 | TCL1 | - |
+| cancestry-render-modelica | Pure-Python SVG renderer (H-05): it draws only what a schema-validated plot-data file declares, verifies the pinned source-evidence hash before drawing, and refuses to run on a broken hash chain or an unknown vocabulary. A defect can at worst fail to display a validated claim; it cannot introduce or alter a numerical result. | TI1 | TD1 | TCL1 | - |
 | fmeda | FMEDA calculator is not implemented; independent ISO 26262-5 Annex D gate required before use. | pending | pending | pending | No qualification evidence. |
 | renode | Renode is not implemented by H-04; fault replay and golden-trace correlation required before use. | pending | pending | pending | No qualification evidence. |
 <!-- END TOOL CLASSIFICATION -->
@@ -174,6 +175,7 @@ OR-002 has no qualified passing claim. Oracle/model gaps remain in
 
 | Version | Date | Change |
 |---|---|---|
+| 0.2.4 | 2026-09-20 | H-05 #44: add cancestry-render-modelica to the controlled table as TCL1 (pure renderer over validated data) with the rationale for the bounded role. |
 | 0.2.3 | 2026-09-20 | N2: identify the actual pre-instantiation pulse FMU state checks and negative fixtures; distinguish the OR-001 stateful hold-up scope. No unconditional FMPy confidence or pulse-qualification promotion. |
 | 0.2.2 | 2026-09-20 | Review F1: make the bounded FMPy TD1/TCL1 argument conditional; require role/configuration reassessment and TCL2/TCL3 reclassification before unvalidated producing uses enter passing evidence. |
 | 0.2.1 | 2026-09-19 | H-04 review: correct normative Test B source and 35 V suppressed level; withdraw pulse qualification to pending/CL0; enforce partial-coverage/source/ledger agreement and artifact-level tool inheritance. |
