@@ -14,7 +14,7 @@ Layers:
 Implementations under test: hw/virtual-bench/run_t2_retention.py,
 hw/virtual-bench/fmi_bridge.py.
 Requirements traced: HW-SF-002, HW-SF-004; HwAGENTS.md rules 4 and 5.
-Test ids: HW-T2-ORCH-001 .. HW-T2-ORCH-006, HW-T2-E2E-001.
+Test ids: HW-T2-ORCH-001 .. HW-T2-ORCH-007, HW-T2-E2E-001.
 """
 
 from __future__ import annotations
@@ -116,6 +116,25 @@ def test_pinned_sources_exist():
     """HW-T2-ORCH-006: every pinned source resolves (no dangling pins)."""
     for relative in runner.PINNED_SOURCES:
         assert (REPO_ROOT / relative).is_file(), relative
+
+
+def test_omc_build_script_is_fully_formatted():
+    """HW-T2-ORCH-007: the generated omc script has no bare ``%s``.
+
+    Regression for F-18 (issue #55): the buildModelFMU line left a bare
+    ``%s`` in the .mos file and omc's lexer rejected it at build time
+    (dispatch 6, run 35722295912). The script text is a pure function, so
+    this pins it without the toolchain.
+    """
+    text = runner.omc_build_script_text()
+    # No unformatted placeholder may leak into omc's input.
+    assert "%s" not in text, "unformatted placeholder in omc script:\n%s" % text
+    # The model name must be formatted into the buildModelFMU call.
+    assert ('buildModelFMU(CancestryLib.Power.Holdup, version="2.0", '
+            'fmuType="cs", fileNamePrefix="cancestry_t2_holdup");') in text
+    # The three pinned model files must be loaded.
+    for name in ("package.mo", "Power/package.mo", "Power/Holdup.mo"):
+        assert 'loadFile("%s")' % (runner.MODEL_ROOT / name) in text
 
 
 # ---------------------------------------------------------------------------

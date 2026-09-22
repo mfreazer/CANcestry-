@@ -324,6 +324,31 @@ def locate_omc():
 # Pipeline stages
 # ---------------------------------------------------------------------------
 
+def omc_build_script_text():
+    """Text of the omc script that builds the Holdup FMU (pure, pinned).
+
+    F-18 (issue #55): the buildModelFMU line must format the model name
+    into the script. An early draft left a bare ``%s`` in the generated
+    .mos file and omc's lexer rejected it at build time ("Lexer failed to
+    recognize '%s, version'", dispatch 6, run 35722295912). The text is a
+    pure function of the pinned model layout so the unit test
+    HW-T2-ORCH-007 can pin it without the toolchain.
+    """
+    return (
+        "loadModel(Modelica);\n"
+        "getErrorString();\n"
+        'loadFile("%s");\n' % (MODEL_ROOT / "package.mo") +
+        "getErrorString();\n"
+        'loadFile("%s");\n' % (MODEL_ROOT / "Power" / "package.mo") +
+        "getErrorString();\n"
+        'loadFile("%s");\n' % (MODEL_ROOT / "Power" / "Holdup.mo") +
+        "getErrorString();\n"
+        'buildModelFMU(%s, version="2.0", fmuType="cs", '
+        'fileNamePrefix="cancestry_t2_holdup");\n' % (MODEL,) +
+        "getErrorString();\n"
+    )
+
+
 def build_fmu(omc, build_dir=BUILD_DIR):
     """Build the Holdup FMU (FMI 2.0, CoSimulation) headless; return path.
 
@@ -335,19 +360,7 @@ def build_fmu(omc, build_dir=BUILD_DIR):
     """
     build_dir.mkdir(parents=True, exist_ok=True)
     script = build_dir / "omc_build_t2.mos"
-    script.write_text(
-        "loadModel(Modelica);\n"
-        "getErrorString();\n"
-        'loadFile("%s");\n' % (MODEL_ROOT / "package.mo") +
-        "getErrorString();\n"
-        'loadFile("%s");\n' % (MODEL_ROOT / "Power" / "package.mo") +
-        "getErrorString();\n"
-        'loadFile("%s");\n' % (MODEL_ROOT / "Power" / "Holdup.mo") +
-        "getErrorString();\n"
-        'buildModelFMU(%s, version="2.0", fmuType="cs", '
-        'fileNamePrefix="cancestry_t2_holdup");\n'
-        "getErrorString();\n",
-        encoding="utf-8")
+    script.write_text(omc_build_script_text(), encoding="utf-8")
     result = subprocess.run(
         [omc, "--showErrorMessages", str(script)],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
