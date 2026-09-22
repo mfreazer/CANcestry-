@@ -117,8 +117,10 @@ jobs:
         with:
           # Full history + tags: the job archives tag v1.0.0 for the
           # off-tree firmware ELF build (read-only firmware sources).
+          # (actions/checkout input name is fetch-tags; 'tags' is not a
+          # valid input and would be silently ignored.)
           fetch-depth: 0
-          tags: true
+          fetch-tags: true
 
       - name: Verify the base-image digest pin (ci/docker/base-image.digest)
         id: pin

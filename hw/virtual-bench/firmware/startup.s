@@ -26,13 +26,6 @@
 /* ----------------------------------------------------------------------- */
 
     .section .isr_vector, "a", %progbits
-    .type g_default_irq, %function
-    .global g_default_irq
-
-g_default_irq:
-    b g_default_irq
-
-    .section .isr_vector, "a", %progbits
     .word _estack            /*     0: initial stack pointer */
     .word Reset_Handler      /*     1: reset */
     .word g_default_irq      /*     2: NMI */
@@ -93,5 +86,18 @@ Reset_Handler:
     b       .
 
     .size Reset_Handler, . - Reset_Handler
+
+    /* Default interrupt handler (park). Lives in .text: it must NOT be
+     * emitted inside .isr_vector, or its body would shift the vector
+     * table and the initial SP word would no longer sit at the flash
+     * origin (the CPU would load SP = 0xBE00 on reset). */
+    .thumb_func
+    .type g_default_irq, %function
+    .global g_default_irq
+
+g_default_irq:
+    b g_default_irq
+
+    .size g_default_irq, . - g_default_irq
 
     .end

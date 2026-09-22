@@ -25,15 +25,37 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
 
 # Cross toolchain for the T2 firmware ELF (tag v1.0.0 sources, off-tree
 # driver). arm-none-eabi-gcc ships the newlib C library needed by the
-# -nostartfiles link.
-# The minimal OM base may lack curl; install it with the cross toolchain.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        arm-none-eabi-gcc \
-        arm-none-eabi-newlib \
-        ca-certificates \
-        curl \
-    && rm -rf /var/lib/apt/lists/*
+# -nostartfiles link. The minimal OM base may lack curl; install it with
+# the cross toolchain.
+# arm-none-eabi-gcc lives in the 'universe' component on Ubuntu; if the
+# base's apt configuration is trimmed to main only, the first install
+# attempt fails and the retry below enables universe (classic
+# sources.list and deb822 .sources formats). On bases where the package
+# is already available (e.g. Debian main), the first attempt succeeds and
+# the universe edit is never made (a base without a universe component
+# must not be told to use one).
+RUN set -eux; \
+    apt-get update; \
+    (apt-get install -y --no-install-recommends \
+        arm-none-eabi-gcc arm-none-eabi-newlib ca-certificates curl) \
+    || { \
+         echo "first install attempt failed - enabling 'universe' and retrying"; \
+         if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then \
+             grep -q '^Components:.*\buniverse\b' /etc/apt/sources.list.d/ubuntu.sources || \
+             sed -i 's/^Components: \(.*\)$/Components: \1 universe/' /etc/apt/sources.list.d/ubuntu.sources; \
+         elif [ -f /etc/apt/sources.list ]; then \
+             grep -qE '^[^#]*\buniverse\b' /etc/apt/sources.list || \
+             sed -i -E 's/^(deb [^#]*)([[:space:]])(main)([[:space:]]|$)/\1\2main universe\4/' /etc/apt/sources.list; \
+         else \
+             echo "no recognized apt sources file to enable 'universe' in" >&2; \
+             ls -la /etc/apt/ /etc/apt/sources.list.d/ >&2; \
+             exit 1; \
+         fi; \
+         apt-get update; \
+         apt-get install -y --no-install-recommends \
+             arm-none-eabi-gcc arm-none-eabi-newlib ca-certificates curl; \
+       }; \
+    rm -rf /var/lib/apt/lists/*
 
 # Renode v1.16.1 portable (self-contained .NET 8 runtime). The identity pin
 # (release tag, asset id, exact byte size) lives in ci/docker/renode-1.16.1.pin;
