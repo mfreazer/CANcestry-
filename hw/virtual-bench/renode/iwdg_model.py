@@ -50,8 +50,11 @@ elif request.IsWrite:
 elif request.IsRead:
     if iwdg_running and not iwdg_fired:
         now = self.Machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds
-        # LSI 32 kHz (OR-007), divider 4^PR (PR=3 -> /32 -> 1 kHz tick).
-        tick_s = float(4 ** iwdg_pr) / 32000.0
+        # LSI 32 kHz (OR-007); STM32G4 IWDG prescaler (RM0440 table):
+        # division = 2^(PR+2) = 4*2^PR, so PR=0 -> /4 ... PR=3 -> /32
+        # (1 kHz tick) ... PR=7 -> /512. The v1.0.0 firmware arms with
+        # PR=0x03, i.e. 1 ms ticks.
+        tick_s = float(4 * (2 ** iwdg_pr)) / 32000.0
         timeout_s = (iwdg_rlr + 1) * tick_s
         if (now - iwdg_started_at) >= timeout_s:
             iwdg_fired = True

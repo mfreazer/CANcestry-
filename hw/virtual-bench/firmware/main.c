@@ -63,9 +63,20 @@
  * bodies are compiled as written, so the cycle counts - and therefore the
  * virtual-time separation of the captured events - are reproducible across
  * runs of the same image and compiler. The gaps only need to be distinct
- * integer microseconds on both sides of each stamp; they are sized to stay
- * inside the IWDG window (102 ms from arming) on any plausible CPU clock. */
-#define T2_SETTLE_DELAY_ITERS 200000u
+ * integer microseconds on both sides of each stamp.
+ *
+ * Window budget (STM32G4 RM0440: IWDG timeout = (RLR+1) * 4*2^PR / LSI):
+ * the driver arms with RLR=50, PR=0x03 (/32) at the 32 kHz LSI, so the
+ * armed window is 51 ms. The escalation sequence (settle, retention write,
+ * latch gap, safe latch, RLR=1 reload) must complete inside that window so
+ * the scripted IWDG fires via the post-escalation 2 ms (RLR=1) window -
+ * the invariant retention_write < safe_latch < iwdg_fire then holds by
+ * construction. The settle is sized at roughly half the armed window
+ * (pessimistic ~15-20 ms at 100 MIPS) leaving comfortable margin; the
+ * exact virtual-time values are confirmed by the first live run
+ * (docs/hw/t2-bringup-report.md, H-08).
+ */
+#define T2_SETTLE_DELAY_ITERS 100000u
 #define T2_LATCH_GAP_ITERS 20000u
 
 static cancestry_watchdog_t s_wdg;
@@ -82,7 +93,9 @@ static void t2_busy_delay(uint32_t iterations)
 static void t2_iwdg_arm(void)
 {
     T2_IWDG_KR = 0x5555u;      /* key write: unlock */
-    T2_IWDG_PR = 0x03u;        /* prescaler 64 (2 ms ticks at 32 kHz) */
+    /* RM0440: division = 4*2^PR, so PR=0x03 -> /32 -> 1 ms ticks at 32 kHz
+     * LSI (identical to cancestry_watchdog_init; armed window = 51 ms). */
+    T2_IWDG_PR = 0x03u;
     T2_IWDG_RLR = T2_IWDG_TIMEOUT_MS & 0x0FFFu;
     T2_IWDG_KR = 0xAAAAu;      /* reload */
     T2_IWDG_KR = 0xCCCCu;      /* start */

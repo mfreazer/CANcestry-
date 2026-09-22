@@ -15,7 +15,8 @@
 //   Cortex-M4F + NVIC  | executes the real v1.0.0 firmware ELF (no reimplementation)
 //   FLASH/RAM/CCMRAM   | cancestry_baremetal.ld MEMORY map (512K/96K/32K)
 //   IWDG @0x40003000   | watchdog.c escalation path (HW-SF-002 (i)); KR 0x5555/
-//                      | 0xAAAA/0xCCCC protocol, PR/RLR, LSI/4^PR time base,
+//                      | 0xAAAA/0xCCCC protocol, PR/RLR, LSI/(4*2^PR) time base
+//                      | (RM0440: PR=3 -> /32 -> 1 ms ticks at 32 kHz LSI),
 //                      | expiry sets RCC_CSR.IWDGRSTF (bit 29) and requests reset
 //   RTC/BKP @0x40002800| watchdog.c retention register RTC_BKP0R (offset 0x50),
 //                      | value persists across machine reset (HW-SF-002)
@@ -141,12 +142,14 @@ fdcan1_scratch: Memory.MappedMemory @ sysbus 0x40006400
 fdcan2_scratch: Memory.MappedMemory @ sysbus 0x40006800
     size: 0x400
 
-// T2 event-capture area (virtual; unused FMC bank on this board).
+// T2 event-capture area (virtual; unused FMC bank on this board). Size 0x200:
+// the header layout above ends at 0x60000100 (retention_shadow), so the
+// region must cover through 0x600001FF.
 t2_trace: Memory.MappedMemory @ sysbus 0x60000000
-    size: 0x100
+    size: 0x200
 
 sysbus:
     init:
         Tag <0x40006400,0x400067FF> "FDCAN1"
         Tag <0x40006800,0x40006BFF> "FDCAN2"
-        Tag <0x60000000,0x600000FF> "T2_TRACE"
+        Tag <0x60000000,0x600001FF> "T2_TRACE"

@@ -290,8 +290,8 @@ def check_renode_version(renode_bin):
     #     runtime: .NET 8.x
     # The release version is the "build:" line (the assembly version is a
     # constant 1.0.0.0 and carries no release information). The legacy
-    # "Renode X.Y" form is kept as a fallback. (Bring-up finding F-3: the
-    # H-07 regex matched neither form of the real 1.16 output.)
+    # "Renode X.Y" form is kept as a fallback. (Bring-up finding F-11:
+    # the H-07 regex matched neither form of the real 1.16 output.)
     match = re.search(r"build:\s*(\d+)\.(\d+)\.(\d+)", text)
     if not match:
         match = re.search(r"[Rr]enode\s+v?(\d+)\.(\d+)", text)
