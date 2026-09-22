@@ -215,7 +215,13 @@ class FakeMonitorServer(threading.Thread):
                     text = line.decode().strip()
                     self.received.append(text)
                     response = self.responses.get(text, "0x00000000\n")
-                    conn.sendall((response + "\n(monitor) ").encode())
+                    # F-24: the real monitor echoes the command line to the
+                    # terminal before producing its output (see the
+                    # dispatch transcripts); the endpoint relies on that
+                    # echo to pair a response with the command that issued
+                    # it while queued startup input is still draining.
+                    conn.sendall((text + "\n" + response + "\n(monitor) ")
+                                 .encode())
         self._server.close()
 
     def stop(self):
@@ -691,3 +697,57 @@ def test_monitor_accepts_ansi_colored_machine_prompt():
         holder.join(timeout=5.0)
         server.close()
     assert parse_u32(tail) == 0x000000
+
+def test_command_skips_queued_startup_output_until_its_echo():
+    """HW-T2-BRIDGE-024: queued startup input does not masquerade as the
+    command response (F-24).
+
+    Dispatch 14 (run 35773043927): the preflight was queued behind the
+    injected '-e' startup line; the prompt the endpoint matched first
+    belonged to the startup line's output (its echo, the
+    LoadPlatformDescription error and the command help), so
+    parse_u32 failed with 'no numeric value' while the real response
+    sat behind the next prompt. The response is now accepted only when
+    it carries the command's own echo.
+    """
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    port = server.getsockname()[1]
+
+    def _serve_once():
+        conn, _ = server.accept()
+        conn.sendall(b"(monitor)> ")  # prompt 1: consumed by the banner read
+        time.sleep(0.2)  # let the client send its command
+        # Consume the client's command line: a real monitor always reads
+        # its input, and close() with an unread receive buffer sends a RST.
+        conn.settimeout(3.0)
+        try:
+            conn.recv(1024)
+        except socket.timeout:
+            pass
+        # startup -e line still draining: echo + error + prompt 2 (no echo
+        # of the client command anywhere in this chunk)
+        conn.sendall(b"(monitor) $elf=\"@x\"; include @y.resc\r\n"
+                     b"There was an error executing command "
+                     b"'machine LoadPlatformDescription y.repl'\r\n"
+                     b"The following methods ...\r\n(monitor)> ")
+        # now the client command really runs: echo + value + prompt 3
+        conn.sendall(b"sysbus ReadDoubleWord 0x60000000\r\n"
+                     b"0x54324353\r\n(monitor)> ")
+        time.sleep(0.1)
+        conn.close()
+
+    holder = threading.Thread(target=_serve_once, daemon=True)
+    holder.start()
+    endpoint = None
+    try:
+        endpoint = RenodeMonitorEndpoint("127.0.0.1", port, timeout=5.0)
+        tail = endpoint.command("sysbus ReadDoubleWord 0x60000000",
+                                echo_fragment="ReadDoubleWord")
+    finally:
+        if endpoint is not None:
+            endpoint._socket.close()
+        holder.join(timeout=5.0)
+        server.close()
+    assert parse_u32(tail) == 0x54324353

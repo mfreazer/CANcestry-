@@ -50,16 +50,22 @@ python "_clog.Logger.Info('[cancestry-hw] scope: sysbus=%s machine=%s variables=
 mach create "cancestry"
 python "_clog.Logger.Info('[cancestry-hw] step2: machine created')"
 
-# F-23 (issue #55): the platform file is loaded by BARE FILE NAME. Renode
-# resolves a bare name against the working directory first
-# (Monitor.TryGetFilenameFromAvailablePaths), and the runner sets the CWD
-# to this file's directory (launch_renode). The previous form
-# 'machine LoadPlatformDescription @$ORIGIN/...' never resolved (dispatch
-# 11, run 35730854679: no step3 marker, the 'Could not find file' error
-# only reached the client terminal) - the include then aborted here, which
-# is why t2_trace was never mapped in dispatches 7-11.
-python "import os; _repl = os.path.join(os.getcwd(), 'stm32g474-cancestry.repl'); _clog.Logger.Info('[cancestry-hw] step2b: repl path %s isfile=%s' % (_repl, os.path.isfile(_repl)))"
-machine LoadPlatformDescription stm32g474-cancestry.repl
+# F-24 (issue #55): load the platform file via $ORIGIN - the standard
+# Renode idiom. Dispatch 14 (run 35773043927) proved the process CWD is
+# /opt/renode (the Renode install dir, step2b probe), so bare names do
+# NOT resolve against this script's directory, and the monitor's
+# file-not-found path degrades into a URI 'download' attempt and a
+# 'Parameters did not match the signature' error (there is no public
+# 'Could not find file' line for command path arguments). $ORIGIN is set
+# by the include loader (Monitor.TryExecuteScript) to THIS script's
+# directory before its lines run, and PathToken trims the '@' prefix -
+# so '$ORIGIN/<file>' expands to the clean absolute path of the .repl
+# next to this .resc, from any CWD. The original H-07 form
+# '@$ORIGIN/<file>' - an EXTRA leading @ on top of the variable's own
+# '@' (dispatches 7-11) - and the F-23 bare name (dispatch 14) both
+# failed for the reasons above.
+python "import os; _o = variables['global.ORIGIN']; _p = (_o.Value if hasattr(_o, 'Value') else str(_o)) + '/stm32g474-cancestry.repl'; _clog.Logger.Info('[cancestry-hw] step2b: repl path %s isfile=%s' % (_p, os.path.isfile(_p)))"
+machine LoadPlatformDescription $ORIGIN/stm32g474-cancestry.repl
 python "_clog.Logger.Info('[cancestry-hw] step3: platform loaded')"
 python "_clog.Logger.Info('[cancestry-hw] step3b: scope after load: sysbus=%s machine=%s monitor.Machine=%s' % ('sysbus' in dir() and 'yes' or 'NO', 'machine' in dir() and 'yes' or 'NO', 'yes' if monitor.Machine is not None else 'NO'))"
 

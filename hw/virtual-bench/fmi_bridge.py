@@ -263,7 +263,7 @@ class RenodeMonitorEndpoint(RenodeEndpoint):
             self._record("RX", chunk)
             self._buffer += chunk
 
-    def command(self, text):
+    def command(self, text, echo_fragment=None):
         self._last_command = text
         payload = (text.rstrip("\n") + "\n").encode("utf-8")
         try:
@@ -272,19 +272,42 @@ class RenodeMonitorEndpoint(RenodeEndpoint):
             raise BridgeError("Renode monitor socket send failed for %r: %s"
                               % (text, error)) from error
         self._record("TX", payload)
-        return self._read_prompt().decode("utf-8", "replace")
+        decoded = self._read_prompt().decode("utf-8", "replace")
+        if echo_fragment is None:
+            return decoded
+        # F-24 (issue #55): the startup include is injected as queued
+        # shell input (-e). While it is still draining, the prompt we
+        # match belongs to ITS output (the -e echo, command errors and
+        # help text - dispatch 14, run 35773043927: the preflight
+        # 'response' was exactly that, and its real response only
+        # arrived after our own 'quit'), not to our command. Our command
+        # is echoed by the terminal before its result, so the response
+        # we want carries our command's echo; keep reading prompts until
+        # it does (bounded - a silent monitor still fails closed via
+        # _read_prompt's timeout).
+        for _ in range(5):
+            if echo_fragment in decoded:
+                return decoded
+            decoded = self._read_prompt().decode("utf-8", "replace")
+        raise BridgeError(
+            "Renode monitor response to %r never carried its command echo "
+            "within 5 prompts (startup input may still be draining): %r"
+            % (text, decoded[:200]))
 
     # -- endpoint interface -------------------------------------------------
     def run_for_us(self, us):
-        self.command('emulation RunFor "%s"' % format_seconds(us))
+        self.command('emulation RunFor "%s"' % format_seconds(us),
+                     echo_fragment="RunFor")
 
     def read_u32(self, addr):
         return parse_u32(self.command("sysbus ReadDoubleWord %s"
-                                      % format_address(addr)))
+                                      % format_address(addr),
+                                      echo_fragment="ReadDoubleWord"))
 
     def write_u32(self, addr, value):
         self.command("sysbus WriteDoubleWord %s 0x%08x"
-                     % (format_address(addr), int(value) & 0xFFFFFFFF))
+                     % (format_address(addr), int(value) & 0xFFFFFFFF),
+                     echo_fragment="WriteDoubleWord")
 
     def close(self):
         try:
