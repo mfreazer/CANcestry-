@@ -169,14 +169,55 @@ class RenodeMonitorEndpoint(RenodeEndpoint):
     # the closing parenthesis and never matched the real monitor prompt.)
     _PROMPT = re.compile(rb"\((?:monitor|machine-[A-Za-z0-9_.:-]+)\)>?[ \t]*\r?$")
 
-    def __init__(self, host, port, timeout=30.0):
-        self._socket = socket.create_connection((host, int(port)),
-                                                timeout=float(timeout))
-        self._socket.settimeout(float(timeout))
+    def __init__(self, host, port, timeout=30.0, transcript_path=None,
+                 clock=None):
         self._timeout = float(timeout)
         self._last_command = None
         self._buffer = b""
-        self._read_prompt()  # banner + initial prompt
+        # F-22 (issue #55): raw monitor transcript - every byte in both
+        # directions. Diagnostics only (never evidence): dispatches 8-10
+        # (runs 35724334649 / 35726064092 / 35726315665) show the preflight
+        # read executing (console warning logged) yet no response ever
+        # reaching this client, and the console alone cannot say which side
+        # dropped it. The bridge stays wall-clock-free (HW-T2-BRIDGE-013):
+        # lines are numbered by a deterministic sequence; the caller may
+        # inject a ``clock`` callable (the runner passes its wall clock)
+        # to stamp the diagnostic file.
+        self._transcript = None
+        self._transcript_clock = clock
+        self._transcript_line = 0
+        if transcript_path is not None:
+            self._transcript = open(transcript_path, "wb")
+        try:
+            self._socket = socket.create_connection((host, int(port)),
+                                                    timeout=self._timeout)
+            self._socket.settimeout(self._timeout)
+            self._read_prompt()  # banner + initial prompt
+        except Exception:
+            # F-22: a failed connect must not leak a live socket - the
+            # runner's retry loop (connect_monitor) would otherwise stack
+            # multiple clients on Renode's socket server.
+            try:
+                self._socket.close()
+            except (AttributeError, OSError):
+                pass
+            if self._transcript is not None:
+                self._transcript.close()
+                self._transcript = None
+            raise
+
+    def _record(self, direction, data):
+        """Append one line of the raw monitor transcript (F-22)."""
+        if self._transcript is None:
+            return
+        stamp = "line %d" % self._transcript_line
+        if self._transcript_clock is not None:
+            stamp = "line %d [%.3f]" % (self._transcript_line,
+                                        self._transcript_clock())
+        line = "%s %s %r\n" % (stamp, direction, data)
+        self._transcript.write(line.encode("utf-8", "replace"))
+        self._transcript.flush()
+        self._transcript_line += 1
 
     # -- low-level line protocol ------------------------------------------
     def _read_prompt(self):
@@ -205,15 +246,18 @@ class RenodeMonitorEndpoint(RenodeEndpoint):
                     from error
             if not chunk:
                 raise BridgeError("Renode monitor closed the connection")
+            self._record("RX", chunk)
             self._buffer += chunk
 
     def command(self, text):
         self._last_command = text
+        payload = (text.rstrip("\n") + "\n").encode("utf-8")
         try:
-            self._socket.sendall((text.rstrip("\n") + "\n").encode("utf-8"))
+            self._socket.sendall(payload)
         except OSError as error:
             raise BridgeError("Renode monitor socket send failed for %r: %s"
                               % (text, error)) from error
+        self._record("TX", payload)
         return self._read_prompt().decode("utf-8", "replace")
 
     # -- endpoint interface -------------------------------------------------
@@ -234,6 +278,9 @@ class RenodeMonitorEndpoint(RenodeEndpoint):
         except (OSError, BridgeError):
             pass
         self._socket.close()
+        if self._transcript is not None:
+            self._transcript.close()
+            self._transcript = None
 
 
 class FmiSlave(object):

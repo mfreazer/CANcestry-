@@ -83,6 +83,8 @@ BUILD_DIR = REPO_ROOT / "build" / "hw"
 # backpressure and preserves the transcript; the runner attaches its tail
 # to every failure.
 RENODE_CONSOLE_LOG = BUILD_DIR / "t2_retention_001_renode_console.log"
+# F-22 (issue #55): raw monitor-socket transcript (diagnostics only).
+RENODE_TRANSCRIPT_LOG = BUILD_DIR / "t2_retention_001_monitor_transcript.log"
 SCHEMA_PATH = REPO_ROOT / "schemas" / "hw" / "hw-t2-evidence-0.1.0.schema.json"
 
 MODEL = "CancestryLib.Power.Holdup"
@@ -439,13 +441,16 @@ def _console_tail(path, lines=120):
     return "\n".join(tail)
 
 
-def connect_monitor(port, deadline_s=60.0):
+def connect_monitor(port, deadline_s=60.0, transcript_path=None,
+                    clock=None):
     """Connect to the Renode monitor, retrying until the deadline."""
     deadline = time.monotonic() + deadline_s
     last = None
     while time.monotonic() < deadline:
         try:
-            return RenodeMonitorEndpoint("127.0.0.1", port, timeout=30.0)
+            return RenodeMonitorEndpoint("127.0.0.1", port, timeout=30.0,
+                                         transcript_path=transcript_path,
+                                         clock=clock)
         except OSError as error:
             last = error
             time.sleep(0.2)
@@ -490,7 +495,12 @@ def run_scenario(renode_bin, elf_path, fmu_path, build_dir=BUILD_DIR):
     process = launch_renode(renode_bin, elf_path, port)
     endpoint = None
     try:
-        endpoint = connect_monitor(port)
+        # The runner (orchestration layer, not the evidence path) supplies
+        # the wall clock that stamps the diagnostic monitor transcript; the
+        # bridge module itself stays wall-clock-free (HW-T2-BRIDGE-013).
+        endpoint = connect_monitor(port,
+                                   transcript_path=RENODE_TRANSCRIPT_LOG,
+                                   clock=time.time)
         fmu = FmpyFmuSlave(fmu_path)
         bridge = RetentionBridge(endpoint, fmu)
         timeline = bridge.run()
@@ -674,6 +684,14 @@ def main(argv=None):
             print("== renode console tail (last %d lines) =="
                   % len(tail.splitlines()))
             print(tail)
+        # F-22: the raw monitor-socket transcript (what the monitor actually
+        # sent back) is the other half of the picture for the no-response
+        # preflight of dispatches 8-10.
+        transcript = _console_tail(RENODE_TRANSCRIPT_LOG, lines=80)
+        if transcript:
+            print("== monitor transcript tail (last %d lines) =="
+                  % len(transcript.splitlines()))
+            print(transcript)
         return 2
 
     document = passing_document(run_body)

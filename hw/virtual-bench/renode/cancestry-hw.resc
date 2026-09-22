@@ -33,21 +33,25 @@ $t2_seed?="123456789"
 # Fail-closed guard: T2 executes the REAL v1.0.0 ELF (HW-PLAN section 8.3);
 # the bench never falls back to a reimplementation of the firmware.
 python "assert variables['elf'] not in ('', None), 'cancestry-hw.resc: no firmware ELF provided (set $elf before including this script)'"
-# F-21 (issue #55): step markers. Dispatch 9 (run 35726064092, with the
-# F-20 console capture) showed the include finishing with the t2_trace
-# region (0x60000000) never mapped and no error logged - a silent partial
-# platform load; quoted strings inside // and # comments are the leading
-# suspect for the ObjectDescription/monitor lexer (now sanitized). The
-# markers (console-logged, deterministic) identify the exact step the
-# script reaches, and the readbacks below turn the platform state into
-# log evidence. They stay in the script as the bring-up audit trail.
-python "print('[cancestry-hw] step1: guard passed, elf=%s' % variables['elf'])"
+# F-21/F-22 (issue #55): step markers. Dispatch 9 (run 35726064092) showed
+# the t2_trace region (0x60000000) never mapped with no error logged.
+# F-22 finding: python print() inside a monitor python command goes to the
+# TELNET CLIENT, not to Renode's stdout (MonitorPythonEngine.ConfigureOutput
+# redirects stdout to the command interaction writer), so the dispatch 10
+# markers were invisible in the console log; Logger.Info goes to the
+# console-logged logger instead. The markers (deterministic, console-logged)
+# identify the exact step the include reaches; the value-carrying readbacks
+# turn the platform state into log evidence. They stay in the script as the
+# bring-up audit trail.
+python "import Antmicro.Renode.Logging as _clog"
+python "_clog.Logger.Info('[cancestry-hw] step0: python logger channel OK, elf=%s' % variables['elf'])"
+python "_clog.Logger.Info('[cancestry-hw] scope: sysbus=%s machine=%s variables=%s' % ('sysbus' in dir() and 'yes' or 'NO', 'machine' in dir() and 'yes' or 'NO', 'variables' in dir() and 'yes' or 'NO'))"
 
 mach create "cancestry"
-python "print('[cancestry-hw] step2: machine created')"
+python "_clog.Logger.Info('[cancestry-hw] step2: machine created')"
 
 machine LoadPlatformDescription @$ORIGIN/stm32g474-cancestry.repl
-python "print('[cancestry-hw] step3: platform loaded')"
+python "_clog.Logger.Info('[cancestry-hw] step3: platform loaded')"
 
 # Deterministic execution (virtual-bench-plan section 6): fixed global
 # quantum (100 us master step) and a fixed seed for the only Renode
@@ -55,14 +59,13 @@ python "print('[cancestry-hw] step3: platform loaded')"
 # wall clock is consumed.
 emulation SetGlobalQuantum "0.0001"
 emulation SetSeed $t2_seed
-python "print('[cancestry-hw] step4: quantum and seed set')"
+python "_clog.Logger.Info('[cancestry-hw] step4: quantum and seed set')"
 
 sysbus LoadELF $elf
 # Readback: the initial SP word of the vector table (0x20018000 per
 # startup.s) proves the ELF segments reached flash; an unmapped access
-# would log a warning instead of a value.
-sysbus ReadDoubleWord 0x08000000
-python "print('[cancestry-hw] step5: ELF loaded')"
+# logs a 'non existing peripheral' warning in the console.
+python "v = machine['sysbus'].ReadDoubleWord(0x08000000); _clog.Logger.Info('[cancestry-hw] step5: ELF loaded, vector SP=0x%08x' % v)"
 
 # ---------------------------------------------------------------------
 # T2 event-capture hooks (HwAGENTS.md rule 5: deterministic, hashed trace).
@@ -84,15 +87,15 @@ machine['sysbus'].WriteDoubleWord(0x6000000C, int(round(machine.ElapsedVirtualTi
 cpu AddSymbolHook "cancestry_watchdog_escalate" """
 machine['sysbus'].WriteDoubleWord(0x60000010, int(round(machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1000000)))
 """
-python "print('[cancestry-hw] step6: symbol hooks installed')"
+python "_clog.Logger.Info('[cancestry-hw] step6: symbol hooks installed')"
 
 # Trace-area magic: the runner and the FMI bridge refuse to run against a
 # machine whose capture area was not initialized by this script.
 sysbus WriteDoubleWord 0x60000000 0x54324353
 # Readback: 0x54324353 proves the t2_trace region is mapped and writable;
 # an unmapped access logs a 'non existing peripheral' warning instead.
-sysbus ReadDoubleWord 0x60000000
-python "print('[cancestry-hw] step7: trace magic written')"
+python "v = machine['sysbus'].ReadDoubleWord(0x60000000); _clog.Logger.Info('[cancestry-hw] step7: t2_trace readback=0x%08x (expected 0x54324353)' % v)"
+python "_clog.Logger.Info('[cancestry-hw] step8: include complete, machine left paused')"
 
 # The machine is left PAUSED: the FMI bridge alone advances emulation with
 # fixed-size `emulation RunFor` quanta (deterministic co-simulation, no

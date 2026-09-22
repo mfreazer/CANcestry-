@@ -578,3 +578,79 @@ def test_monitor_command_timeout_maps_to_bridge_error():
         if conn is not None:
             conn.close()
         server.close()
+
+def test_monitor_transcript_captures_raw_traffic(tmp_path):
+    """HW-T2-BRIDGE-021: the raw monitor transcript records both directions.
+
+    F-22 (issue #55): dispatches 8-10 (runs 35724334649 / 35726064092 /
+    35726315665) show the preflight read executing on the Renode side
+    (console warning logged) while no response ever reached the client;
+    the console alone cannot say which side dropped the bytes, so the
+    endpoint now records every byte, wall-clock stamped.
+    """
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    port = server.getsockname()[1]
+
+    def _serve_once():
+        conn, _ = server.accept()
+        conn.sendall(b"(monitor)> ")
+        conn.recv(1024)
+        conn.sendall(b"0x54324353\r\n(monitor)> ")
+        conn.close()
+
+    holder = threading.Thread(target=_serve_once, daemon=True)
+    holder.start()
+    transcript = tmp_path / "monitor_transcript.log"
+    endpoint = None
+    try:
+        endpoint = RenodeMonitorEndpoint("127.0.0.1", port, timeout=5.0,
+                                         transcript_path=str(transcript))
+        value = parse_u32(endpoint.command(
+            "sysbus ReadDoubleWord 0x60000000"))
+    finally:
+        if endpoint is not None:
+            endpoint.close()
+        holder.join(timeout=5.0)
+        server.close()
+    assert value == 0x54324353
+    text = transcript.read_text(encoding="utf-8")
+    assert "TX b'sysbus ReadDoubleWord 0x60000000\\n'" in text
+    assert "RX" in text
+    assert "0x54324353" in text
+
+
+def test_failed_endpoint_init_closes_socket(tmp_path):
+    """HW-T2-BRIDGE-022: a failed connect must not leak a live socket.
+
+    F-22 (issue #55): connect_monitor() retries while the banner read
+    times out; if each failed attempt leaks its accepted connection,
+    multiple clients stack up on Renode's socket server - a prime
+    suspect for the no-response preflight of dispatches 8-10.
+    """
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    port = server.getsockname()[1]
+    accepted = []
+
+    def _accept_silent():
+        conn, _ = server.accept()
+        accepted.append(conn)
+        # then never send a prompt: the banner read must time out
+
+    holder = threading.Thread(target=_accept_silent, daemon=True)
+    holder.start()
+    try:
+        with pytest.raises(OSError):
+            RenodeMonitorEndpoint("127.0.0.1", port, timeout=0.3,
+                                  transcript_path=str(tmp_path / "t.log"))
+    finally:
+        holder.join(timeout=5.0)
+        server.close()
+    assert accepted, "server never accepted the connection"
+    accepted[0].settimeout(2.0)
+    assert accepted[0].recv(64) == b"", \
+        "the failed endpoint left its socket open (F-22 leak)"
+    accepted[0].close()
