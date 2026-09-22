@@ -129,7 +129,13 @@ def _t2_schema():
         format_checker=jsonschema.FormatChecker())
 
 def _t2_toolchain_available():
-    if runner.locate_renode() is None:
+    # locate_renode()/locate_elf() fail closed by raising T2SetupError
+    # (HW-T2-ORCH-004/005), so the probe must translate that into "absent"
+    # instead of letting the raise bypass the explicit-skip branch below.
+    try:
+        if runner.locate_renode() is None:
+            return False
+    except runner.T2SetupError:
         return False
     if shutil.which("omc") is None:
         return False

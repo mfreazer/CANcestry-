@@ -50,7 +50,7 @@
     "hw/virtual-bench/renode/rtc_backup_model.py": "sha256:6a100141b0ba9635b51dec621b09c5d309d134a2399edf889abb9df2c9d1dd79",
     "hw/virtual-bench/renode/stm32g474-cancestry.repl": "sha256:e7c0f0ef88ead6b737c7fb41e3c84ce6935094764c874ee03a5968c21681b190",
     "hw/virtual-bench/run_t2_retention.py": "sha256:9bb9e072e9e474576897518b39210db97f25a92836697f1b54ddb534dfcfc989",
-    "hw/virtual-bench/test_t2_retention.py": "sha256:6c53de6543c5d1e2b09e31df265ec0a394a23cb64fbc9f55aa9336a8ad400fdf",
+    "hw/virtual-bench/test_t2_retention.py": "sha256:ce59b2adbca3709e175217d5ffc7c6827e02a82bb3cea8e690c84a26d17ee76c",
     "schemas/hw/hw-oracle-registry-0.1.0.schema.json": "sha256:7bd0a15770f2bae185600bd554198a791ab94dceb59b4d8084111d5bf01e6123",
     "schemas/hw/hw-sim-0.1.0.schema.json": "sha256:efa2591e203a56f9fe3792d0bbdd891ce3b3b01bab52e2976b11ad417bd35f6a",
     "schemas/hw/hw-t2-evidence-0.1.0.schema.json": "sha256:2ce132337be43fa52ce673cd781b58db5d2480a09e35b3da8eee4ea8363604ea"
