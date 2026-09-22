@@ -93,8 +93,15 @@ mkdir -p "$(dirname "$ELF_OUT")"
     OBJECTS=()
     for src in "${FIRMWARE_SOURCES[@]}"; do
         obj="$ELF_OUT.$(echo "${src##*/}" | tr . _).o"
-        echo "$CC $CFLAGS ${INCLUDES[*]} -c $src -o $obj"
-        $CC $CFLAGS "${INCLUDES[@]}" -c "$src" -o "$obj"
+        # F-16: watchdog.c only - supply the sim-only static its unguarded
+        # cancestry_watchdog_sim_tick() references (target builds never
+        # happened in v1.0.0 CI). See t2_target_compat.h.
+        extra=()
+        case "${src##*/}" in
+            watchdog.c) extra=(-include "$DRIVER_DIR/t2_target_compat.h") ;;
+        esac
+        echo "$CC $CFLAGS ${extra[*]} ${INCLUDES[*]} -c $src -o $obj"
+        $CC $CFLAGS "${extra[@]}" "${INCLUDES[@]}" -c "$src" -o "$obj"
         OBJECTS+=("$obj")
     done
     for src in "${DRIVER_SOURCES[@]}"; do

@@ -6,13 +6,13 @@
 cancestry-provenance
 plot_id=t2_retention_001
 plot_version=0.1.0
-plot_data_hash=sha256:2ad308eb6df6a8735f817d487a34a67d4fc81da39f294a0572817901ab9dfef4
+plot_data_hash=sha256:820b52a02067d5f0491905e6da5ccd879988a955a932448e7a825b0726714a10
 status=pending
 method=virtual_bench
 credibility_level=CL0
 provisional=true
 source_evidence_path=hw/tests/evidence/t2_retention_001.json
-source_evidence_hash=sha256:e2d805b25be04ea0e50c770609918367e1d4cde1ebb02364efbf802e0c86592c
+source_evidence_hash=sha256:2fb7f2935f1bdc5244ccbd96a9731b6ce1dd2e1a88501d8bf3a469b287c3ad9a
 oracle_id=OR-001
 renderer_tool=cancestry-render-modelica
 renderer_tool_version=0.1.0
@@ -72,9 +72,9 @@ generated_at=2026-09-22T00:00:00Z
 </g>
 <text x="24" y="521" font-family="DejaVu Sans Mono, monospace" font-size="11">EVIDENCE  t2_retention_001@0.1.0</text>
 <text x="24" y="536" font-family="DejaVu Sans Mono, monospace" font-size="11">STATUS  pending(virtual_bench,CL0,provisional)</text>
-<text x="24" y="551" font-family="DejaVu Sans Mono, monospace" font-size="11">PLOT-DATA  sha256:2ad308eb6df6a8735f817d487a34a67d4fc81da39f294a0572817901ab9dfef4</text>
+<text x="24" y="551" font-family="DejaVu Sans Mono, monospace" font-size="11">PLOT-DATA  sha256:820b52a02067d5f0491905e6da5ccd879988a955a932448e7a825b0726714a10</text>
 <text x="24" y="566" font-family="DejaVu Sans Mono, monospace" font-size="11">ORACLE  OR-001</text>
 <text x="24" y="581" font-family="DejaVu Sans Mono, monospace" font-size="11">RENDERER  cancestry-render-modelica 0.1.0</text>
-<text x="24" y="596" font-family="DejaVu Sans Mono, monospace" font-size="11">SOURCE  hw/tests/evidence/t2_retention_001.json sha256:e2d805b25be04ea0e50c770609918367e1d4cde1ebb02364efbf802e0c86592c</text>
+<text x="24" y="596" font-family="DejaVu Sans Mono, monospace" font-size="11">SOURCE  hw/tests/evidence/t2_retention_001.json sha256:2fb7f2935f1bdc5244ccbd96a9731b6ce1dd2e1a88501d8bf3a469b287c3ad9a</text>
 <text x="24" y="611" font-family="DejaVu Sans Mono, monospace" font-size="11">GENERATED  2026-09-22T00:00:00Z</text>
 </svg>
