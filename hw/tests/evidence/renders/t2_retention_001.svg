@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="640" viewBox="0 0 960 640" role="img" aria-labelledby="t2_retention_001-title t2_retention_001-desc">
+<title id="t2_retention_001-title">HW-SF-002 T2 retention timeline (QA-EV-01 escalation) - PENDING first run</title>
+<desc id="t2_retention_001-desc">Pending placeholder view per docs/hw/visual-evidence-plan.md section 5: no T2 run has executed (issue #53), so no QA-EV-01 event markers exist. The intended final view plots the captured escalation timeline on this window - x: emulation time 0..150 ms; event markers (retention write, safe-state latch, IWDG fire) as labelled glyph series with their exact hook-stamped microsecond times from hw/tests/evidence/t2_retention_001.json. The zero-width hatched band over 0..0.150 s marks the PENDING disposition only; it is not a tolerance claim (HwAGENTS rule 14). Rendering creates no evidence and promotes nothing (HwAGENTS rule 13).</desc>
+<!--
+cancestry-provenance
+plot_id=t2_retention_001
+plot_version=0.1.0
+plot_data_hash=sha256:52a51c37d43426fa1ba1e0dfb7939b20c306d49ce103d043a5255b09b967df89
+status=pending
+method=virtual_bench
+credibility_level=CL0
+provisional=true
+source_evidence_path=hw/tests/evidence/t2_retention_001.json
+source_evidence_hash=sha256:58e37c016caa7c3ce5000ecb5c09701b8066bc3d6f737a1f8b622b9394e7ec11
+oracle_id=OR-001
+renderer_tool=cancestry-render-modelica
+renderer_tool_version=0.1.0
+renderer_tool_digest=sha256:c50a6b0592117c081dc9c8dbc5cfcb69d50ef8e33b520c1a4d740e80ce4ac614
+generated_at=2026-09-22T00:00:00Z
+-->
+<defs><pattern id="hatch-0" width="8" height="8" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="8" y2="8" stroke="#606060" stroke-width="1"/><line x1="8" y1="0" x2="0" y2="8" stroke="#606060" stroke-width="1"/></pattern></defs>
+<rect x="96" y="72" width="832" height="320" fill="#ffffff" stroke="#d0d0d0"/>
+<line x1="96.000" y1="72" x2="96.000" y2="392" stroke="#e0e0e0"/>
+<line x1="96.000" y1="392" x2="96.000" y2="398" stroke="#101010"/>
+<text x="96.000" y="414" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="11">0.00</text>
+<line x1="234.667" y1="72" x2="234.667" y2="392" stroke="#e0e0e0"/>
+<line x1="234.667" y1="392" x2="234.667" y2="398" stroke="#101010"/>
+<text x="234.667" y="414" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="11">0.03</text>
+<line x1="373.333" y1="72" x2="373.333" y2="392" stroke="#e0e0e0"/>
+<line x1="373.333" y1="392" x2="373.333" y2="398" stroke="#101010"/>
+<text x="373.333" y="414" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="11">0.05</text>
+<line x1="512.000" y1="72" x2="512.000" y2="392" stroke="#e0e0e0"/>
+<line x1="512.000" y1="392" x2="512.000" y2="398" stroke="#101010"/>
+<text x="512.000" y="414" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="11">0.07</text>
+<line x1="650.667" y1="72" x2="650.667" y2="392" stroke="#e0e0e0"/>
+<line x1="650.667" y1="392" x2="650.667" y2="398" stroke="#101010"/>
+<text x="650.667" y="414" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="11">0.10</text>
+<line x1="789.333" y1="72" x2="789.333" y2="392" stroke="#e0e0e0"/>
+<line x1="789.333" y1="392" x2="789.333" y2="398" stroke="#101010"/>
+<text x="789.333" y="414" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="11">0.12</text>
+<line x1="928.000" y1="72" x2="928.000" y2="392" stroke="#e0e0e0"/>
+<line x1="928.000" y1="392" x2="928.000" y2="398" stroke="#101010"/>
+<text x="928.000" y="414" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="11">0.15</text>
+<line x1="96" y1="392.000" x2="928" y2="392.000" stroke="#e0e0e0"/>
+<line x1="90" y1="392.000" x2="96" y2="392.000" stroke="#101010"/>
+<text x="86" y="396.000" text-anchor="end" font-family="DejaVu Sans, sans-serif" font-size="11">0.0</text>
+<line x1="96" y1="328.000" x2="928" y2="328.000" stroke="#e0e0e0"/>
+<line x1="90" y1="328.000" x2="96" y2="328.000" stroke="#101010"/>
+<text x="86" y="332.000" text-anchor="end" font-family="DejaVu Sans, sans-serif" font-size="11">0.2</text>
+<line x1="96" y1="264.000" x2="928" y2="264.000" stroke="#e0e0e0"/>
+<line x1="90" y1="264.000" x2="96" y2="264.000" stroke="#101010"/>
+<text x="86" y="268.000" text-anchor="end" font-family="DejaVu Sans, sans-serif" font-size="11">0.4</text>
+<line x1="96" y1="200.000" x2="928" y2="200.000" stroke="#e0e0e0"/>
+<line x1="90" y1="200.000" x2="96" y2="200.000" stroke="#101010"/>
+<text x="86" y="204.000" text-anchor="end" font-family="DejaVu Sans, sans-serif" font-size="11">0.6</text>
+<line x1="96" y1="136.000" x2="928" y2="136.000" stroke="#e0e0e0"/>
+<line x1="90" y1="136.000" x2="96" y2="136.000" stroke="#101010"/>
+<text x="86" y="140.000" text-anchor="end" font-family="DejaVu Sans, sans-serif" font-size="11">0.8</text>
+<line x1="96" y1="72.000" x2="928" y2="72.000" stroke="#e0e0e0"/>
+<line x1="90" y1="72.000" x2="96" y2="72.000" stroke="#101010"/>
+<text x="86" y="76.000" text-anchor="end" font-family="DejaVu Sans, sans-serif" font-size="11">1.0</text>
+<line x1="96" y1="392" x2="928" y2="392" stroke="#101010"/>
+<line x1="96" y1="72" x2="96" y2="392" stroke="#101010"/>
+<text x="512" y="436" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="12">time [s]</text>
+<text x="24" y="232" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="12" transform="rotate(-90 24 232)">voltage [V]</text>
+<polygon points="96.000,392.000 928.000,392.000 928.000,392.000 96.000,392.000" fill="url(#hatch-0)" stroke="#606060" stroke-width="1" stroke-dasharray="3 3"/>
+<text x="96" y="34" font-family="DejaVu Sans, sans-serif" font-size="13">HW-SF-002 T2 retention timeline (QA-EV-01 escalation) - PENDING first run</text>
+<g transform="translate(40,436)">
+<rect x="0" y="-6" width="34" height="12" fill="url(#hatch-0)" stroke="#606060" stroke-dasharray="3 3"/>
+<text x="44" y="4" font-family="DejaVu Sans, sans-serif" font-size="11">PENDING: no qualified tolerance band; the first executing T2 run replaces this placeholder with the captured event timeline (zero-width placeholder, not a tolerance claim)</text>
+</g>
+<text x="24" y="521" font-family="DejaVu Sans Mono, monospace" font-size="11">EVIDENCE  t2_retention_001@0.1.0</text>
+<text x="24" y="536" font-family="DejaVu Sans Mono, monospace" font-size="11">STATUS  pending(virtual_bench,CL0,provisional)</text>
+<text x="24" y="551" font-family="DejaVu Sans Mono, monospace" font-size="11">PLOT-DATA  sha256:52a51c37d43426fa1ba1e0dfb7939b20c306d49ce103d043a5255b09b967df89</text>
+<text x="24" y="566" font-family="DejaVu Sans Mono, monospace" font-size="11">ORACLE  OR-001</text>
+<text x="24" y="581" font-family="DejaVu Sans Mono, monospace" font-size="11">RENDERER  cancestry-render-modelica 0.1.0</text>
+<text x="24" y="596" font-family="DejaVu Sans Mono, monospace" font-size="11">SOURCE  hw/tests/evidence/t2_retention_001.json sha256:58e37c016caa7c3ce5000ecb5c09701b8066bc3d6f737a1f8b622b9394e7ec11</text>
+<text x="24" y="611" font-family="DejaVu Sans Mono, monospace" font-size="11">GENERATED  2026-09-22T00:00:00Z</text>
+</svg>

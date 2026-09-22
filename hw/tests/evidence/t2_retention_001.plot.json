@@ -1,0 +1,67 @@
+{
+  "credibility_level": "CL0",
+  "generated_at": "2026-09-22T00:00:00Z",
+  "method": "virtual_bench",
+  "oracle_id": "OR-001",
+  "plot_description": "Pending placeholder view per docs/hw/visual-evidence-plan.md section 5: no T2 run has executed (issue #53), so no QA-EV-01 event markers exist. The intended final view plots the captured escalation timeline on this window - x: emulation time 0..150 ms; event markers (retention write, safe-state latch, IWDG fire) as labelled glyph series with their exact hook-stamped microsecond times from hw/tests/evidence/t2_retention_001.json. The zero-width hatched band over 0..0.150 s marks the PENDING disposition only; it is not a tolerance claim (HwAGENTS rule 14). Rendering creates no evidence and promotes nothing (HwAGENTS rule 13).",
+  "plot_id": "t2_retention_001",
+  "plot_title": "HW-SF-002 T2 retention timeline (QA-EV-01 escalation) - PENDING first run",
+  "plot_version": "0.1.0",
+  "provenance_notes": "H-07 (issue #53) pending placeholder: the picture is never the proof; the hash chain t2_retention_001.plot.json -> t2_retention_001.json -> pinned sources is. Status, provisional and credibility are inherited from the case manifest and never improved here.",
+  "provisional": true,
+  "renderer_tool": "cancestry-render-modelica",
+  "renderer_tool_digest": "sha256:c50a6b0592117c081dc9c8dbc5cfcb69d50ef8e33b520c1a4d740e80ce4ac614",
+  "renderer_tool_version": "0.1.0",
+  "schema_version": "0.1.0",
+  "series": [
+    {
+      "description": "Zero-width placeholder lower edge; no T2 data is claimed.",
+      "name": "pending_band_lower",
+      "non_color_encoding": {
+        "line_style": "dotted",
+        "marker": "none"
+      },
+      "role": "tolerance_lower",
+      "x": [
+        0.0,
+        0.15
+      ],
+      "x_units": "s",
+      "y": [
+        0.0,
+        0.0
+      ],
+      "y_units": "V"
+    },
+    {
+      "description": "Zero-width placeholder upper edge; no T2 data is claimed.",
+      "name": "pending_band_upper",
+      "non_color_encoding": {
+        "line_style": "dotted",
+        "marker": "none"
+      },
+      "role": "tolerance_upper",
+      "x": [
+        0.0,
+        0.15
+      ],
+      "x_units": "s",
+      "y": [
+        0.0,
+        0.0
+      ],
+      "y_units": "V"
+    }
+  ],
+  "source_evidence_hash": "sha256:58e37c016caa7c3ce5000ecb5c09701b8066bc3d6f737a1f8b622b9394e7ec11",
+  "source_evidence_path": "hw/tests/evidence/t2_retention_001.json",
+  "source_requirement": "HW-SF-002",
+  "status": "pending",
+  "tolerance_band": {
+    "description": "PENDING: no qualified tolerance band; the first executing T2 run replaces this placeholder with the captured event timeline (zero-width placeholder, not a tolerance claim)",
+    "hatch": "xxx",
+    "lower_series": "pending_band_lower",
+    "units": "V",
+    "upper_series": "pending_band_upper"
+  }
+}
