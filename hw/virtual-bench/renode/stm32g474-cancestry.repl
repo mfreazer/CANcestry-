@@ -1,0 +1,137 @@
+// STM32G474-class platform model for the CANcestry T2 virtual bench (H-07, issue #53).
+//
+// Implements: HW-FR-001 (register map matching platform/cortex_m at v1.0.0),
+//             HW-SF-002 (retention domain: RTC_BKP0R preserved across IWDG reset),
+//             HW-SF-004 (QA-EV-01 escalation ordering observable from the platform).
+// Governing documents: docs/hw/virtual-bench-plan.md section 3 (model scopes and
+// `not_simulated` rule), docs/hw/HW-PLAN.md section 8.3 (virtual bench),
+// HwAGENTS.md rules 2, 5 and 6.
+//
+// Scope (virtual-bench-plan section 3): this platform models EXACTLY the
+// register surface used by the v1.0.0 firmware under `platform/cortex_m/`:
+//
+//   modeled            | because
+//   -------------------+-------------------------------------------------------
+//   Cortex-M4F + NVIC  | executes the real v1.0.0 firmware ELF (no reimplementation)
+//   FLASH/RAM/CCMRAM   | cancestry_baremetal.ld MEMORY map (512K/96K/32K)
+//   IWDG @0x40003000   | watchdog.c escalation path (HW-SF-002 (i)); KR 0x5555/
+//                      | 0xAAAA/0xCCCC protocol, PR/RLR, LSI/4^PR time base,
+//                      | expiry sets RCC_CSR.IWDGRSTF (bit 29) and requests reset
+//   RTC/BKP @0x40002800| watchdog.c retention register RTC_BKP0R (offset 0x50),
+//                      | value persists across machine reset (HW-SF-002)
+//   GPIOA @0x48000000  | watchdog.c safe-latch: BSRR reset of bits 8/9
+//   RCC @0x40021000    | reset-cause readback: CSR IWDGRSTF (bit 29), RMVF (bit 23)
+//   FDCAN1/2 @0x40006400/0x40006800 | register scratch for the HAL bases
+//   T2 trace @0x60000000 (virtual, unused FMC bank) | event-capture contract
+//                      | with the FMI bridge (see below)
+//
+// NOT_SIMULATED (with rationale, per virtual-bench-plan section 3):
+//   - bxCAN/FDCAN protocol engine, bit timing and bus arbitration: CAN
+//     protocol simulation is out of H-07 scope (issue #53, constraint 5);
+//   - DWT CYCCNT (0xE0001000) and CoreDebug DEMCR (0xE000EDFC): the Cortex-M
+//     core debug block is owned by the Renode CPU model; the firmware's DWT
+//     timestamps are NOT load-bearing for the T2 retention ordering (events
+//     are captured from emulation virtual time), so DWT accuracy carries the
+//     renode TCL2 validation gap (docs/hw/tool-qualification.md section 3);
+//   - BOR/power supervisor reset on brownout: the passive fail-safe topology
+//     is a requirement (HwAGENTS.md rule 6); modelling its reset behavior is
+//     safety-relevant and deferred to a Human-Reviewer-approved change. The
+//     brownout energy margin itself is closed at T1 by OR-001 (Holdup FMU);
+//   - all remaining STM32G4 peripherals (DMA, ADC, DAC, USART, SPI, I2C,
+//     timers, USB, etc.): untouched by platform/cortex_m at v1.0.0.
+//
+// Event-capture contract (consumed by hw/virtual-bench/fmi_bridge.py):
+//
+//   0x60000000  magic      0x54324353 ("T2CS"), written by cancestry-hw.resc
+//   0x60000004  flags      reserved (0)
+//   0x60000008  retention_write_us   cpu symbol hook:
+//               cancestry_watchdog_write_retention_register
+//   0x6000000C  safe_latch_us        cpu symbol hook:
+//               cancestry_hardware_set_safe_state
+//   0x60000010  escalation_us        cpu symbol hook:
+//               cancestry_watchdog_escalate
+//   0x60000014  iwdg_fire_us         iwdg_model.py at expiry
+//   0x60000020  vbat_mv_in           written by the FMI bridge (plant -> MCU)
+//   0x60000100  retention_shadow     persistence store for RTC_BKP0R; lives in
+//               the (non-volatile across machine reset) trace area so the
+//               retained fault code survives the scripted IWDG reset
+//
+// Determinism (HwAGENTS.md rule 5): this platform is deterministic by
+// construction. The FMI bridge drives emulation with fixed-size
+// `emulation RunFor` quanta (100 us master step) and `emulation SetSeed`
+// fixes the only randomness source. No wall-clock input is consumed.
+//
+// Note for reviewers: the scripted peripherals (Python.PythonPeripheral,
+// IronPython 2) implement register semantics only. Peripheral-script API:
+// request.IsInit/IsRead/IsWrite/Value/Offset and self per Renode
+// documentation (renode.readthedocs.io, "Using Python in Renode"). The
+// pinned Renode version is checked by the T2 runner before loading this
+// platform; on any scripted-peripheral API mismatch the platform fails to
+// load and the T2 run aborts (fail-closed).
+
+// CPU: Cortex-M4F at the 170 MHz issue-#53 clock (NVIC systick base).
+nvic: IRQControllers.NVIC @ sysbus 0xE000E000
+    systickFrequency: 170000000
+
+cpu: CPU.CortexM @ sysbus
+    cpuType: "cortex-m4f"
+    nvic: nvic
+
+// Memory per platform/cortex_m/cancestry_baremetal.ld (MEMORY block).
+flash: Memory.MappedMemory @ sysbus 0x08000000
+    size: 0x80000
+
+sram: Memory.MappedMemory @ sysbus 0x20000000
+    size: 0x18000
+
+ccmram: Memory.MappedMemory @ sysbus 0x10000000
+    size: 0x8000
+
+// IWDG: scripted model, see header. Expiry is evaluated lazily on bus
+// access; the co-simulation master polls after every RunFor quantum, which
+// bounds the fire-timestamp quantization by the master step while the hook
+// timestamps above stay exact.
+iwdg: Python.PythonPeripheral @ sysbus 0x40003000
+    size: 0x14
+    initable: true
+    filename: "iwdg_model.py"
+
+// RTC backup domain: only RTC_BKP0R (offset 0x50) is modeled; the value is
+// persisted in the T2 trace area so it survives the scripted IWDG reset
+// (that persistence IS the HW-SF-002 sub-event (i) behavior under test).
+rtc_backup: Python.PythonPeripheral @ sysbus 0x40002800
+    size: 0x64
+    initable: false
+    filename: "rtc_backup_model.py"
+
+// GPIOA: MODER/ODR/BSRR semantics for the safe-latch path (watchdog.c:
+// GPIOA_BSRR = (1 << 24) | (1 << 25) resets the CAN TX / contactor pins).
+gpioa: Python.PythonPeripheral @ sysbus 0x48000000
+    size: 0x400
+    initable: true
+    filename: "gpioa_model.py"
+
+// RCC: reset-cause readback (CSR at +0x94: IWDGRSTF bit 29 set by the IWDG
+// model, RMVF bit 23 clears it). Other RCC registers read as 0.
+rcc: Python.PythonPeripheral @ sysbus 0x40021000
+    size: 0x98
+    initable: true
+    filename: "rcc_model.py"
+
+// FDCAN register scratch for the HAL bases (hal_stm32.c FDCAN1_BASE /
+// FDCAN2_BASE). Protocol engine not_simulated (see header).
+fdcan1_scratch: Memory.MappedMemory @ sysbus 0x40006400
+    size: 0x400
+
+fdcan2_scratch: Memory.MappedMemory @ sysbus 0x40006800
+    size: 0x400
+
+// T2 event-capture area (virtual; unused FMC bank on this board).
+t2_trace: Memory.MappedMemory @ sysbus 0x60000000
+    size: 0x100
+
+sysbus:
+    init:
+        Tag <0x40006400,0x400067FF> "FDCAN1"
+        Tag <0x40006800,0x40006BFF> "FDCAN2"
+        Tag <0x60000000,0x600000FF> "T2_TRACE"
