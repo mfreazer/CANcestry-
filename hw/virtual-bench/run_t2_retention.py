@@ -684,14 +684,24 @@ def main(argv=None):
             print("== renode console tail (last %d lines) =="
                   % len(tail.splitlines()))
             print(tail)
-        # F-22: the raw monitor-socket transcript (what the monitor actually
-        # sent back) is the other half of the picture for the no-response
-        # preflight of dispatches 8-10.
-        transcript = _console_tail(RENODE_TRANSCRIPT_LOG, lines=80)
-        if transcript:
-            print("== monitor transcript tail (last %d lines) =="
-                  % len(transcript.splitlines()))
-            print(transcript)
+        # F-22/F-23: the raw monitor-socket transcript (what the monitor
+        # actually sent, including command errors that never reach the
+        # console) - dispatch 11 proved the decisive lines (the platform
+        # load error) sit at the HEAD, so print the whole file while it
+        # stays small; head+tail once it outgrows that.
+        try:
+            t_text = RENODE_TRANSCRIPT_LOG.read_text(
+                encoding="utf-8", errors="replace")
+        except OSError:
+            t_text = ""
+        if t_text:
+            t_lines = t_text.splitlines()
+            shown = t_lines if len(t_lines) <= 200 else (
+                t_lines[:60] + ["... (transcript truncated) ..."]
+                + t_lines[-80:])
+            print("== monitor transcript (%d of %d lines) =="
+                  % (len(shown), len(t_lines)))
+            print("\n".join(shown))
         return 2
 
     document = passing_document(run_body)

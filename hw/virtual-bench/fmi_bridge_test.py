@@ -583,9 +583,9 @@ def test_monitor_transcript_captures_raw_traffic(tmp_path):
     """HW-T2-BRIDGE-021: the raw monitor transcript records both directions.
 
     F-22 (issue #55): dispatches 8-10 (runs 35724334649 / 35726064092 /
-    35726315665) show the preflight read executing on the Renode side
-    (console warning logged) while no response ever reached the client;
-    the console alone cannot say which side dropped the bytes, so the
+    35727339896) showed the preflight read executing on the Renode side
+    (console warning logged) while the client saw no response for 30 s;
+    the console alone cannot say what the monitor sent, so the
     endpoint now records every byte, wall-clock stamped.
     """
     server = socket.socket()
@@ -654,3 +654,40 @@ def test_failed_endpoint_init_closes_socket(tmp_path):
     assert accepted[0].recv(64) == b"", \
         "the failed endpoint left its socket open (F-22 leak)"
     accepted[0].close()
+
+def test_monitor_accepts_ansi_colored_machine_prompt():
+    """HW-T2-BRIDGE-023: the real machine prompt form is recognized (F-23).
+
+    Dispatch 11 (run 35730854679) transcript: after 'mach create' the
+    monitor prompt is the machine name in parentheses, trailing space,
+    wrapped in ANSI color codes: b'\\x1b[33;1m(cancestry) \\x1b[0m'. The
+    F-3 prompt regex only matched '(monitor)>' / '(machine-<name>)>', so
+    the preflight response (value + this prompt) arrived at +0.2 s and
+    sat unrecognized until the 30 s timeout. The byte sequence below is
+    the exact dispatch-11 response.
+    """
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    port = server.getsockname()[1]
+
+    def _serve_once():
+        conn, _ = server.accept()
+        conn.sendall(b"(monitor)> ")
+        conn.recv(1024)
+        # value line, then the ANSI-colored machine prompt (dispatch 11)
+        conn.sendall(b"0x000000\r\r\n\x1b[33;1m(cancestry) \x1b[0m")
+        conn.close()
+
+    holder = threading.Thread(target=_serve_once, daemon=True)
+    holder.start()
+    endpoint = None
+    try:
+        endpoint = RenodeMonitorEndpoint("127.0.0.1", port, timeout=3.0)
+        tail = endpoint.command("sysbus ReadDoubleWord 0x60000000")
+    finally:
+        if endpoint is not None:
+            endpoint._socket.close()
+        holder.join(timeout=5.0)
+        server.close()
+    assert parse_u32(tail) == 0x000000

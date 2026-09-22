@@ -162,12 +162,21 @@ class RenodeMonitorEndpoint(RenodeEndpoint):
     deterministic (HwAGENTS.md rule 5).
     """
 
-    # The Renode monitor prompt is "(monitor)>" or "(machine-<name>)>" with a
-    # trailing space; the ">" is optional here so the protocol client also
-    # accepts the bare-prompt form used by the unit-test double. (H-08
-    # bring-up finding F-3: the H-07 regex required the prompt to end after
-    # the closing parenthesis and never matched the real monitor prompt.)
-    _PROMPT = re.compile(rb"\((?:monitor|machine-[A-Za-z0-9_.:-]+)\)>?[ \t]*\r?$")
+    # F-23 (issue #55): the real monitor prompt after a machine is
+    # selected is the machine name in parentheses with a trailing space,
+    # ANSI-colored - e.g. b"\x1b[33;1m(cancestry) \x1b[0m" (dispatch 11,
+    # run 35730854679 transcript); before any machine exists it is the
+    # plain monitor prompt. The F-3 form only matched "(monitor)>" /
+    # "(machine-<name>)>" and therefore never recognized the
+    # machine-prompt form: every response after machine selection sat in
+    # the buffer unrecognized until the 30 s timeout (dispatches 8-11 -
+    # the transcript shows the preflight response arriving at +0.2 s,
+    # then 30 s of silence, then our own 'quit'). Two changes: ANSI
+    # escape sequences are stripped from the buffer (partial trailing
+    # sequences are left for the next chunk), and the prompt matcher
+    # accepts any "(name)" form.
+    _ANSI_ESCAPE = re.compile(rb"\x1b\[[0-9;]*[A-Za-z]")
+    _PROMPT = re.compile(rb"\([A-Za-z0-9_.:-]+\)>?[ \t]*\r?$")
 
     def __init__(self, host, port, timeout=30.0, transcript_path=None,
                  clock=None):
@@ -176,7 +185,7 @@ class RenodeMonitorEndpoint(RenodeEndpoint):
         self._buffer = b""
         # F-22 (issue #55): raw monitor transcript - every byte in both
         # directions. Diagnostics only (never evidence): dispatches 8-10
-        # (runs 35724334649 / 35726064092 / 35726315665) show the preflight
+        # (runs 35724334649 / 35726064092 / 35727339896) show the preflight
         # read executing (console warning logged) yet no response ever
         # reaching this client, and the console alone cannot say which side
         # dropped it. The bridge stays wall-clock-free (HW-T2-BRIDGE-013):
@@ -222,6 +231,11 @@ class RenodeMonitorEndpoint(RenodeEndpoint):
     # -- low-level line protocol ------------------------------------------
     def _read_prompt(self):
         while True:
+            # F-23: drop ANSI escapes so the colored prompt
+            # ("\x1b[33;1m(cancestry) \x1b[0m") matches _PROMPT. A partial
+            # escape at the buffer tail (no terminating letter) is left in
+            # place and completes on the next chunk.
+            self._buffer = self._ANSI_ESCAPE.sub(b"", self._buffer)
             match = self._PROMPT.search(self._buffer)
             if match:
                 tail = self._buffer[:match.start()]

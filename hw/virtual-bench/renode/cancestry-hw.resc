@@ -50,8 +50,17 @@ python "_clog.Logger.Info('[cancestry-hw] scope: sysbus=%s machine=%s variables=
 mach create "cancestry"
 python "_clog.Logger.Info('[cancestry-hw] step2: machine created')"
 
-machine LoadPlatformDescription @$ORIGIN/stm32g474-cancestry.repl
+# F-23 (issue #55): the platform file is loaded by BARE FILE NAME. Renode
+# resolves a bare name against the working directory first
+# (Monitor.TryGetFilenameFromAvailablePaths), and the runner sets the CWD
+# to this file's directory (launch_renode). The previous form
+# 'machine LoadPlatformDescription @$ORIGIN/...' never resolved (dispatch
+# 11, run 35730854679: no step3 marker, the 'Could not find file' error
+# only reached the client terminal) - the include then aborted here, which
+# is why t2_trace was never mapped in dispatches 7-11.
+machine LoadPlatformDescription stm32g474-cancestry.repl
 python "_clog.Logger.Info('[cancestry-hw] step3: platform loaded')"
+python "_clog.Logger.Info('[cancestry-hw] step3b: scope after load: sysbus=%s machine=%s monitor.Machine=%s' % ('sysbus' in dir() and 'yes' or 'NO', 'machine' in dir() and 'yes' or 'NO', 'yes' if monitor.Machine is not None else 'NO'))"
 
 # Deterministic execution (virtual-bench-plan section 6): fixed global
 # quantum (100 us master step) and a fixed seed for the only Renode
@@ -64,8 +73,10 @@ python "_clog.Logger.Info('[cancestry-hw] step4: quantum and seed set')"
 sysbus LoadELF $elf
 # Readback: the initial SP word of the vector table (0x20018000 per
 # startup.s) proves the ELF segments reached flash; an unmapped access
-# logs a 'non existing peripheral' warning in the console.
-python "v = machine['sysbus'].ReadDoubleWord(0x08000000); _clog.Logger.Info('[cancestry-hw] step5: ELF loaded, vector SP=0x%08x' % v)"
+# logs a 'non existing peripheral' warning in the console. The bus
+# accessor picks whichever scope name the monitor bound (F-23: the
+# step3b probe logs which one that is).
+python "bus = sysbus if 'sysbus' in dir() else (machine['sysbus'] if 'machine' in dir() else monitor.Machine['sysbus']); v = bus.ReadDoubleWord(0x08000000); _clog.Logger.Info('[cancestry-hw] step5: ELF loaded, vector SP=0x%08x' % v)"
 
 # ---------------------------------------------------------------------
 # T2 event-capture hooks (HwAGENTS.md rule 5: deterministic, hashed trace).
@@ -94,7 +105,7 @@ python "_clog.Logger.Info('[cancestry-hw] step6: symbol hooks installed')"
 sysbus WriteDoubleWord 0x60000000 0x54324353
 # Readback: 0x54324353 proves the t2_trace region is mapped and writable;
 # an unmapped access logs a 'non existing peripheral' warning instead.
-python "v = machine['sysbus'].ReadDoubleWord(0x60000000); _clog.Logger.Info('[cancestry-hw] step7: t2_trace readback=0x%08x (expected 0x54324353)' % v)"
+python "bus = sysbus if 'sysbus' in dir() else (machine['sysbus'] if 'machine' in dir() else monitor.Machine['sysbus']); v = bus.ReadDoubleWord(0x60000000); _clog.Logger.Info('[cancestry-hw] step7: t2_trace readback=0x%08x (expected 0x54324353)' % v)"
 python "_clog.Logger.Info('[cancestry-hw] step8: include complete, machine left paused')"
 
 # The machine is left PAUSED: the FMI bridge alone advances emulation with
