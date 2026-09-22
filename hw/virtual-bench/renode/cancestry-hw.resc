@@ -64,7 +64,7 @@ python "_clog.Logger.Info('[cancestry-hw] step2: machine created')"
 # '@$ORIGIN/<file>' - an EXTRA leading @ on top of the variable's own
 # '@' (dispatches 7-11) - and the F-23 bare name (dispatch 14) both
 # failed for the reasons above.
-python "import os; _o = variables['global.ORIGIN']; _p = (_o.Value if hasattr(_o, 'Value') else str(_o)) + '/stm32g474-cancestry.repl'; _clog.Logger.Info('[cancestry-hw] step2b: repl path %s isfile=%s' % (_p, os.path.isfile(_p)))"
+python "import os; _o = variables['global.ORIGIN']; _p = (_o.Value if hasattr(_o, 'Value') else str(_o)) + '/stm32g474-cancestry.repl'; _clog.Logger.Info('[cancestry-hw] step2b: repl isfile=%s (%s)' % (os.path.isfile(_p), _p))"
 machine LoadPlatformDescription $ORIGIN/stm32g474-cancestry.repl
 python "_clog.Logger.Info('[cancestry-hw] step3: platform loaded')"
 python "_clog.Logger.Info('[cancestry-hw] step3b: scope after load: sysbus=%s machine=%s monitor.Machine=%s' % ('sysbus' in dir() and 'yes' or 'NO', 'machine' in dir() and 'yes' or 'NO', 'yes' if monitor.Machine is not None else 'NO'))"
@@ -83,7 +83,7 @@ sysbus LoadELF $elf
 # logs a 'non existing peripheral' warning in the console. The bus
 # accessor picks whichever scope name the monitor bound (F-23: the
 # step3b probe logs which one that is).
-python "bus = sysbus if 'sysbus' in dir() else (machine['sysbus'] if 'machine' in dir() else monitor.Machine['sysbus']); v = bus.ReadDoubleWord(0x08000000); _clog.Logger.Info('[cancestry-hw] step5: ELF loaded, vector SP=0x%08x' % v)"
+python "bus = sysbus if 'sysbus' in dir() else (machine['sysbus'] if 'machine' in dir() else monitor.Machine['sysbus']); v = bus.ReadDoubleWord(0x08000000); _clog.Logger.Info('[cancestry-hw] step5: vector SP=0x%08x (ELF loaded)' % v)"
 
 # ---------------------------------------------------------------------
 # T2 event-capture hooks (HwAGENTS.md rule 5: deterministic, hashed trace).

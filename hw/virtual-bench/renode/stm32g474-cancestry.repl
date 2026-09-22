@@ -78,20 +78,21 @@
 // load and the T2 run aborts (fail-closed).
 
 // CPU: Cortex-M4F. Virtual time is driven exclusively by the FMI bridge's
-// fixed `emulation RunFor` quanta; the CPU's time->instruction rate is
-// pinned explicitly to the Renode default of 100 MIPS (bring-up finding
-// F-10): the scenario timing (IWDG windows vs. the driver's bounded
-// busy-waits, docs/hw/t2-bringup-report.md) is computed at 100 MIPS, so the
-// platform must not silently run at a different rate. The NVIC systick base
-// (170 MHz, the STM32G474 main clock) is modeled but unused: the T2 driver
-// never enables systick.
+// fixed `emulation RunFor` quanta. The CPU's instruction rate in the
+// pinned Renode 1.16.1 is the core's built-in fixed default (100 MIPS;
+// bring-up finding F-10): 1.16.1 exposes NO configurable MIPS property -
+// dispatch 16 (run 35778907099) failed with DLR error E25 ('Could not
+// find suitable constructor for ...CortexM') when 'performanceInMips: 100'
+// was declared; that property exists only in newer Renode releases. The
+// rate is therefore pinned by the runner's Renode version pin, not by a
+// platform property. The NVIC systick base (170 MHz, the STM32G474 main
+// clock) is modeled but unused: the T2 driver never enables systick.
 nvic: IRQControllers.NVIC @ sysbus 0xE000E000
     systickFrequency: 170000000
 
 cpu: CPU.CortexM @ sysbus
     cpuType: "cortex-m4f"
     nvic: nvic
-    performanceInMips: 100
 
 // Memory per platform/cortex_m/cancestry_baremetal.ld (MEMORY block).
 flash: Memory.MappedMemory @ sysbus 0x08000000
