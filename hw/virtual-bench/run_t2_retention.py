@@ -50,6 +50,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -72,6 +73,16 @@ EVIDENCE_PATH = REPO_ROOT / "hw" / "tests" / "evidence" / "t2_retention_001.json
 SIM_CASE_PATH = REPO_ROOT / "hw" / "tests" / "cases" / "holdup_001.simcase.json"
 MODEL_ROOT = REPO_ROOT / "hw" / "model" / "CancestryLib"
 BUILD_DIR = REPO_ROOT / "build" / "hw"
+# F-20 (issue #55): Renode's console transcript (per-run, gitignored).
+# Renode's monitor protocol rides the TCP port; its console log goes to
+# stdout, which used to sit in a PIPE nobody read - a full 64 KB pipe would
+# block Renode's own shell thread on write(2) (the monitor then goes silent)
+# and every include-script diagnostic (errors, IronPython exceptions, crash
+# dumps) was lost, which is exactly the undiagnosable monitor timeout of
+# dispatch 8 (run 35724334649). The drain thread below removes the
+# backpressure and preserves the transcript; the runner attaches its tail
+# to every failure.
+RENODE_CONSOLE_LOG = BUILD_DIR / "t2_retention_001_renode_console.log"
 SCHEMA_PATH = REPO_ROOT / "schemas" / "hw" / "hw-t2-evidence-0.1.0.schema.json"
 
 MODEL = "CancestryLib.Power.Holdup"
@@ -386,17 +397,46 @@ def _free_port():
     return port
 
 
-def launch_renode(renode_bin, elf_path, port):
+def launch_renode(renode_bin, elf_path, port,
+                  console_log_path=RENODE_CONSOLE_LOG):
     """Start Renode headless with the platform script; return the process."""
     command = [
         str(renode_bin), "--disable-xwt", "--port", str(port),
         "-e", '$elf="@%s"' % elf_path.resolve(),
         "-e", "include @cancestry-hw.resc",
     ]
-    return subprocess.Popen(
+    process = subprocess.Popen(
         command, cwd=str(BRIDGE_DIR / "renode"),
         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT)
+    if console_log_path is not None:
+        console_log_path.parent.mkdir(parents=True, exist_ok=True)
+
+        def _drain_console():
+            with open(console_log_path, "wb") as log:
+                while True:
+                    chunk = process.stdout.read(65536)
+                    if not chunk:
+                        break
+                    log.write(chunk)
+                    log.flush()
+
+        # F-20: keep draining until the pipe closes (process exit).
+        process._t2_console_thread = threading.Thread(
+            target=_drain_console, name="renode-console-drain",
+            daemon=True)
+        process._t2_console_thread.start()
+    return process
+
+
+def _console_tail(path, lines=40):
+    """Last ``lines`` of the Renode console transcript ('' when absent)."""
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    tail = text.splitlines()[-lines:]
+    return "\n".join(tail)
 
 
 def connect_monitor(port, deadline_s=60.0):
@@ -525,6 +565,11 @@ def run_scenario(renode_bin, elf_path, fmu_path, build_dir=BUILD_DIR):
         if process.poll() is None:
             process.kill()
         process.wait(timeout=30)
+        # F-20: let the console drain finish so the post-mortem tail below
+        # is complete (the pipe is at EOF once the process is reaped).
+        drain = getattr(process, "_t2_console_thread", None)
+        if drain is not None:
+            drain.join(timeout=10)
 
 
 def passing_document(run_body):
@@ -622,6 +667,13 @@ def main(argv=None):
         run_body, _ = run_scenario(renode_bin, elf_path, fmu_path)
     except (T2SetupError, BridgeError) as error:
         print("T2 FAILED (fail-closed, no evidence written): %s" % error)
+        # F-20: attach the captured Renode console transcript so a
+        # silent-monitor failure is diagnosable from the CI log.
+        tail = _console_tail(RENODE_CONSOLE_LOG)
+        if tail:
+            print("== renode console tail (last %d lines) =="
+                  % len(tail.splitlines()))
+            print(tail)
         return 2
 
     document = passing_document(run_body)

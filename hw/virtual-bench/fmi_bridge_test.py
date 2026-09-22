@@ -10,7 +10,7 @@ Renode-equipped infrastructure.
 
 Implementations under test: hw/virtual-bench/fmi_bridge.py.
 Requirements traced: HW-SF-002, HW-SF-004; HwAGENTS.md rules 4 and 5.
-Test ids: HW-T2-BRIDGE-001 .. HW-T2-BRIDGE-019.
+Test ids: HW-T2-BRIDGE-001 .. HW-T2-BRIDGE-020.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ import shutil
 import socket
 import subprocess
 import threading
+import time
 import zipfile
 from pathlib import Path
 
@@ -540,3 +541,40 @@ def test_fmpy_slave_rejects_wrong_fmi_version(tmp_path):
     fmu = _build_smoke_fmu(tmp_path, fmi_version="1.0")
     with pytest.raises(BridgeError, match="FMI 2.0"):
         FmpyFmuSlave(fmu)
+
+def test_monitor_command_timeout_maps_to_bridge_error():
+    """HW-T2-BRIDGE-020: a silent monitor fails closed, not as a raw timeout.
+
+    Regression for F-20 (issue #55): dispatch 8 (run 35724334649) died with
+    a bare ``TimeoutError`` traceback from ``socket.recv`` when the monitor
+    did not answer the first command. The bridge must raise BridgeError
+    (fail-closed, with the command named) so the runner can attach the
+    Renode console tail; the startup banner read keeps its OSError
+    semantics so connect_monitor() can retry.
+    """
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    port = server.getsockname()[1]
+    stalled = {"conn": None}
+
+    def _accept_and_stall():
+        conn, _ = server.accept()
+        stalled["conn"] = conn
+        conn.sendall(b"Welcome to Renode (test double)\n(monitor) ")
+        time.sleep(10.0)  # then say nothing, ever
+
+    holder = threading.Thread(target=_accept_and_stall, daemon=True)
+    holder.start()
+    endpoint = None
+    try:
+        endpoint = RenodeMonitorEndpoint("127.0.0.1", port, timeout=0.3)
+        with pytest.raises(BridgeError, match="did not respond"):
+            endpoint.command("sysbus ReadDoubleWord 0x60000000")
+    finally:
+        if endpoint is not None:
+            endpoint._socket.close()
+        conn = stalled["conn"]
+        if conn is not None:
+            conn.close()
+        server.close()

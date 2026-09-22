@@ -173,6 +173,8 @@ class RenodeMonitorEndpoint(RenodeEndpoint):
         self._socket = socket.create_connection((host, int(port)),
                                                 timeout=float(timeout))
         self._socket.settimeout(float(timeout))
+        self._timeout = float(timeout)
+        self._last_command = None
         self._buffer = b""
         self._read_prompt()  # banner + initial prompt
 
@@ -184,13 +186,34 @@ class RenodeMonitorEndpoint(RenodeEndpoint):
                 tail = self._buffer[:match.start()]
                 self._buffer = self._buffer[match.end():]
                 return tail
-            chunk = self._socket.recv(4096)
+            try:
+                chunk = self._socket.recv(4096)
+            except socket.timeout as error:
+                if self._last_command is None:
+                    # Startup banner read: re-raise as OSError so
+                    # connect_monitor() can retry the connection.
+                    raise
+                # F-20 (issue #55): a silent monitor must fail closed with
+                # context, not as a bare TimeoutError traceback. Dispatch 8
+                # (run 35724334649) hung here on the first command; the
+                # runner now attaches the captured Renode console tail.
+                raise BridgeError(
+                    "Renode monitor did not respond within %.0f s to %r; "
+                    "the startup script may still be executing or the "
+                    "monitor thread may be blocked (check the renode "
+                    "console tail)" % (self._timeout, self._last_command)) \
+                    from error
             if not chunk:
                 raise BridgeError("Renode monitor closed the connection")
             self._buffer += chunk
 
     def command(self, text):
-        self._socket.sendall((text.rstrip("\n") + "\n").encode("utf-8"))
+        self._last_command = text
+        try:
+            self._socket.sendall((text.rstrip("\n") + "\n").encode("utf-8"))
+        except OSError as error:
+            raise BridgeError("Renode monitor socket send failed for %r: %s"
+                              % (text, error)) from error
         return self._read_prompt().decode("utf-8", "replace")
 
     # -- endpoint interface -------------------------------------------------
