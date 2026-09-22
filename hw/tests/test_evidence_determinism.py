@@ -19,6 +19,7 @@ from __future__ import annotations
 import copy
 import difflib
 import hashlib
+import importlib.util
 import json
 import re
 from pathlib import Path
@@ -449,8 +450,27 @@ def _sha256_file(path):
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _load_t2_runner():
+    """Load hw/virtual-bench/run_t2_retention.py as the T2 single source.
+
+    H-07 (issue #53): the T2 pending manifest has exactly one definition -
+    ``expected_pending_manifest()`` in the orchestrator - and this guard
+    proves the committed bytes stay identical to it (HwAGENTS.md rule 5).
+    The import is toolchain-free (stdlib only).
+    """
+    spec = importlib.util.spec_from_file_location(
+        "run_t2_retention",
+        REPO_ROOT / "hw" / "virtual-bench" / "run_t2_retention.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _regenerate_evidence(case_id="holdup_001"):
     """Rebuild canonical evidence bytes using live pinned-source hashes."""
+    if case_id == "t2_retention_001":
+        runner = _load_t2_runner()
+        return runner.render_evidence_bytes(runner.expected_pending_manifest())
     document = copy.deepcopy({"holdup_001": EXPECTED_EVIDENCE,
                               "pulse_7637_001": PULSE_EXPECTED_EVIDENCE,
                               "pulse_5a_001": PULSE_5A_EXPECTED_EVIDENCE}[case_id])
@@ -481,7 +501,7 @@ def _assert_stable_metadata(raw, document, forbidden=_FORBIDDEN_METADATA_KEYS):
 
 
 @pytest.mark.parametrize("case_id", ["holdup_001", "pulse_7637_001",
-                                     "pulse_5a_001"])
+                                     "pulse_5a_001", "t2_retention_001"])
 def test_evidence_is_byte_for_byte_deterministic(case_id):
     """HW-EVIDENCE-DETERMINISM-001: canonical regeneration is identical."""
     committed = (EVIDENCE_PATH.parent / f"{case_id}.json").read_text(encoding="utf-8")

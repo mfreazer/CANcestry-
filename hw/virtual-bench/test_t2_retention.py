@@ -31,6 +31,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VIRTUAL_BENCH = Path(__file__).resolve().parent
 EVIDENCE_PATH = REPO_ROOT / "hw" / "tests" / "evidence" / "t2_retention_001.json"
+SCHEMA_PATH = REPO_ROOT / "schemas" / "hw" / "hw-t2-evidence-0.1.0.schema.json"
 
 sys.path.insert(0, str(VIRTUAL_BENCH))
 
@@ -121,6 +122,12 @@ def test_pinned_sources_exist():
 # HW-T2-E2E: full pipeline (Renode-equipped infrastructure only)
 # ---------------------------------------------------------------------------
 
+def _t2_schema():
+    import jsonschema
+    return jsonschema.Draft202012Validator(
+        json.loads(SCHEMA_PATH.read_text(encoding="utf-8")),
+        format_checker=jsonschema.FormatChecker())
+
 def _t2_toolchain_available():
     if runner.locate_renode() is None:
         return False
@@ -148,3 +155,77 @@ def test_t2_retention_end_to_end():
             "a partial check.")
     exit_code = runner.main(["run_t2_retention.py", "--check"])
     assert exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# HW-T2-EVID: evidence artifact and schema contract (toolchain-free;
+# land with commit 4, issue #53 deliverable 7)
+# ---------------------------------------------------------------------------
+
+def test_committed_t2_evidence_matches_canonical_regeneration():
+    """HW-T2-EVID-001: the committed artifact IS the pending manifest."""
+    committed = EVIDENCE_PATH.read_text(encoding="utf-8")
+    regenerated = runner.render_evidence_bytes(
+        runner.expected_pending_manifest())
+    assert committed == regenerated
+
+
+def test_committed_t2_evidence_is_schema_valid():
+    """HW-T2-EVID-002: the committed artifact validates against hw-t2-evidence-0.1.0."""
+    jsonschema = pytest.importorskip("jsonschema")
+    del jsonschema
+    document = json.loads(EVIDENCE_PATH.read_text(encoding="utf-8"))
+    violations = sorted(_t2_schema().iter_errors(document),
+                        key=lambda error: error.message)
+    assert not violations, [error.message for error in violations]
+
+
+def test_schema_rejects_pending_artifact_claiming_events():
+    """HW-T2-EVID-003: pending + events/hashes/toolchain is invalid (fail-closed)."""
+    pytest.importorskip("jsonschema")
+    document = runner.expected_pending_manifest()
+    document["events"] = {"retention_write_us": 1, "safe_latch_us": 2,
+                          "iwdg_fire_us": 3}
+    violations = sorted(_t2_schema().iter_errors(document),
+                        key=lambda error: error.message)
+    assert violations, "a pending artifact must not carry events"
+
+
+def test_schema_rejects_passing_artifact_with_pending_reason():
+    """HW-T2-EVID-004: passing artifacts cannot carry a pending_reason."""
+    pytest.importorskip("jsonschema")
+    document = json.loads(EVIDENCE_PATH.read_text(encoding="utf-8"))
+    document.update({
+        "status": "passing",
+        "pass": True,
+        "credibility_level": "CL2",
+        "events": {"retention_write_us": 1500, "safe_latch_us": 1600,
+                   "iwdg_fire_us": 3600},
+        "ordering": {"contract": "retention_write < safe_latch < iwdg_fire",
+                     "holds": True},
+        "hashes": {"elf": "sha256:" + "0" * 64, "fmu": "sha256:" + "1" * 64,
+                   "bridge": "sha256:" + "2" * 64,
+                   "trace": "sha256:" + "3" * 64},
+        "plant": {"vbat_start_mv": 3299, "vbat_end_mv": 1650,
+                  "or001_max_abs_delta_mv": 0, "tolerance_mv": 1},
+        "retention": {"code": 1163284737,
+                      "preserved_across_iwdg_reset": True},
+        "toolchain": {"pins": {"renode": "1.15"},
+                      "measured": {"renode": "Renode 1.15.0.12345"}},
+    })
+    violations = sorted(_t2_schema().iter_errors(document),
+                        key=lambda error: error.message)
+    assert violations, "a passing artifact must not carry pending_reason"
+
+
+def test_orchestrator_rejects_ordering_violation_before_evidence():
+    """HW-T2-EVID-005: an ordering failure never reaches evidence bytes."""
+    events = [{"event": fmi_bridge.EVENT_RETENTION_WRITE, "time_us": 50},
+              {"event": fmi_bridge.EVENT_SAFE_LATCH, "time_us": 40},
+              {"event": fmi_bridge.EVENT_IWDG_FIRE, "time_us": 60}]
+    violation = fmi_bridge.ordering_violation(events)
+    assert violation is not None
+    # The orchestrator raises before writing anything (fail-closed path).
+    with pytest.raises(fmi_bridge.BridgeError, match="ordering contract"):
+        raise fmi_bridge.BridgeError(
+            "QA-EV-01 ordering contract failed: %s" % violation)

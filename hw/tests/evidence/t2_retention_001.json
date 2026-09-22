@@ -1,0 +1,70 @@
+{
+  "case_id": "t2_retention_001",
+  "credibility_level": "CL0",
+  "evidence_of": "T2 virtual-bench foundation for HW-SF-002 (H-07, issue #53): Renode platform model (hw/virtual-bench/renode/), deterministic FMI 3.0 co-simulation bridge (hw/virtual-bench/fmi_bridge.py) and orchestration (this file). No T2 run has been executed: this manifest records the pending disposition of the retention sequence (retention write < safe latch < IWDG fire) pending the first Renode-equipped run of the v1.0.0 firmware ELF.",
+  "firmware": {
+    "elf": "built off-tree from tag v1.0.0 with the pinned toolchain image (virtual-bench-plan section 2); supplied at run time via CANCESTRY_T2_ELF; never committed; its sha256 is recorded in the evidence at run time",
+    "modification": "none; the firmware is read-only (issue #53)"
+  },
+  "inherited_validation_gap": "openmodelica: Compiler semantics outside independently validated output remain unqualified; OR-001/OR-002 regressions do not cover all translation and solver behavior.",
+  "not_covered": [
+    "No executed T2 run exists: no event timestamps, no trace hash and no ELF/FMU artifact hashes are claimed by this manifest.",
+    "QA-EV-01 escalation stimulus injection (the queue-saturation fault recipe reaching the firmware through CAN traffic) is not part of this foundation; capture is passive and the runner fails closed if the sequence does not occur within 150 ms.",
+    "BOR/power-supervisor reset on brownout is not_simulated in the platform model (HwAGENTS.md rule 6: safety-relevant, Human Reviewer-gated); the brownout energy margin itself is closed at T1 by OR-001 (holdup_001).",
+    "DWT CYCCNT accuracy is not exercised by the ordering claim (events are captured from emulation virtual time); it carries the renode validation gap.",
+    "CAN protocol simulation, thermal simulation and multi-channel support are out of H-07 scope (issue #53 constraints).",
+    "T4 physical correlation: bench-pending per HwRS section 5; CL3 requires bench data (no qualification promotion)."
+  ],
+  "oracle_id": "OR-001",
+  "pass": false,
+  "pending_reason": "The T2 toolchain (Renode binary plus the v1.0.0 firmware ELF built from tag v1.0.0) is not available to the hosted CI image (HW-PLAN C5 places heavy simulation on self-hosted infrastructure), so no executed run backs this artifact yet. Foundation delivered by https://github.com/mfreazer/CANcestry-/issues/53; the first executing run is produced by hw/virtual-bench/run_t2_retention.py on Renode-equipped infrastructure and must reproduce this ledger chain deterministically before any passing claim.",
+  "provisional": true,
+  "requirement_id": "HW-SF-002",
+  "scenario": {
+    "duration_us": 150000,
+    "fmu_step_us": 1,
+    "master_step_us": 100,
+    "method": "virtual_bench",
+    "seed": "123456789"
+  },
+  "schema_version": "0.1.0",
+  "sim_case": "hw/tests/cases/holdup_001.simcase.json",
+  "source_hashes": {
+    "ci/docker/Dockerfile": "sha256:49703d8b330e41c58e5411bdede3310aec55199e3fb77fc973189b9ee7358102",
+    "ci/docker/base-image.digest": "sha256:fbe0594ac4ef88a211f86be44892d6d24efaefd22b747fe6aca41f512e38614f",
+    "docs/hw/tool-qualification.md": "sha256:62987ef08d8ab15a81266d62aa8d316b7125fc57ae2766613e03aa1426502880",
+    "docs/hw/virtual-bench-plan.md": "sha256:022d4640e66d47207438d1fe4a8464b5d77f7ffee1b2d3f29f402154c20cd86c",
+    "hw/model/CancestryLib/Power/Holdup.mo": "sha256:20af059a03aa6537bbf462fe3b1873ae7dd7a5faa9daca0cbf92fdf4322946b4",
+    "hw/model/CancestryLib/Power/package.mo": "sha256:b764dcccf84d3660c855d2d9712ed63bf7ff3e617a7409fd72d4381a0d527c33",
+    "hw/model/CancestryLib/package.mo": "sha256:53662fe968facb4cc3ca5d6ccb0ec8a7b7382224c0122ab5af19b748694e2372",
+    "hw/tests/cases/holdup_001.simcase.json": "sha256:6c1da1b50d8d3486c17f06a96cf49a5663e1486cc4344e67ab44282b176f0ae1",
+    "hw/tests/oracles/or_001_holdup.py": "sha256:0be9fe0869c355a9780f73d17981f92dba4af1bbfc2b1be392930402a5f63b9d",
+    "hw/tests/oracles/registry.csv": "sha256:7e478f80772bf29e09b02981684e06784646adb7459fe95afd38982d8836a6ba",
+    "hw/tests/oracles/registry.json": "sha256:9480431021cb56920a3236968accebf60b98a6ef0ac5835957cd471538b00345",
+    "hw/virtual-bench/fmi_bridge.py": "sha256:0b9ddda883943651bad0c5327fe1bdc31bd40a4d9166475440d4774d24b84079",
+    "hw/virtual-bench/fmi_bridge_test.py": "sha256:25ab22acb9ddfb9d9a10bc6155faac6e6b635ca98da5a028b46b0facd8658bc3",
+    "hw/virtual-bench/renode/cancestry-hw.resc": "sha256:84b9370243e9e1115178f6988c5db536feecf7b257464819c62b7f6e024876df",
+    "hw/virtual-bench/renode/gpioa_model.py": "sha256:a05b2b47e3f08ba411ebdcc41689f19b934fe40e9746d0cfcdb3c55b75c5f37a",
+    "hw/virtual-bench/renode/iwdg_model.py": "sha256:086ccbd970c95ce600682da8650ad3869a59c6dde2905751923319e6e88a29d2",
+    "hw/virtual-bench/renode/rcc_model.py": "sha256:2b52b7196955837a423e8281e5189c11d102400462df48aec5f44bf25aac4dc0",
+    "hw/virtual-bench/renode/rtc_backup_model.py": "sha256:6a100141b0ba9635b51dec621b09c5d309d134a2399edf889abb9df2c9d1dd79",
+    "hw/virtual-bench/renode/stm32g474-cancestry.repl": "sha256:e7c0f0ef88ead6b737c7fb41e3c84ce6935094764c874ee03a5968c21681b190",
+    "hw/virtual-bench/run_t2_retention.py": "sha256:9bb9e072e9e474576897518b39210db97f25a92836697f1b54ddb534dfcfc989",
+    "hw/virtual-bench/test_t2_retention.py": "sha256:6c53de6543c5d1e2b09e31df265ec0a394a23cb64fbc9f55aa9336a8ad400fdf",
+    "schemas/hw/hw-oracle-registry-0.1.0.schema.json": "sha256:7bd0a15770f2bae185600bd554198a791ab94dceb59b4d8084111d5bf01e6123",
+    "schemas/hw/hw-sim-0.1.0.schema.json": "sha256:efa2591e203a56f9fe3792d0bbdd891ce3b3b01bab52e2976b11ad417bd35f6a",
+    "schemas/hw/hw-t2-evidence-0.1.0.schema.json": "sha256:2ce132337be43fa52ce673cd781b58db5d2480a09e35b3da8eee4ea8363604ea"
+  },
+  "status": "pending",
+  "tool_pins": {
+    "fmpy": "0.3.24",
+    "openmodelica": "1.24",
+    "python": ">=3.10",
+    "renode": "1.15"
+  },
+  "trace": {
+    "artifact": "build/hw/t2_retention_001_trace.csv (per-run artifact, gitignored)",
+    "columns": "time_us,vbat_mv,gpio_odr",
+    "hashing": "sha256 of the trace CSV, measured invariants and measured tool versions recorded in build/hw/t2_retention_001.runlog.json"
+  }
+}

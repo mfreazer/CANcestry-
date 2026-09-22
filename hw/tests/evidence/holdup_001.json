@@ -26,7 +26,7 @@
     "hw/tests/oracles/or_001_holdup.py": "sha256:0be9fe0869c355a9780f73d17981f92dba4af1bbfc2b1be392930402a5f63b9d",
     "hw/tests/oracles/registry.csv": "sha256:7e478f80772bf29e09b02981684e06784646adb7459fe95afd38982d8836a6ba",
     "hw/tests/oracles/registry.json": "sha256:9480431021cb56920a3236968accebf60b98a6ef0ac5835957cd471538b00345",
-    "hw/tests/test_evidence_determinism.py": "sha256:6e4432a3ce39923bf4cc53d57b6768c21502df3023b2278d5a47454cf7d97aee",
+    "hw/tests/test_evidence_determinism.py": "sha256:500ec90fc931cf7bea8902e6e1ddc2a4be2dbcba12e11cd457766b4b32a4e760",
     "hw/tests/test_power_sim.py": "sha256:26194fe5303bec1242ed2e2717e0fb4050ba64795905df7631d3e82b3b173487",
     "schemas/hw/hw-bom-0.1.0.schema.json": "sha256:53c2b0796fa5805f43f1683cece6e2bd9ebedde131d1b6729607902ff1677a6a",
     "schemas/hw/hw-datasheet-extract-0.1.0.schema.json": "sha256:cd9de8b653e8b774926eaa3953c7122ea64bd1d3ec64de906b48ec0465ac5eff",

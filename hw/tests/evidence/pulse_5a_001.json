@@ -48,7 +48,7 @@
     "hw/tests/oracles/or_002_pulse7637.py": "sha256:0d34e4cfe4c4386962fe4f36f9094c558a1df8ea2ad4a7941c9690913e09b9d5",
     "hw/tests/oracles/registry.csv": "sha256:7e478f80772bf29e09b02981684e06784646adb7459fe95afd38982d8836a6ba",
     "hw/tests/oracles/registry.json": "sha256:9480431021cb56920a3236968accebf60b98a6ef0ac5835957cd471538b00345",
-    "hw/tests/test_evidence_determinism.py": "sha256:6e4432a3ce39923bf4cc53d57b6768c21502df3023b2278d5a47454cf7d97aee",
+    "hw/tests/test_evidence_determinism.py": "sha256:500ec90fc931cf7bea8902e6e1ddc2a4be2dbcba12e11cd457766b4b32a4e760",
     "hw/tests/test_power_sim.py": "sha256:26194fe5303bec1242ed2e2717e0fb4050ba64795905df7631d3e82b3b173487",
     "hw/tests/test_pulse_sim.py": "sha256:c798759d945b2888002ae55cf8ff744af06059646feb29d20a6ce76665a5117a",
     "schemas/hw/hw-datasheet-extract-0.1.0.schema.json": "sha256:cd9de8b653e8b774926eaa3953c7122ea64bd1d3ec64de906b48ec0465ac5eff",
