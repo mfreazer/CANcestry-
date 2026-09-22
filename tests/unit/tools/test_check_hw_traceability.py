@@ -891,7 +891,9 @@ def change_pulse_manifest(root, change):
 def test_pending_pulse_manifest_is_still_checked(pulse_repo):
     result = run_checker(pulse_repo)
     assert result.returncode == 0, result.stdout
-    assert 'passing 1, pending 3' in result.stdout
+    # H-07 (issue #53) adds the pending (HW-SF-002, virtual_bench) row:
+    # passing 1, pending 4.
+    assert 'passing 1, pending 4' in result.stdout
 
 
 @pytest.mark.parametrize('pulse', ['pulse4', 'pulse5b'])

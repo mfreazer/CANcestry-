@@ -15,7 +15,7 @@
   "source_hashes": {
     "ci/docker/Dockerfile": "sha256:49703d8b330e41c58e5411bdede3310aec55199e3fb77fc973189b9ee7358102",
     "ci/docker/base-image.digest": "sha256:fbe0594ac4ef88a211f86be44892d6d24efaefd22b747fe6aca41f512e38614f",
-    "docs/hw/tool-qualification.md": "sha256:62987ef08d8ab15a81266d62aa8d316b7125fc57ae2766613e03aa1426502880",
+    "docs/hw/tool-qualification.md": "sha256:51509f080b4b114345a6285c01e9275a86e9d324c0aa27ffe6425fdfaf78ff53",
     "hw/bom/bom.json": "sha256:779a79e7cc6649f7c345fc70ff97ca0b5c0fe615e1475a9ff6f423e1dbf41311",
     "hw/bom/datasheets/extract-holdup-cap.json": "sha256:b6b75ce57d0a27690e7cba788380c74d5b408385e24f9ce2990cbf2785b5686f",
     "hw/bom/datasheets/extract-mcu-vbat.json": "sha256:755fa5d3a31e36811f6f112f4ea6f764f14d4f47c01f76c78720b1b289eab518",
@@ -26,7 +26,7 @@
     "hw/tests/oracles/or_001_holdup.py": "sha256:0be9fe0869c355a9780f73d17981f92dba4af1bbfc2b1be392930402a5f63b9d",
     "hw/tests/oracles/registry.csv": "sha256:7e478f80772bf29e09b02981684e06784646adb7459fe95afd38982d8836a6ba",
     "hw/tests/oracles/registry.json": "sha256:9480431021cb56920a3236968accebf60b98a6ef0ac5835957cd471538b00345",
-    "hw/tests/test_evidence_determinism.py": "sha256:6e4432a3ce39923bf4cc53d57b6768c21502df3023b2278d5a47454cf7d97aee",
+    "hw/tests/test_evidence_determinism.py": "sha256:500ec90fc931cf7bea8902e6e1ddc2a4be2dbcba12e11cd457766b4b32a4e760",
     "hw/tests/test_power_sim.py": "sha256:26194fe5303bec1242ed2e2717e0fb4050ba64795905df7631d3e82b3b173487",
     "schemas/hw/hw-bom-0.1.0.schema.json": "sha256:53c2b0796fa5805f43f1683cece6e2bd9ebedde131d1b6729607902ff1677a6a",
     "schemas/hw/hw-datasheet-extract-0.1.0.schema.json": "sha256:cd9de8b653e8b774926eaa3953c7122ea64bd1d3ec64de906b48ec0465ac5eff",

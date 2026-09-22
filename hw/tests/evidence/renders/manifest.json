@@ -1,15 +1,25 @@
 {
-  "schema_version": "0.1.0",
   "entries": [
     {
-      "plot_id": "pulse_5a_001",
-      "plot_version": "0.1.0",
-      "plot_data_sha256": "sha256:708bfb8d7bf1b60dd8ac4dc083028e47b17a6ce06fbf0a4ba204c1cb6b5c260c",
       "expected_renderer_tool": "cancestry-render-modelica",
-      "expected_renderer_tool_version": "0.1.0",
       "expected_renderer_tool_digest": "sha256:c50a6b0592117c081dc9c8dbc5cfcb69d50ef8e33b520c1a4d740e80ce4ac614",
-      "expected_svg_sha256": "sha256:92ddd00bc23f7157d6a766523e3d0290d34c5bc6cff57db4cbedde9a96e2f326",
-      "last_updated": "2026-09-21T00:00:00Z"
+      "expected_renderer_tool_version": "0.1.0",
+      "expected_svg_sha256": "sha256:cc92dddca849997eb1279c10bd6ab0d2bc1fcd77a6cf0f5293dc7c04cc44235a",
+      "last_updated": "2026-09-22T00:00:00Z",
+      "plot_data_sha256": "sha256:cda4b0c24cd9a437d32ae33578571eb2ff91b33c9a00063c46cad96433403a39",
+      "plot_id": "pulse_5a_001",
+      "plot_version": "0.1.0"
+    },
+    {
+      "expected_renderer_tool": "cancestry-render-modelica",
+      "expected_renderer_tool_digest": "sha256:c50a6b0592117c081dc9c8dbc5cfcb69d50ef8e33b520c1a4d740e80ce4ac614",
+      "expected_renderer_tool_version": "0.1.0",
+      "expected_svg_sha256": "sha256:9a7125a4dd6615fa686354954db081e5070b01df4c9acddb0de0d1874951595d",
+      "last_updated": "2026-09-22T00:00:00Z",
+      "plot_data_sha256": "sha256:36bdd7771815fa316429d4273dab4d5df1d93f1a950afe443435746dfd7c5e7c",
+      "plot_id": "t2_retention_001",
+      "plot_version": "0.1.0"
     }
-  ]
+  ],
+  "schema_version": "0.1.0"
 }

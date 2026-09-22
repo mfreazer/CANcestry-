@@ -1,0 +1,77 @@
+:name: CANcestry T2 virtual bench
+:description: Bring-up of the STM32G474-class platform model and the v1.0.0 firmware ELF for the HW-SF-002 retention sequence (H-07, issue #53).
+
+# CANcestry T2 virtual bench bring-up script (H-07, issue #53).
+#
+# Renode platform script (.resc) for the platform described by
+# stm32g474-cancestry.repl. The issue text names "cancestry-hw.cs (or
+# equivalent Renode script)"; .resc is Renode's script format and this file
+# is that equivalent - no C# peripheral code exists in this repository.
+#
+# Implements: HW-FR-001 (the v1.0.0 firmware ELF boots and executes on the
+# platform model), HW-SF-002 / HW-SF-004 (QA-EV-01 escalation events are
+# observable with exact emulation-time timestamps). Governing documents:
+# docs/hw/virtual-bench-plan.md sections 1, 3 and 6; HwAGENTS.md rule 5.
+#
+# The script is driven by the T2 runner (hw/virtual-bench/run_t2_retention.py):
+#
+#   $elf   path of the v1.0.0 firmware ELF (mandatory; set with
+#          `set $elf "@..."` before including this script - the runner always
+#          sets it, and the guard below fails closed when it is missing)
+#   $seed  optional deterministic seed (fixed default below; overriding it
+#          is a reviewable, evidence-affecting change)
+#
+# Renode is executed with the working directory set to this file's directory
+# so the PythonPeripheral `filename:` attributes resolve; the runner checks
+# the pinned Renode version BEFORE including this script (fail-closed).
+
+using sysbus
+
+# Fixed deterministic seed (HwAGENTS.md rule 5).
+$t2_seed?="123456789"
+
+# Fail-closed guard: T2 executes the REAL v1.0.0 ELF (HW-PLAN section 8.3);
+# the bench never falls back to a reimplementation of the firmware.
+python "assert variables['elf'] not in ('', None), 'cancestry-hw.resc: no firmware ELF provided (set $elf before including this script)'"
+
+mach create "cancestry"
+
+machine LoadPlatformDescription @$ORIGIN/stm32g474-cancestry.repl
+
+# Deterministic execution (virtual-bench-plan section 6): fixed global
+# quantum (100 us master step) and a fixed seed for the only Renode
+# randomness source. `emulation RunFor` advances virtual time exactly - no
+# wall clock is consumed.
+emulation SetGlobalQuantum "0.0001"
+emulation SetSeed $t2_seed
+
+sysbus LoadELF $elf
+
+# ---------------------------------------------------------------------
+# T2 event-capture hooks (HwAGENTS.md rule 5: deterministic, hashed trace).
+#
+# Each hook stamps the exact emulation virtual time (microseconds) into the
+# T2 trace area. The hooks fire on the REAL firmware executing its REAL
+# escalation path - nothing in the firmware is modified or reimplemented.
+# Slot layout is the platform-file contract (stm32g474-cancestry.repl).
+# ---------------------------------------------------------------------
+
+cpu AddSymbolHook "cancestry_watchdog_write_retention_register" """
+machine['sysbus'].WriteDoubleWord(0x60000008, int(round(machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1000000)))
+"""
+
+cpu AddSymbolHook "cancestry_hardware_set_safe_state" """
+machine['sysbus'].WriteDoubleWord(0x6000000C, int(round(machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1000000)))
+"""
+
+cpu AddSymbolHook "cancestry_watchdog_escalate" """
+machine['sysbus'].WriteDoubleWord(0x60000010, int(round(machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1000000)))
+"""
+
+# Trace-area magic: the runner and the FMI bridge refuse to run against a
+# machine whose capture area was not initialized by this script.
+sysbus WriteDoubleWord 0x60000000 0x54324353
+
+# The machine is left PAUSED: the FMI bridge alone advances emulation with
+# fixed-size `emulation RunFor` quanta (deterministic co-simulation, no
+# free-running). This configuration must NOT be started with `start`.

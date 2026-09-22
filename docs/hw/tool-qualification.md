@@ -3,11 +3,11 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Tool Qualification Plan and Evidence |
-| **Version** | 0.2.6 |
-| **Status** | Draft — H-04/H-06, pending QA and Human Reviewer approval |
+| **Version** | 0.2.7 |
+| **Status** | Draft — H-07, pending QA and Human Reviewer approval |
 | **Owner** | System Engineer |
 | **Approver** | QA Lead |
-| **Last Review** | 2026-09-21 |
+| **Last Review** | 2026-09-22 |
 | **Repository location** | `docs/hw/tool-qualification.md` |
 | **Governing documents** | ISO 26262-8:2018 §13; hardware policy |
 
@@ -42,8 +42,9 @@ gap fails closed. `-` represents an empty tool gap for TCL1 only.
 | fmpy | Bounded, independently oracle-checked FMU execution/readout only: OR-001 uses explicit CoSimulation `doStep` scheduling and OR-002 uses the guarded zero-state ModelExchange evaluator. Subject to §3.1; TD1 is conditional on detection coverage for the exact claimed outputs, not a claim that FMPy cannot introduce errors. | TI2 | TD1 | TCL1 | - |
 | capellambse | capellambse is a model reader, not a safety-case producer. Live structural checks and negative fixtures detect missed linkage/parse errors. | TI2 | TD1 | TCL1 | - |
 | cancestry-render-modelica | Pure-Python SVG renderer (H-05): it draws only what a schema-validated plot-data file declares, verifies the pinned source-evidence hash before drawing, and refuses to run on a broken hash chain or an unknown vocabulary. A defect can at worst fail to display a validated claim; it cannot introduce or alter a numerical result. | TI1 | TD1 | TCL1 | - |
+| fmi_bridge | Deterministic FMI 3.0 co-simulation master (H-07, issue #53): integer-microsecond fixed-step scheduling (100 µs master / 1 µs FMU internal), no wall clock and no randomness (source-lint-enforced), marshals plant/MCU values, captures events from the platform's hook-stamped trace slots and asserts the strict QA-EV-01 ordering against the OR-001-anchored plant trajectory. Every exchanged value is recorded in the hashed trace and the event times come from Renode-side registers, not from bridge computation: a bridge defect can at worst fail to detect a mismatch or halt the run; it cannot introduce or alter a numerical result into the item. Bounded contract tests HW-T2-BRIDGE-001..015 support the detection argument for this exact configuration. | TI1 | TD1 | TCL1 | - |
 | fmeda | FMEDA calculator is not implemented; independent ISO 26262-5 Annex D gate required before use. | pending | pending | pending | No qualification evidence. |
-| renode | Renode is not implemented by H-04; fault replay and golden-trace correlation required before use. | pending | pending | pending | No qualification evidence. |
+| renode | Renode executes the real v1.0.0 firmware ELF on the T2 virtual bench (H-07, issue #53). A platform-model defect (scripted IWDG/RTC_BKP/GPIO/RCC peripheral models, DWT accuracy) can silently alter firmware-visible register or timing semantics, introducing errors into T2 evidence — the ELF cannot be re-derived independently, so detection rests on golden-trace/vendor-reference correlation which does not exist yet. | TI2 | TD2 | TCL2 | Renode peripheral models (IWDG, GPIO, RTC_BKP, DWT) are scripted emulations, not vendor-validated silicon models: platform-model bugs can alter firmware-visible timing or register semantics, and this gap is inherited by every T2 evidence artifact; golden-trace correlation against vendor reference behavior and T4 bench correlation are required before any promotion. |
 <!-- END TOOL CLASSIFICATION -->
 
 ### 3.1 FMPy reclassification precondition (F1, normative)
@@ -100,6 +101,36 @@ configuration under the same bounded argument, OpenModelica remains TCL2, and
 the 5a case manifest inherits the OpenModelica gap verbatim. The controlled
 table above is unchanged; this paragraph is the §3.1-required disposition
 record.
+
+**H-07 disposition (issue #53, v0.2.7): T2 virtual-bench configuration.**
+The T2 foundation re-uses the same bounded FMPy role for the Holdup plant
+(pinned OpenModelica 1.24 build, FMPy 0.3.24, explicit CoSimulation
+`doStep` scheduling — the §4.1 argument carries over), but the execution
+context is new: the FMU is now stepped by `fmi_bridge` inside a coupled
+co-simulation with Renode executing the real v1.0.0 firmware ELF. Three
+dispositions apply before any T2 evidence is consumed:
+
+1. `fmi_bridge` is classified TI1/TD1/TCL1 for the bounded role above
+   (integer fixed-step master, hashed trace of every exchanged value,
+   event timestamps read from Renode-side registers, contract tests
+   HW-T2-BRIDGE-001..015). Any extension of the bridge role — resampling,
+   interpolation, master-side computation entering a claim, event synthesis —
+   voids the TI1 argument and triggers this precondition again.
+2. `renode` is classified TI2/TD2/TCL2: the scripted peripheral models can
+   introduce errors that the ELF cannot reveal. Its validation gap is
+   inherited verbatim by every T2 evidence artifact via the §5 inheritance
+   rule. Golden-trace/vendor-reference correlation is a prerequisite for any
+   promotion; T4 bench correlation remains required for CL3.
+3. The Holdup FMU for T2 is built with `version="3.0"` (FMI 3.0,
+   virtual-bench-plan §1) — a new FMU configuration in the §3.1 sense. The
+   producing role (stateful CoSimulation plant, explicit `doStep`, readout
+   of `v`) is unchanged and independently OR-001-checked inside every T2
+   run, so FMPy remains TCL1 for this configuration under the same bounded
+   argument. Review before consuming any passing T2 claim.
+
+No executed T2 run exists yet (issue #53 delivers the foundation; the
+pending manifest `hw/tests/evidence/t2_retention_001.json` is CL0); this
+paragraph is the §3.1-required disposition record, not a promotion.
 
 ## 4. Qualification regression records
 
@@ -218,6 +249,38 @@ FMU/configuration/version, or a future use. Those uses remain subject to the
   [pulse-coverage.md](pulse-coverage.md). Pulse 4 and 5b cannot be promoted
   from pending until independently qualified; no T4/DUT immunity claim exists.
 
+### 4.3 Renode + FMI bridge against OR-001: T2 foundation, qualification pending
+
+- Requirement: HW-SF-002 (ordering derivation HW-SF-004 / QA-EV-01). Oracle:
+  OR-001 anchors the plant trajectory check executed inside every T2 run.
+- Configuration (H-07, issue #53): Renode executes the real v1.0.0 firmware
+  ELF on `hw/virtual-bench/renode/stm32g474-cancestry.repl` (scripted
+  IWDG/RTC_BKP/GPIO/RCC peripherals; scope and `not_simulated` rationale in
+  the platform header); `fmi_bridge` couples it to the Holdup FMU at a fixed
+  100 µs master step / 1 µs FMU internal step with deterministic seeds and
+  no wall clock; `run_t2_retention.py` orchestrates, asserts the strict
+  retention < safe-latch < IWDG-fire ordering and writes
+  `hw/tests/evidence/t2_retention_001.json` (schema
+  `hw-t2-evidence-0.1.0.schema.json`).
+- Status: **no executed T2 run exists.** The committed evidence artifact is
+  the pending manifest (pass=false, CL0); the ledger row
+  (HW-SF-002, virtual_bench) is `sim-pending`. The event-capture mechanism
+  (CPU symbol hooks stamping exact emulation times) and the deterministic
+  bridge are unit-tested (HW-T2-BRIDGE-001..015, HW-T2-ORCH-001..006), but
+  unit tests are not T2 evidence.
+- Acceptance for a future passing claim: a full pipeline run on
+  Renode-equipped infrastructure (HW-PLAN C5) that (a) captures all three
+  QA-EV-01 events in strict order within 150 ms, (b) matches OR-001 within
+  the sim-case tolerance, (c) shows the retained fault code preserved across
+  the scripted IWDG reset, and (d) reproduces the committed evidence
+  byte-for-byte via `--check` — plus the §3.1 disposition review, golden
+  Renode-trace correlation to bound the TCL2 gap, and Human Reviewer
+  sign-off for the retention/fail-safe model per HwAGENTS.md rule 6.
+- Not covered: BOR/supervisor reset (not_simulated, rule 6), DWT accuracy,
+  CAN protocol simulation, stimulus injection (the QA-EV-01 escalation
+  recipe reaching the firmware via CAN traffic is not yet defined), and all
+  T4 physical correlation.
+
 ## 5. Validation-gap inheritance (normative)
 
 The hardware ledger `hw/tests/traceability.csv` adds
@@ -254,6 +317,7 @@ OR-002 has no qualified passing claim. Oracle/model gaps remain in
 
 | Version | Date | Change |
 |---|---|---|
+| 0.2.7 | 2026-09-22 | H-07 #53: renode classified TCL2 (TI2/TD2) with the scripted-peripheral validation gap inherited by every T2 artifact; fmi_bridge added as TCL1 (TI1/TD1) for the bounded deterministic-master role; §3.1 disposition for the T2 configuration (FMI 3.0 Holdup build, coupled co-simulation) recorded — pending-only consumption in this PR; §4.3 T2 foundation record added. No executed T2 run exists; no qualification promotion. |
 | 0.2.6 | 2026-09-21 | H-06 #49: record the pulse 5a (ISO 16750-2:2012 Test A, §4.6.4.2.2 Figure 8 / Table 5) configuration in §4.2 as OR-002 regression-only evidence with the Table 5-vs-Table 6 citation disposition; add the §3.1 disposition review for the recompiled selector-8 FMU (unchanged bounded FMPy TCL1 scope, OpenModelica stays TCL2, gap inherited verbatim by the new pulse_5a_001 case manifest and its pending placeholder view). Controlled §3 table untouched. No qualification promotion; shape qualification deferred to #41. |
 | 0.2.5 | 2026-09-21 | N2 audit (PR #43): pin the hold-up build/execution to explicit CoSimulation, add the §4.1.1 execution-mode audit and the updated fmpy row, test the mode gate and real-FMU interface, and retain FMPy TCL1 only for the bounded OR-001 output-detection argument. Merged on top of 0.2.4. No FMPy gap waiver or pulse promotion. |
 | 0.2.4 | 2026-09-20 | H-05 #44: add cancestry-render-modelica to the controlled table as TCL1 (pure renderer over validated data) with the rationale for the bounded role. |

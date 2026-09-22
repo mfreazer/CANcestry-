@@ -1,0 +1,429 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cancestry.dev/schemas/hw/hw-t2-evidence-0.1.0.schema.json",
+  "title": "CANcestry T2 Virtual Bench Evidence (v0.1.0)",
+  "description": "Schema for the T2 virtual-bench evidence artifact of the HW-SF-002 retention sequence (issue #53, H-07; HW-PLAN section 10.1 tier T2, virtual-bench-plan section 6). One artifact per T2 case: the executed v1.0.0 firmware ELF (hash-pinned, never committed), the Holdup FMU, the deterministic FMI 3.0 bridge and the trace hash form the evidence hash chain. The pending disposition (status=pending, pass=false, CL0) is the honest no-run state delivered by the H-07 foundation; a passing artifact additionally carries the captured QA-EV-01 event timestamps with their ordering, the OR-001 plant anchor and the retention-preservation record. The strict retention < safe-latch < IWDG-fire ordering is asserted by hw/virtual-bench/run_t2_retention.py and its tests (JSON Schema cannot express cross-value ordering); the schema enforces the structural contract and the fail-closed pairing. Kept in lockstep with schemas/hw/hw-pulse-evidence-0.1.0.schema.json conventions (pending/pairing discipline, tool pins, gap inheritance).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "case_id",
+    "requirement_id",
+    "oracle_id",
+    "status",
+    "pass",
+    "provisional",
+    "credibility_level",
+    "evidence_of",
+    "not_covered",
+    "scenario",
+    "sim_case",
+    "firmware",
+    "source_hashes",
+    "tool_pins",
+    "inherited_validation_gap",
+    "trace"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0"
+    },
+    "case_id": {
+      "const": "t2_retention_001",
+      "description": "The QA-EV-01 escalation scenario on the T2 virtual bench (issue #53)."
+    },
+    "requirement_id": {
+      "const": "HW-SF-002",
+      "description": "Retention domain across IWDG reset; ordering derives from HW-SF-004 / QA-EV-01."
+    },
+    "oracle_id": {
+      "const": "OR-001",
+      "description": "RC hold-up / energy-balance closed form (hw/tests/oracles/registry.json); anchors the plant trajectory check. HW-PLAN section 10.2 oracle rule."
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "passing"
+      ],
+      "description": "pending: no executed T2 run exists (foundation). passing: a deterministic T2 run backs every claim. 'failing' is deliberately excluded: a failed run aborts before evidence is written (fail-closed, run_t2_retention.py)."
+    },
+    "pass": {
+      "type": "boolean"
+    },
+    "provisional": {
+      "type": "boolean",
+      "description": "True while the claim awaits T4 bench correlation; a passing T2 safety row stays provisional (CL2) because HW-SF-002 requires CL3."
+    },
+    "credibility_level": {
+      "enum": [
+        "CL0",
+        "CL1",
+        "CL2",
+        "CL3"
+      ],
+      "description": "virtual-bench-plan section 5. pending artifacts are CL0; a passing T2 artifact is CL2 (provisional) at most in H-Phase 2."
+    },
+    "evidence_of": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "not_covered": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "pending_reason": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S",
+      "description": "Mandatory while pending and forbidden when passing; must name the exact deferral (the first executing T2 run on Renode-equipped infrastructure, issue #53)."
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "duration_us",
+        "master_step_us",
+        "fmu_step_us",
+        "seed",
+        "method"
+      ],
+      "properties": {
+        "duration_us": {
+          "const": 150000,
+          "description": "150 ms scenario: 50 ms brownout at BOR level 3 + 100 ms rail removal (holdup_001 sim case, issue #53 deliverable 5)."
+        },
+        "master_step_us": {
+          "const": 100,
+          "description": "Fixed co-simulation master step (virtual-bench-plan section 6)."
+        },
+        "fmu_step_us": {
+          "const": 1,
+          "description": "FMU internal step <= 1 us (virtual-bench-plan section 6)."
+        },
+        "seed": {
+          "const": "123456789",
+          "description": "Fixed Renode seed (HwAGENTS.md rule 5); must equal fmi_bridge.FIXED_SEED and the cancestry-hw.resc $t2_seed default."
+        },
+        "method": {
+          "const": "virtual_bench"
+        }
+      }
+    },
+    "sim_case": {
+      "const": "hw/tests/cases/holdup_001.simcase.json",
+      "description": "Single source of truth for the plant physics parameters and the OR-001 tolerance."
+    },
+    "firmware": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elf",
+        "modification"
+      ],
+      "properties": {
+        "elf": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Provenance of the executed v1.0.0 firmware ELF (built off-tree with the pinned toolchain image; virtual-bench-plan section 2 rebuild/retention policy)."
+        },
+        "modification": {
+          "const": "none; the firmware is read-only (issue #53)",
+          "description": "T2 executes the v1.0.0 ELF as-is (issue #53 constraint 1)."
+        }
+      }
+    },
+    "source_hashes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^sha256:[0-9a-f]{64}$"
+      }
+    },
+    "tool_pins": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "inherited_validation_gap": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S",
+      "description": "Exact inherited TCL2/TCL3 producer gaps (tool-qualification.md section 5), joined with ' | ' in sorted tool_id order; the checker recomputes this string from the controlled classification table when the artifact backs a ledger row."
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact",
+        "columns",
+        "hashing"
+      ],
+      "properties": {
+        "artifact": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "columns": {
+          "const": "time_us,vbat_mv,gpio_odr"
+        },
+        "hashing": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      }
+    },
+    "events": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "retention_write_us",
+        "safe_latch_us",
+        "iwdg_fire_us"
+      ],
+      "properties": {
+        "retention_write_us": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exact emulation time of the firmware retention write (cancestry_watchdog_write_retention_register symbol hook)."
+        },
+        "safe_latch_us": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exact emulation time of the safe-state latch (cancestry_hardware_set_safe_state symbol hook)."
+        },
+        "iwdg_fire_us": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exact emulation time of the IWDG expiry (scripted IWDG model)."
+        }
+      }
+    },
+    "ordering": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "holds"
+      ],
+      "properties": {
+        "contract": {
+          "const": "retention_write < safe_latch < iwdg_fire"
+        },
+        "holds": {
+          "const": true
+        }
+      }
+    },
+    "hashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elf",
+        "fmu",
+        "bridge",
+        "trace"
+      ],
+      "properties": {
+        "elf": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "fmu": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "bridge": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "trace": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "description": "Evidence hash chain (issue #53 deliverable 7): FMU hash + ELF hash + bridge hash + trace hash."
+    },
+    "plant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vbat_start_mv",
+        "vbat_end_mv",
+        "or001_max_abs_delta_mv",
+        "tolerance_mv"
+      ],
+      "properties": {
+        "vbat_start_mv": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "vbat_end_mv": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "or001_max_abs_delta_mv": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Worst absolute deviation from the OR-001 closed form across the run."
+        },
+        "tolerance_mv": {
+          "const": 1,
+          "description": "holdup_001 sim-case tolerance (0.001 V) expressed in millivolts."
+        }
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "preserved_across_iwdg_reset"
+      ],
+      "properties": {
+        "code": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Retained RTC_BKP0R fault code observed after the scripted IWDG reset."
+        },
+        "preserved_across_iwdg_reset": {
+          "const": true,
+          "description": "HW-SF-002 sub-event (i): the retained value must survive the reset."
+        }
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pins",
+        "measured"
+      ],
+      "properties": {
+        "pins": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          }
+        },
+        "measured": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "passing"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "pass": {
+            "const": true
+          },
+          "provisional": {
+            "const": true,
+            "description": "A passing T2 safety closure stays provisional until T4 bench correlation promotes it to fully-verified(CL3) (HwRS closure policy)."
+          },
+          "credibility_level": {
+            "enum": [
+              "CL1",
+              "CL2"
+            ],
+            "description": "CL3 is reachable only through the bench method (HwAGENTS.md rule 4)."
+          }
+        },
+        "required": [
+          "events",
+          "ordering",
+          "hashes",
+          "plant",
+          "retention",
+          "toolchain"
+        ],
+        "not": {
+          "required": [
+            "pending_reason"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "pending"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "pass": {
+            "const": false
+          },
+          "provisional": {
+            "const": true
+          },
+          "credibility_level": {
+            "const": "CL0"
+          }
+        },
+        "required": [
+          "pending_reason"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "events"
+              ]
+            },
+            {
+              "required": [
+                "hashes"
+              ]
+            },
+            {
+              "required": [
+                "toolchain"
+              ]
+            }
+          ]
+        },
+        "properties": {
+          "pending_reason": {
+            "pattern": "issues/53",
+            "description": "The deferral must name the H-07 follow-through (first executing T2 run)."
+          }
+        }
+      }
+    }
+  ]
+}
