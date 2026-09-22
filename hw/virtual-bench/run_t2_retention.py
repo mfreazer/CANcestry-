@@ -120,6 +120,7 @@ PINNED_SOURCES = (
     "hw/virtual-bench/firmware/main.c",
     "hw/virtual-bench/firmware/startup.s",
     "hw/virtual-bench/firmware/t2_target_compat.h",
+    "hw/virtual-bench/fmi2_smoke_slave.c",
     "hw/virtual-bench/fmi_bridge.py",
     "hw/virtual-bench/fmi_bridge_test.py",
     "hw/virtual-bench/renode/cancestry-hw.resc",

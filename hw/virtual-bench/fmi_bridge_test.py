@@ -10,19 +10,24 @@ Renode-equipped infrastructure.
 
 Implementations under test: hw/virtual-bench/fmi_bridge.py.
 Requirements traced: HW-SF-002, HW-SF-004; HwAGENTS.md rules 4 and 5.
-Test ids: HW-T2-BRIDGE-001 .. HW-T2-BRIDGE-015.
+Test ids: HW-T2-BRIDGE-001 .. HW-T2-BRIDGE-019.
 """
 
 from __future__ import annotations
 
 import inspect
+import os
+import shutil
 import socket
+import subprocess
 import threading
+import zipfile
 from pathlib import Path
 
 import pytest
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+SMOKE_SLAVE_C = SCRIPT_DIR / "fmi2_smoke_slave.c"
 
 from fmi_bridge import (
     BridgeError,
@@ -399,3 +404,139 @@ def test_monitor_prompt_regex_accepts_renode_prompt_forms():
     for line in (b"(monitor) >", b"(monitor)foo", b"no prompt here",
                  b"welcome banner (monitor) trailing text"):
         assert not pattern.search(line), line
+
+# ---------------------------------------------------------------------------
+# HW-T2-BRIDGE-017..019: the pinned FMPy executor contract (F-19)
+#
+# Dispatch 7 (run 35723022901) failed with "cannot import name 'extract'
+# from 'fmpy.util'": the bridge's FMPy usage was written against names that
+# do not exist in the pinned fmpy 0.3.24, and no sandbox test could catch it
+# because the sandbox has no FMPy. These tests run where the pinned FMPy is
+# importable (the t2 CI image; a local venv with fmpy==0.3.24) and drive the
+# exact executor path against a minimal FMU compiled from the pinned C
+# fixture (fmi2_smoke_slave.c), so an API regression in the pin is caught
+# before a live dispatch.
+# ---------------------------------------------------------------------------
+
+def _require_fmpy_gcc():
+    """Fail-closed toolchain gate for the FMPy contract tests (F-19)."""
+    try:
+        import fmpy  # noqa: F401
+    except ImportError as error:
+        if os.environ.get("CANCESTRY_HW_ALLOW_SKIP") == "1":
+            pytest.skip("fmpy (pinned FMI executor) not installed: %s" % error)
+        pytest.fail("fmpy (pinned FMI executor) is required for the FMPy "
+                    "contract tests (F-19): %s" % error)
+    if shutil.which("gcc") is None:
+        if os.environ.get("CANCESTRY_HW_ALLOW_SKIP") == "1":
+            pytest.skip("gcc not installed (local development)")
+        pytest.fail("gcc is required to build the FMPy smoke FMU (F-19)")
+
+
+def _smoke_model_description(fmi_version, with_co_simulation):
+    """Schema-conformant modelDescription.xml for the smoke slave.
+
+    FMI 2.0: <CoSimulation>/<ModelExchange> + ScalarVariable-wrapped Real
+    variables + ModelStructure (fmpy 0.3.24 validates against the FMI 2.0
+    XSD). FMI 1.0: no interface element, required root state counts.
+    """
+    if fmi_version == "1.0":
+        return (
+            '<?xml version="1.0" encoding="utf-8"?>\n'
+            '<fmiModelDescription fmiVersion="1.0" '
+            'modelName="CancestryT2SmokeHoldup" '
+            'modelIdentifier="cancestry_t2_holdup" '
+            'guid="{99999999-8888-4777-8666-555555555555}" '
+            'numberOfContinuousStates="0" numberOfEventIndicators="0">\n'
+            '  <ModelVariables>\n'
+            '    <ScalarVariable name="vBat" valueReference="0" '
+            'causality="output">\n'
+            '      <Real/>\n'
+            '    </ScalarVariable>\n'
+            '  </ModelVariables>\n'
+            '</fmiModelDescription>\n'
+        )
+    interface = "CoSimulation" if with_co_simulation else "ModelExchange"
+    attrs = ' canHandleVariableCommunicationStepSize="true"' \
+        if with_co_simulation else ""
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<fmiModelDescription fmiVersion="2.0" '
+        'modelName="CancestryT2SmokeHoldup" '
+        'guid="{c3b1a2d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d}">\n'
+        '  <%s modelIdentifier="cancestry_t2_holdup"%s/>\n'
+        % (interface, attrs)
+        + '  <ModelVariables>\n'
+        + '    <ScalarVariable name="vBat" valueReference="0" '
+        + 'causality="output">\n'
+        + '      <Real/>\n'
+        + '    </ScalarVariable>\n'
+        + '    <ScalarVariable name="t" valueReference="1" '
+        + 'causality="local">\n'
+        + '      <Real/>\n'
+        + '    </ScalarVariable>\n'
+        + '  </ModelVariables>\n'
+        + '  <ModelStructure>\n'
+        + '    <Outputs><Unknown index="1"/></Outputs>\n'
+        + '  </ModelStructure>\n'
+        + '</fmiModelDescription>\n'
+    )
+
+
+def _build_smoke_fmu(tmp_path, fmi_version="2.0", with_co_simulation=True):
+    """Compile the pinned C fixture into a minimal FMI FMU; return path."""
+    import fmpy
+    so_name = "cancestry_t2_holdup" + fmpy.sharedLibraryExtension
+    bin_dir = tmp_path / "build" / "binaries" / fmpy.platform
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    so_path = bin_dir / so_name
+    result = subprocess.run(
+        ["gcc", "-shared", "-fPIC", "-O0", "-Wall", "-Wextra", "-Werror",
+         "-o", str(so_path), str(SMOKE_SLAVE_C)],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if result.returncode != 0:
+        pytest.fail("smoke slave C fixture failed to compile:\n%s"
+                    % result.stdout.decode("utf-8", "replace"))
+    xml_path = tmp_path / "build" / "modelDescription.xml"
+    xml_path.write_text(
+        _smoke_model_description(fmi_version, with_co_simulation),
+        encoding="utf-8")
+    fmu_path = tmp_path / "cancestry_t2_holdup.fmu"
+    with zipfile.ZipFile(fmu_path, "w") as archive:
+        archive.write(xml_path, "modelDescription.xml")
+        archive.write(so_path, "binaries/%s/%s" % (fmpy.platform, so_name))
+    return fmu_path
+
+
+def test_fmpy_slave_contract_with_pinned_executor(tmp_path):
+    """HW-T2-BRIDGE-017: FmpyFmuSlave drives pinned fmpy 0.3.24 end-to-end."""
+    _require_fmpy_gcc()
+    fmu = _build_smoke_fmu(tmp_path)
+    slave = FmpyFmuSlave(fmu)
+    # vBat = 3.3 V at t = 0 (the smoke slave's holdup shape).
+    assert slave.read_real("vBat") == 3.3
+    assert slave.read_real("t") == 0.0
+    # One 1 ms communication step: 20 mV of discharge (20e-6 V/us).
+    slave.do_step_us(0, 1000)
+    assert abs(slave.read_real("vBat") - (3.3 - 20e-6 * 1000)) < 1e-9
+    assert slave.read_real("t") == 1e-3
+    # Unknown variables fail closed (the name map is the contract).
+    with pytest.raises(BridgeError):
+        slave.read_real("not_a_variable")
+    slave.close()
+
+
+def test_fmpy_slave_rejects_model_exchange_only_fmu(tmp_path):
+    """HW-T2-BRIDGE-018: an FMU without a CoSimulation interface fails closed."""
+    _require_fmpy_gcc()
+    fmu = _build_smoke_fmu(tmp_path, with_co_simulation=False)
+    with pytest.raises(BridgeError, match="no CoSimulation interface"):
+        FmpyFmuSlave(fmu)
+
+
+def test_fmpy_slave_rejects_wrong_fmi_version(tmp_path):
+    """HW-T2-BRIDGE-019: a non-FMI-2 FMU fails closed (F-2 guard)."""
+    _require_fmpy_gcc()
+    fmu = _build_smoke_fmu(tmp_path, fmi_version="1.0")
+    with pytest.raises(BridgeError, match="FMI 2.0"):
+        FmpyFmuSlave(fmu)

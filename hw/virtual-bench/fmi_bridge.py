@@ -235,14 +235,22 @@ class FmpyFmuSlave(FmiSlave):
 
     def __init__(self, fmu_path):
         try:
-            from fmpy.fmi2 import FMU2Slave
+            import fmpy
             from fmpy.model_description import read_model_description
-            from fmpy.util import extract
         except ImportError as error:
             raise BridgeError(
                 "FMPy is not installed; the T2 bridge refuses to run without "
                 "the pinned FMU executor (fail-closed): %s" % error)
-        description = read_model_description(extract(str(fmu_path)))
+        # F-19 (issue #55): fmpy 0.3.24 - the TCL1 pin - exposes extract()
+        # at the package TOP LEVEL (not in fmpy.util; that name does not
+        # exist in this version), and FMU2Slave's constructor takes
+        # guid/modelIdentifier/unzipDirectory keyword arguments, so the
+        # canonical construction path is fmpy.instantiate_fmu(), the same
+        # helper the T1 simulate_fmu pipeline drives. Dispatch 7 (run
+        # 35723022901) failed with "cannot import name 'extract' from
+        # 'fmpy.util'" before the FMU was ever touched.
+        unzipdir = fmpy.extract(str(fmu_path))
+        description = read_model_description(unzipdir)
         if not str(description.fmiVersion).startswith("2.0"):
             raise BridgeError(
                 "T2 requires an FMI 2.0 CoSimulation FMU (bring-up finding "
@@ -252,8 +260,8 @@ class FmpyFmuSlave(FmiSlave):
         if description.coSimulation is None:
             raise BridgeError("%s has no CoSimulation interface" % fmu_path)
         self._description = description
-        self._fmu = FMU2Slave(extract(str(fmu_path)))
-        self._fmu.instantiate()
+        self._fmu = fmpy.instantiate_fmu(
+            unzipdir, description, fmi_type="CoSimulation")
         self._fmu.setupExperiment(startTime=0.0)
         self._fmu.enterInitializationMode()
         self._fmu.exitInitializationMode()
