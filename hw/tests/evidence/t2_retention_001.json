@@ -50,7 +50,7 @@
     "hw/virtual-bench/fmi2_smoke_slave.c": "sha256:621f65454471412ac79ed90fbb67025ea44ada1bbb1b41c3c995dc4fbfed26d7",
     "hw/virtual-bench/fmi_bridge.py": "sha256:86b049fcfaed2f69dee3cc271b1795126816ffd68d67ae6ca8550b0f5d706e21",
     "hw/virtual-bench/fmi_bridge_test.py": "sha256:e30a072a4b099374872d0edc56ea09f0f521a048d785ac867be0cf34943149a9",
-    "hw/virtual-bench/renode/cancestry-hw.resc": "sha256:d3001c83cd8043ac8c0a38c7037aaa464c6c20b471fc9d8db65a060a5beb388f",
+    "hw/virtual-bench/renode/cancestry-hw.resc": "sha256:0d4778f67281b479c6b5d2615448fb241c614850f95a3a6698025a08b7a2304a",
     "hw/virtual-bench/renode/gpioa_model.py": "sha256:a05b2b47e3f08ba411ebdcc41689f19b934fe40e9746d0cfcdb3c55b75c5f37a",
     "hw/virtual-bench/renode/iwdg_model.py": "sha256:677bd4e7fa8daa48bcafd0fc06df36461d8e8762c4c2d81f501baf4bbdd40b67",
     "hw/virtual-bench/renode/rcc_model.py": "sha256:9fe92b7836f4fcd4a765d65ff302d426389a45db1049c64d59cf9bf80df5306d",

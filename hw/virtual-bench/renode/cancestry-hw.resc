@@ -58,6 +58,7 @@ python "_clog.Logger.Info('[cancestry-hw] step2: machine created')"
 # 11, run 35730854679: no step3 marker, the 'Could not find file' error
 # only reached the client terminal) - the include then aborted here, which
 # is why t2_trace was never mapped in dispatches 7-11.
+python "import os; _repl = os.path.join(os.getcwd(), 'stm32g474-cancestry.repl'); _clog.Logger.Info('[cancestry-hw] step2b: repl path %s isfile=%s' % (_repl, os.path.isfile(_repl)))"
 machine LoadPlatformDescription stm32g474-cancestry.repl
 python "_clog.Logger.Info('[cancestry-hw] step3: platform loaded')"
 python "_clog.Logger.Info('[cancestry-hw] step3b: scope after load: sysbus=%s machine=%s monitor.Machine=%s' % ('sysbus' in dir() and 'yes' or 'NO', 'machine' in dir() and 'yes' or 'NO', 'yes' if monitor.Machine is not None else 'NO'))"
