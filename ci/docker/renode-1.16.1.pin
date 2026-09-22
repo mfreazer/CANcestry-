@@ -1,0 +1,26 @@
+# Pinned Renode release asset for the T2 virtual-bench image (issue #55, H-08).
+#
+# Renode v1.16.1 (https://github.com/renode/renode/releases/tag/v1.16.1),
+# portable Linux build with the bundled self-contained .NET 8 runtime - no
+# system .NET/Mono packages are required (build.sh: `dotnet publish
+# --self-contained true`).
+#
+# Identity pin: GitHub does not publish per-asset SHA-256 digests through
+# its API, so the pin fixes the release tag, the asset identity (GitHub
+# asset id) and the exact byte size. ci/docker/Dockerfile.t2 verifies the
+# size on download and records the MEASURED sha256 of the fetched bytes in
+# the image build log; the hw-nightly t2-virtual-bench job copies that
+# measured digest into the run log (build/hw/t2_retention_001.runlog.json),
+# which is the deterministic evidence of the exact Renode bytes executed.
+# Re-fetching the same asset id/size yields the same bytes; a changed byte
+# stream changes the measured digest and the run log records the drift.
+#
+# Why 1.16.1 (not 1.15): the T2 event-capture hooks use `cpu AddSymbolHook`,
+# which does not exist in Renode 1.15.x (first shipped in v1.16.0,
+# src/Renode/Plugins/OsSymbolHook.cs). See docs/hw/t2-bringup-report.md
+# finding F-1.
+release: v1.16.1
+asset: renode-1.16.1.linux-portable-dotnet.tar.gz
+asset_id: 356830383
+size_bytes: 77304986
+url: https://github.com/renode/renode/releases/download/v1.16.1/renode-1.16.1.linux-portable-dotnet.tar.gz

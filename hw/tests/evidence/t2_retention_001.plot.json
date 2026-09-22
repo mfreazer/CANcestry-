@@ -53,7 +53,7 @@
       "y_units": "V"
     }
   ],
-  "source_evidence_hash": "sha256:18a12bba9b566753a878c8d356b0190dfde28b453266d3776baef991478c110e",
+  "source_evidence_hash": "sha256:ad582879a8dbf71714f2e844c9bcebdf2463610f96e29465bc62e955ef05c828",
   "source_evidence_path": "hw/tests/evidence/t2_retention_001.json",
   "source_requirement": "HW-SF-002",
   "status": "pending",

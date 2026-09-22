@@ -2,10 +2,11 @@
 """T2 orchestration: HW-SF-002 retention verification on the virtual bench.
 
 Implements the H-07 (issue #53) T2 pipeline over the platform model
-(``renode/``) and the deterministic FMI 3.0 bridge (``fmi_bridge.py``):
+(``renode/``) and the deterministic FMI 2.0 bridge (``fmi_bridge.py``):
 
     1. preflight: locate the pinned toolchain (omc, renode, firmware ELF)
-    2. build the Holdup FMU (FMI 3.0 CoSimulation) headless via omc
+    2. build the Holdup FMU (FMI 2.0 CoSimulation; bring-up finding F-2 -
+       the pinned OpenModelica 1.24.0 cannot export FMI 3.0) headless via omc
     3. launch Renode headless with cancestry-hw.resc and the v1.0.0 ELF
     4. run the FMI bridge for 150 ms (100 us master / 1 us FMU steps)
     5. capture the QA-EV-01 events (retention write, safe latch, IWDG fire),
@@ -84,11 +85,13 @@ TOOL_PINS = {
     "fmpy": "0.3.24",
     "openmodelica": "1.24",
     "python": ">=3.10",
-    "renode": "1.15",
+    "renode": "1.16",
 }
-# Runner-side Renode policy pin: the platform's scripted peripherals target
-# the documented Renode 1.15.x PythonPeripheral/machine APIs.
-RENODE_VERSION_PIN = (1, 15)
+# Runner-side Renode policy pin: the platform's scripted peripherals and the
+# T2 event-capture hooks (``cpu AddSymbolHook``) require Renode >= 1.16
+# (bring-up finding F-1: AddSymbolHook does not exist in 1.15.x). 1.16.1 is
+# the pinned release; the runner accepts any 1.16.x.
+RENODE_VERSION_PIN = (1, 16)
 
 # The retention-domain load scenario: OR-001 parameters of the committed
 # holdup_001 sim case (single source of truth for the plant physics).
@@ -101,7 +104,9 @@ TOLERANCE_VBAT_MV = 1  # holdup_001 sim-case tolerance (0.001 V), in mV
 # so regeneration stays deterministic; hashes are computed live.
 PINNED_SOURCES = (
     "ci/docker/Dockerfile",
+    "ci/docker/Dockerfile.t2",
     "ci/docker/base-image.digest",
+    "ci/docker/renode-1.16.1.pin",
     "docs/hw/tool-qualification.md",
     "docs/hw/virtual-bench-plan.md",
     "hw/model/CancestryLib/Power/Holdup.mo",
@@ -111,6 +116,9 @@ PINNED_SOURCES = (
     "hw/tests/oracles/or_001_holdup.py",
     "hw/tests/oracles/registry.csv",
     "hw/tests/oracles/registry.json",
+    "hw/virtual-bench/firmware/build_firmware.sh",
+    "hw/virtual-bench/firmware/main.c",
+    "hw/virtual-bench/firmware/startup.s",
     "hw/virtual-bench/fmi_bridge.py",
     "hw/virtual-bench/fmi_bridge_test.py",
     "hw/virtual-bench/renode/cancestry-hw.resc",
@@ -169,7 +177,7 @@ def expected_pending_manifest():
         "evidence_of": (
             "T2 virtual-bench foundation for HW-SF-002 (H-07, issue #53): "
             "Renode platform model (hw/virtual-bench/renode/), deterministic "
-            "FMI 3.0 co-simulation bridge (hw/virtual-bench/fmi_bridge.py) "
+            "FMI 2.0 co-simulation bridge (hw/virtual-bench/fmi_bridge.py) "
             "and orchestration (this file). No T2 run has been executed: "
             "this manifest records the pending disposition of the retention "
             "sequence (retention write < safe latch < IWDG fire) pending the "
@@ -207,15 +215,16 @@ def expected_pending_manifest():
         "oracle_id": ORACLE_ID,
         "pass": False,
         "pending_reason": (
-            "The T2 toolchain (Renode binary plus the v1.0.0 firmware ELF "
-            "built from tag v1.0.0) is not available to the hosted CI "
-            "image (HW-PLAN C5 places heavy simulation on self-hosted "
-            "infrastructure), so no executed run backs this artifact yet. "
-            "Foundation delivered by https://github.com/mfreazer/CANcestry-/"
+            "The T2 toolchain (pinned Renode 1.16 + the off-tree v1.0.0 "
+            "firmware ELF) is now provisioned by the hw-nightly "
+            "t2-virtual-bench job (issue #55, H-08), but no executed T2 run "
+            "backs this artifact yet, so the retention sequence (retention "
+            "write < safe latch < IWDG fire) remains sim-pending. Foundation "
+            "delivered by https://github.com/mfreazer/CANcestry-/"
             "issues/53; the first executing run is produced by "
-            "hw/virtual-bench/run_t2_retention.py on Renode-equipped "
-            "infrastructure and must reproduce this ledger chain "
-            "deterministically before any passing claim."),
+            "hw/virtual-bench/run_t2_retention.py on the T2 toolchain image "
+            "and must reproduce this ledger chain deterministically before "
+            "any passing claim."),
         "provisional": True,
         "requirement_id": REQUIREMENT_ID,
         "schema_version": "0.1.0",
@@ -274,11 +283,25 @@ def check_renode_version(renode_bin):
         [str(renode_bin), "--version"], stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT, timeout=60)
     text = result.stdout.decode("utf-8", "replace")
-    match = re.search(r"Renode\s+(\d+)\.(\d+)", text)
+    # `renode --version` prints, e.g.:
+    #   renode v1.0.0.0
+    #     build: 1.16.1
+    #     build type: Release
+    #     runtime: .NET 8.x
+    # The release version is the "build:" line (the assembly version is a
+    # constant 1.0.0.0 and carries no release information). The legacy
+    # "Renode X.Y" form is kept as a fallback. (Bring-up finding F-3: the
+    # H-07 regex matched neither form of the real 1.16 output.)
+    match = re.search(r"build:\s*(\d+)\.(\d+)\.(\d+)", text)
     if not match:
-        raise T2SetupError("cannot parse `renode --version` output: %r"
-                           % text.strip()[:200])
-    version = (int(match.group(1)), int(match.group(2)))
+        match = re.search(r"[Rr]enode\s+v?(\d+)\.(\d+)", text)
+        if match:
+            version = (int(match.group(1)), int(match.group(2)))
+        else:
+            raise T2SetupError("cannot parse `renode --version` output: %r"
+                               % text.strip()[:200])
+    else:
+        version = (int(match.group(1)), int(match.group(2)))
     if version != RENODE_VERSION_PIN:
         raise T2SetupError(
             "renode %d.%d does not match the runner policy pin %d.%d; the "
@@ -301,7 +324,14 @@ def locate_omc():
 # ---------------------------------------------------------------------------
 
 def build_fmu(omc, build_dir=BUILD_DIR):
-    """Build the Holdup FMU (FMI 3.0, CoSimulation) headless; return path."""
+    """Build the Holdup FMU (FMI 2.0, CoSimulation) headless; return path.
+
+    FMI 2.0, not the plan's FMI 3.0 wording: bring-up finding F-2 - the
+    pinned OpenModelica 1.24.0 cannot export FMI 3.0 (its FMI.mo
+    checkFMIVersion accepts only 1.0/2.0), while the FMI 2.0 CS FMU is the
+    exact configuration the T1 holdup_001 evidence was built with on this
+    same toolchain (docs/hw/t2-bringup-report.md).
+    """
     build_dir.mkdir(parents=True, exist_ok=True)
     script = build_dir / "omc_build_t2.mos"
     script.write_text(
@@ -313,7 +343,7 @@ def build_fmu(omc, build_dir=BUILD_DIR):
         "getErrorString();\n"
         'loadFile("%s");\n' % (MODEL_ROOT / "Power" / "Holdup.mo") +
         "getErrorString();\n"
-        'buildModelFMU(%s, version="3.0", fmuType="cs", '
+        'buildModelFMU(%s, version="2.0", fmuType="cs", '
         'fileNamePrefix="cancestry_t2_holdup");\n'
         "getErrorString();\n",
         encoding="utf-8")
@@ -552,6 +582,12 @@ def main(argv=None):
                         help="firmware ELF (default: CANCESTRY_T2_ELF)")
     parser.add_argument("--renode", default=None,
                         help="renode binary (default: CANCESTRY_RENODE/$PATH)")
+    parser.add_argument("--fmu", default=None,
+                        help="prebuilt Holdup FMU (default: build it via omc; "
+                             "reuse a single FMU artifact across the "
+                             "determinism pair so the evidence's fmu hash "
+                             "compares identical bytes - same contract as "
+                             "the ELF)")
     args = parser.parse_args(argv[1:] if argv is None else argv[1:])
 
     if args.emit_pending:
@@ -562,7 +598,12 @@ def main(argv=None):
         renode_bin = locate_renode(args.renode)
         check_renode_version(renode_bin)
         elf_path = locate_elf(args.elf)
-        fmu_path = build_fmu(omc)
+        if args.fmu:
+            fmu_path = Path(args.fmu)
+            if not fmu_path.is_file():
+                raise T2SetupError("prebuilt FMU not found: %s" % fmu_path)
+        else:
+            fmu_path = build_fmu(omc)
         run_body, _ = run_scenario(renode_bin, elf_path, fmu_path)
     except (T2SetupError, BridgeError) as error:
         print("T2 FAILED (fail-closed, no evidence written): %s" % error)

@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
-"""Deterministic FMI 3.0 co-simulation bridge for the CANcestry T2 virtual bench.
+"""Deterministic FMI 2.0 co-simulation bridge for the CANcestry T2 virtual bench.
 
 Implements the H-07 (issue #53) bridge contract over the platform model in
 ``hw/virtual-bench/renode/``:
+
+FMI version (H-08 bring-up finding F-2, docs/hw/t2-bringup-report.md): the
+plant is an FMI 2.0 CoSimulation FMU. The plan's "FMI 3.0" wording is a
+planning detail, not a requirement; the pinned OpenModelica 1.24.0 cannot
+export FMI 3.0 (its FMI.mo checkFMIVersion accepts only 1.0/2.0), while the
+same toolchain is proven to produce the FMI 2.0 CS FMU the T1 holdup_001
+evidence was built with. FMPy's bounded doStep/readout role is unchanged.
 
     OpenModelica plant (Holdup FMU, OR-001)  <->  Renode (v1.0.0 firmware ELF)
 
@@ -155,7 +162,12 @@ class RenodeMonitorEndpoint(RenodeEndpoint):
     deterministic (HwAGENTS.md rule 5).
     """
 
-    _PROMPT = re.compile(rb"\((?:monitor|machine-[A-Za-z0-9_.:-]+)\)[ \t]*\r?$")
+    # The Renode monitor prompt is "(monitor)>" or "(machine-<name>)>" with a
+    # trailing space; the ">" is optional here so the protocol client also
+    # accepts the bare-prompt form used by the unit-test double. (H-08
+    # bring-up finding F-3: the H-07 regex required the prompt to end after
+    # the closing parenthesis and never matched the real monitor prompt.)
+    _PROMPT = re.compile(rb"\((?:monitor|machine-[A-Za-z0-9_.:-]+)\)>?[ \t]*\r?$")
 
     def __init__(self, host, port, timeout=30.0):
         self._socket = socket.create_connection((host, int(port)),
@@ -202,7 +214,7 @@ class RenodeMonitorEndpoint(RenodeEndpoint):
 
 
 class FmiSlave(object):
-    """Abstract FMI 3.0 slave (CoSimulation) side of the bridge."""
+    """Abstract FMI 2.0 slave (CoSimulation) side of the bridge."""
 
     def read_real(self, name):
         raise NotImplementedError
@@ -212,16 +224,18 @@ class FmiSlave(object):
 
 
 class FmpyFmuSlave(FmiSlave):
-    """FMPy-driven FMI 3.0 CoSimulation slave (guarded import).
+    """FMPy-driven FMI 2.0 CoSimulation slave (guarded import).
 
     FMPy is TCL1 for the bounded doStep/readout role
     (docs/hw/tool-qualification.md section 3); the OpenModelica compiler gap
-    is inherited by the evidence, not by this module.
+    is inherited by the evidence, not by this module. The FMI 2.0 state
+    sequence is instantiate -> setupExperiment -> enterInitializationMode ->
+    exitInitializationMode -> doStep*, as in the T1 holdup_001 pipeline.
     """
 
     def __init__(self, fmu_path):
         try:
-            from fmpy.fmi3 import FMU3Slave
+            from fmpy.fmi2 import FMU2Slave
             from fmpy.model_description import read_model_description
             from fmpy.util import extract
         except ImportError as error:
@@ -229,31 +243,30 @@ class FmpyFmuSlave(FmiSlave):
                 "FMPy is not installed; the T2 bridge refuses to run without "
                 "the pinned FMU executor (fail-closed): %s" % error)
         description = read_model_description(extract(str(fmu_path)))
-        if not str(description.fmiVersion).startswith("3.0"):
+        if not str(description.fmiVersion).startswith("2.0"):
             raise BridgeError(
-                "T2 requires an FMI 3.0 FMU (virtual-bench-plan section 1); "
-                "%s declares fmiVersion %r (build with omc version=\"3.0\")"
+                "T2 requires an FMI 2.0 CoSimulation FMU (bring-up finding "
+                "F-2: the pinned OpenModelica 1.24.0 cannot export FMI 3.0); "
+                "%s declares fmiVersion %r"
                 % (fmu_path, description.fmiVersion))
         if description.coSimulation is None:
             raise BridgeError("%s has no CoSimulation interface" % fmu_path)
         self._description = description
-        self._fmu = FMU3Slave(extract(str(fmu_path)))
+        self._fmu = FMU2Slave(extract(str(fmu_path)))
         self._fmu.instantiate()
+        self._fmu.setupExperiment(startTime=0.0)
         self._fmu.enterInitializationMode()
         self._fmu.exitInitializationMode()
-        self._refs = {
-            name: description.variableByName[name].valueReference
-            for name in self.output_names()
-        }
-
-    def output_names(self):
-        return [variable.name for variable in self._description.modelVariables
-                if variable.causality == "output"]
+        # FMPy 0.3.24 exposes no variableByName helper; build the name map
+        # from the (complete) modelVariables list instead. (Bring-up finding
+        # F-4.)
+        self._refs = {variable.name: variable.valueReference
+                      for variable in description.modelVariables}
 
     def read_real(self, name):
         if name not in self._refs:
-            raise BridgeError("unknown FMU output %r" % name)
-        values = self._fmu.getFloat64([self._refs[name]], 1)
+            raise BridgeError("unknown FMU variable %r" % name)
+        values = self._fmu.getReal([self._refs[name]])
         return float(values[0])
 
     def do_step_us(self, current_us, step_us):

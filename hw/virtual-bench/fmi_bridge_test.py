@@ -381,3 +381,21 @@ def test_fixed_seed_is_pinned():
     """HW-T2-BRIDGE-015: the bridge and the .resc seed stay in lockstep."""
     resc = (SCRIPT_DIR / "renode" / "cancestry-hw.resc").read_text()
     assert '$t2_seed?="%s"' % FIXED_SEED in resc
+
+
+def test_monitor_prompt_regex_accepts_renode_prompt_forms():
+    """HW-T2-BRIDGE-016: the prompt matcher accepts the real monitor prompt.
+
+    Renode's telnet monitor prompts are "(monitor)> " and, after
+    "mach create <name>", "(machine-<name)> ". The H-07 matcher required the
+    line to end right after the closing parenthesis and matched neither form
+    (bring-up finding F-3); the bare "(monitor) " form of the test double
+    must keep working.
+    """
+    pattern = RenodeMonitorEndpoint._PROMPT
+    for line in (b"(monitor)> ", b"(machine-cancestry)> ", b"(monitor) ",
+                 b"(monitor)> \r"):
+        assert pattern.search(line), line
+    for line in (b"(monitor) >", b"(monitor)foo", b"no prompt here",
+                 b"welcome banner (monitor) trailing text"):
+        assert not pattern.search(line), line

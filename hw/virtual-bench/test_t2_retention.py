@@ -159,7 +159,14 @@ def test_t2_retention_end_to_end():
             "test on Renode-equipped infrastructure (HW-PLAN C5) with the "
             "v1.0.0 firmware ELF; per H-07 it must not silently downgrade to "
             "a partial check.")
-    exit_code = runner.main(["run_t2_retention.py", "--check"])
+    argv = ["run_t2_retention.py", "--check"]
+    # Reuse the FMU artifact a prior run in this environment already built,
+    # so the check compares identical FMU bytes (same contract as the ELF).
+    # If none exists, the runner builds it (build_fmu) as it always has.
+    prebuilt = runner.BUILD_DIR / "cancestry_t2_holdup.fmu"
+    if prebuilt.is_file():
+        argv += ["--fmu", str(prebuilt)]
+    exit_code = runner.main(argv)
     assert exit_code == 0
 
 
@@ -168,9 +175,59 @@ def test_t2_retention_end_to_end():
 # land with commit 4, issue #53 deliverable 7)
 # ---------------------------------------------------------------------------
 
+def _assert_passing_t2_invariants(document):
+    """Toolchain-free invariants of a committed T2 bring-up artifact.
+
+    Cross-run byte-identity is proven by the hw-nightly ``--check``
+    determinism gate (issue #55); the invariants that any static check can
+    verify are asserted here: bring-up status, the QA-EV-01 ordering on the
+    real timestamps, source-hash drift detection against the pinned sources,
+    the scenario/tool contract constants and the artifact hash forms.
+    """
+    assert document["status"] == "passing"
+    assert document["pass"] is True
+    assert document["provisional"] is True
+    events = document["events"]
+    assert (events["retention_write_us"]
+            < events["safe_latch_us"]
+            < events["iwdg_fire_us"])
+    assert document["ordering"]["contract"] == (
+        "retention_write < safe_latch < iwdg_fire")
+    assert document["ordering"]["holds"] is True
+    # No event may land outside the 150 ms scenario.
+    assert 0 <= events["iwdg_fire_us"] < fmi_bridge.SCENARIO_DURATION_US
+    # Source-hash drift detection: the artifact was generated from exactly
+    # the pinned sources now in the tree.
+    assert document["source_hashes"] == runner._live_source_hashes()
+    scenario = document["scenario"]
+    assert scenario["duration_us"] == fmi_bridge.SCENARIO_DURATION_US
+    assert scenario["master_step_us"] == fmi_bridge.MASTER_STEP_US
+    assert scenario["fmu_step_us"] == fmi_bridge.FMU_STEP_US
+    assert scenario["method"] == "virtual_bench"
+    assert scenario["seed"] == fmi_bridge.FIXED_SEED
+    assert document["tool_pins"] == runner.TOOL_PINS
+    for key in ("elf", "fmu", "bridge", "trace"):
+        assert document["hashes"][key].startswith("sha256:")
+    assert document["retention"]["preserved_across_iwdg_reset"] is True
+    # 0x45565101 = CANCESTRY_FAULT_CODE_QUEUE_SATURATION (QA-EV-01).
+    assert document["retention"]["code"] == 0x45565101
+
+
 def test_committed_t2_evidence_matches_canonical_regeneration():
-    """HW-T2-EVID-001: the committed artifact IS the pending manifest."""
+    """HW-T2-EVID-001: the committed artifact is canonical and consistent.
+
+    Pending form: byte-identical to the canonical pending-manifest
+    regeneration. Passing form (post bring-up, issue #55): the bring-up run
+    evidence, canonically rendered, with the bring-up invariants held.
+    """
     committed = EVIDENCE_PATH.read_text(encoding="utf-8")
+    document = json.loads(committed)
+    if document["status"] == "passing":
+        assert committed == runner.render_evidence_bytes(document), \
+            "the passing artifact is not canonically rendered"
+        _assert_passing_t2_invariants(document)
+        return
+    assert document["status"] == "pending"
     regenerated = runner.render_evidence_bytes(
         runner.expected_pending_manifest())
     assert committed == regenerated

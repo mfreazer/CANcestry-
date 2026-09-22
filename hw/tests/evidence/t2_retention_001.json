@@ -1,7 +1,7 @@
 {
   "case_id": "t2_retention_001",
   "credibility_level": "CL0",
-  "evidence_of": "T2 virtual-bench foundation for HW-SF-002 (H-07, issue #53): Renode platform model (hw/virtual-bench/renode/), deterministic FMI 3.0 co-simulation bridge (hw/virtual-bench/fmi_bridge.py) and orchestration (this file). No T2 run has been executed: this manifest records the pending disposition of the retention sequence (retention write < safe latch < IWDG fire) pending the first Renode-equipped run of the v1.0.0 firmware ELF.",
+  "evidence_of": "T2 virtual-bench foundation for HW-SF-002 (H-07, issue #53): Renode platform model (hw/virtual-bench/renode/), deterministic FMI 2.0 co-simulation bridge (hw/virtual-bench/fmi_bridge.py) and orchestration (this file). No T2 run has been executed: this manifest records the pending disposition of the retention sequence (retention write < safe latch < IWDG fire) pending the first Renode-equipped run of the v1.0.0 firmware ELF.",
   "firmware": {
     "elf": "built off-tree from tag v1.0.0 with the pinned toolchain image (virtual-bench-plan section 2); supplied at run time via CANCESTRY_T2_ELF; never committed; its sha256 is recorded in the evidence at run time",
     "modification": "none; the firmware is read-only (issue #53)"
@@ -17,7 +17,7 @@
   ],
   "oracle_id": "OR-001",
   "pass": false,
-  "pending_reason": "The T2 toolchain (Renode binary plus the v1.0.0 firmware ELF built from tag v1.0.0) is not available to the hosted CI image (HW-PLAN C5 places heavy simulation on self-hosted infrastructure), so no executed run backs this artifact yet. Foundation delivered by https://github.com/mfreazer/CANcestry-/issues/53; the first executing run is produced by hw/virtual-bench/run_t2_retention.py on Renode-equipped infrastructure and must reproduce this ledger chain deterministically before any passing claim.",
+  "pending_reason": "The T2 toolchain (pinned Renode 1.16 + the off-tree v1.0.0 firmware ELF) is now provisioned by the hw-nightly t2-virtual-bench job (issue #55, H-08), but no executed T2 run backs this artifact yet, so the retention sequence (retention write < safe latch < IWDG fire) remains sim-pending. Foundation delivered by https://github.com/mfreazer/CANcestry-/issues/53; the first executing run is produced by hw/virtual-bench/run_t2_retention.py on the T2 toolchain image and must reproduce this ledger chain deterministically before any passing claim.",
   "provisional": true,
   "requirement_id": "HW-SF-002",
   "scenario": {
@@ -31,7 +31,9 @@
   "sim_case": "hw/tests/cases/holdup_001.simcase.json",
   "source_hashes": {
     "ci/docker/Dockerfile": "sha256:49703d8b330e41c58e5411bdede3310aec55199e3fb77fc973189b9ee7358102",
+    "ci/docker/Dockerfile.t2": "sha256:799136cfa29a2c9dc684ecb6946a33c94341e842eb5e7d375512685729437092",
     "ci/docker/base-image.digest": "sha256:fbe0594ac4ef88a211f86be44892d6d24efaefd22b747fe6aca41f512e38614f",
+    "ci/docker/renode-1.16.1.pin": "sha256:091ef14d0677440408bc2436530442e4fea1690439b1827a7bd08d495c6b44f1",
     "docs/hw/tool-qualification.md": "sha256:51509f080b4b114345a6285c01e9275a86e9d324c0aa27ffe6425fdfaf78ff53",
     "docs/hw/virtual-bench-plan.md": "sha256:8d5a3f5d07730c9d63090d740bf17466979d913174b3c6c8b9032700f86c84fe",
     "hw/model/CancestryLib/Power/Holdup.mo": "sha256:20af059a03aa6537bbf462fe3b1873ae7dd7a5faa9daca0cbf92fdf4322946b4",
@@ -41,26 +43,29 @@
     "hw/tests/oracles/or_001_holdup.py": "sha256:0be9fe0869c355a9780f73d17981f92dba4af1bbfc2b1be392930402a5f63b9d",
     "hw/tests/oracles/registry.csv": "sha256:7e478f80772bf29e09b02981684e06784646adb7459fe95afd38982d8836a6ba",
     "hw/tests/oracles/registry.json": "sha256:9480431021cb56920a3236968accebf60b98a6ef0ac5835957cd471538b00345",
-    "hw/virtual-bench/fmi_bridge.py": "sha256:0b9ddda883943651bad0c5327fe1bdc31bd40a4d9166475440d4774d24b84079",
-    "hw/virtual-bench/fmi_bridge_test.py": "sha256:25ab22acb9ddfb9d9a10bc6155faac6e6b635ca98da5a028b46b0facd8658bc3",
+    "hw/virtual-bench/firmware/build_firmware.sh": "sha256:157a1b8f952e4c68e5f9185d7dd268adacec7bd1bdd446f4a4e88ee7511c4d64",
+    "hw/virtual-bench/firmware/main.c": "sha256:e1f2b8028a9d92d105c0ea434d0a803eb367be44dbb0f837f5e2c7e44920662c",
+    "hw/virtual-bench/firmware/startup.s": "sha256:18a713ce1ba78e95f31ef2f6d19e7c5d0d986d8e35e3a5ca368fb6cb8cfc868e",
+    "hw/virtual-bench/fmi_bridge.py": "sha256:f6fb2268eb20053ccb71cfeaa192975dbe94a1d03813885485a3bbe1031c6423",
+    "hw/virtual-bench/fmi_bridge_test.py": "sha256:b23ee4c7500fc9464843c0ab57258b94e7534a5f6c785c9cbd9f1af1f9711375",
     "hw/virtual-bench/renode/cancestry-hw.resc": "sha256:84b9370243e9e1115178f6988c5db536feecf7b257464819c62b7f6e024876df",
     "hw/virtual-bench/renode/gpioa_model.py": "sha256:a05b2b47e3f08ba411ebdcc41689f19b934fe40e9746d0cfcdb3c55b75c5f37a",
     "hw/virtual-bench/renode/iwdg_model.py": "sha256:086ccbd970c95ce600682da8650ad3869a59c6dde2905751923319e6e88a29d2",
-    "hw/virtual-bench/renode/rcc_model.py": "sha256:2b52b7196955837a423e8281e5189c11d102400462df48aec5f44bf25aac4dc0",
+    "hw/virtual-bench/renode/rcc_model.py": "sha256:9fe92b7836f4fcd4a765d65ff302d426389a45db1049c64d59cf9bf80df5306d",
     "hw/virtual-bench/renode/rtc_backup_model.py": "sha256:6a100141b0ba9635b51dec621b09c5d309d134a2399edf889abb9df2c9d1dd79",
-    "hw/virtual-bench/renode/stm32g474-cancestry.repl": "sha256:e7c0f0ef88ead6b737c7fb41e3c84ce6935094764c874ee03a5968c21681b190",
-    "hw/virtual-bench/run_t2_retention.py": "sha256:9bb9e072e9e474576897518b39210db97f25a92836697f1b54ddb534dfcfc989",
-    "hw/virtual-bench/test_t2_retention.py": "sha256:ce59b2adbca3709e175217d5ffc7c6827e02a82bb3cea8e690c84a26d17ee76c",
+    "hw/virtual-bench/renode/stm32g474-cancestry.repl": "sha256:cfb58fc6eabde9ab9baa559792fdd1661df905f8a24d6deced5baf0b57be7c8c",
+    "hw/virtual-bench/run_t2_retention.py": "sha256:809dfe3082a4766c5873079e42edaf7c95473db0217d023fdbd8d4638b87a0ee",
+    "hw/virtual-bench/test_t2_retention.py": "sha256:fce3df172e75e13321198264709eb9955f634f7ec7a6d61b1d44094a06d17f58",
     "schemas/hw/hw-oracle-registry-0.1.0.schema.json": "sha256:7bd0a15770f2bae185600bd554198a791ab94dceb59b4d8084111d5bf01e6123",
     "schemas/hw/hw-sim-0.1.0.schema.json": "sha256:efa2591e203a56f9fe3792d0bbdd891ce3b3b01bab52e2976b11ad417bd35f6a",
-    "schemas/hw/hw-t2-evidence-0.1.0.schema.json": "sha256:2ce132337be43fa52ce673cd781b58db5d2480a09e35b3da8eee4ea8363604ea"
+    "schemas/hw/hw-t2-evidence-0.1.0.schema.json": "sha256:b5090bbe7b5a569c5f83d345b922a517a851824edd3fe2cad7f24ac42259a342"
   },
   "status": "pending",
   "tool_pins": {
     "fmpy": "0.3.24",
     "openmodelica": "1.24",
     "python": ">=3.10",
-    "renode": "1.15"
+    "renode": "1.16"
   },
   "trace": {
     "artifact": "build/hw/t2_retention_001_trace.csv (per-run artifact, gitignored)",

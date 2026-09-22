@@ -20,7 +20,10 @@
 //   RTC/BKP @0x40002800| watchdog.c retention register RTC_BKP0R (offset 0x50),
 //                      | value persists across machine reset (HW-SF-002)
 //   GPIOA @0x48000000  | watchdog.c safe-latch: BSRR reset of bits 8/9
-//   RCC @0x40021000    | reset-cause readback: CSR IWDGRSTF (bit 29), RMVF (bit 23)
+//   RCC @0x40021000    | reset-cause readback: CSR IWDGRSTF (bit 29), RMVF (bit 23);
+//                      | reset-cause flags persist across the scripted IWDG reset
+//                      | (trace-area shadow at 0x60000024, as on real STM32G4
+//                      | retention domain until RMVF) - H-08 bring-up fix F-5
 //   FDCAN1/2 @0x40006400/0x40006800 | register scratch for the HAL bases
 //   T2 trace @0x60000000 (virtual, unused FMC bank) | event-capture contract
 //                      | with the FMI bridge (see below)
@@ -52,6 +55,10 @@
 //               cancestry_watchdog_escalate
 //   0x60000014  iwdg_fire_us         iwdg_model.py at expiry
 //   0x60000020  vbat_mv_in           written by the FMI bridge (plant -> MCU)
+//   0x60000024  rcc_csr_shadow       persistence store for RCC_CSR; the RCC
+//               reset-cause flags survive the scripted IWDG reset here (same
+//               trace-area pattern as the retention shadow), as on real
+//               STM32G4 until RMVF is written
 //   0x60000100  retention_shadow     persistence store for RTC_BKP0R; lives in
 //               the (non-volatile across machine reset) trace area so the
 //               retained fault code survives the scripted IWDG reset
@@ -69,13 +76,21 @@
 // platform; on any scripted-peripheral API mismatch the platform fails to
 // load and the T2 run aborts (fail-closed).
 
-// CPU: Cortex-M4F at the 170 MHz issue-#53 clock (NVIC systick base).
+// CPU: Cortex-M4F. Virtual time is driven exclusively by the FMI bridge's
+// fixed `emulation RunFor` quanta; the CPU's time->instruction rate is
+// pinned explicitly to the Renode default of 100 MIPS (bring-up finding
+// F-10): the scenario timing (IWDG windows vs. the driver's bounded
+// busy-waits, docs/hw/t2-bringup-report.md) is computed at 100 MIPS, so the
+// platform must not silently run at a different rate. The NVIC systick base
+// (170 MHz, the STM32G474 main clock) is modeled but unused: the T2 driver
+// never enables systick.
 nvic: IRQControllers.NVIC @ sysbus 0xE000E000
     systickFrequency: 170000000
 
 cpu: CPU.CortexM @ sysbus
     cpuType: "cortex-m4f"
     nvic: nvic
+    performanceInMips: 100
 
 // Memory per platform/cortex_m/cancestry_baremetal.ld (MEMORY block).
 flash: Memory.MappedMemory @ sysbus 0x08000000
