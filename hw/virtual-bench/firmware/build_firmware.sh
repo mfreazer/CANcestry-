@@ -35,6 +35,21 @@ BUILD_LOG="${CANCESTRY_T2_BUILD_LOG:?CANCESTRY_T2_BUILD_LOG (build log path) is 
 CC="${CANCESTRY_T2_CROSS_CC:-arm-none-eabi-gcc}"
 DRIVER_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# F-17: object file names are derived from the source path RELATIVE TO ITS
+# TREE ROOT, not from the basename. Tag v1.0.0 ships two files both named
+# types.c (core/event/src and core/hal/src); the old basename-only scheme
+# compiled both into the same .o - the second compile silently clobbered the
+# first, and the link line then passed the same object file twice, so the
+# linker reported "multiple definition" for every symbol of the second file
+# (bring-up finding F-17, issue #55). The in-run collision guard below makes
+# any future duplicate object name fail immediately with an explicit error
+# instead of surfacing as a cryptic link failure.
+obj_name() {
+    # $1 = source path, $2 = its tree root -> path-unique object file stem
+    local rel="${1#"$2"/}"
+    printf '%s' "$rel" | tr '/.' '__'
+}
+
 # Cortex-M4F (FPU = fpv4-sp-d16 hard float), matching the platform model
 # cpuType "cortex-m4f" and the v1.0.0 platform assumptions.
 CPU_FLAGS="-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard"
@@ -91,8 +106,18 @@ mkdir -p "$(dirname "$ELF_OUT")"
 
     echo "-- compile --"
     OBJECTS=()
+    OBJECT_STEMS=()
     for src in "${FIRMWARE_SOURCES[@]}"; do
-        obj="$ELF_OUT.$(echo "${src##*/}" | tr . _).o"
+        stem="$(obj_name "$src" "$FW_TAG_DIR")"
+        for used in "${OBJECT_STEMS[@]}"; do
+            if [ "$used" = "$stem" ]; then
+                echo "OBJECT COLLISION: two sources map to object stem '$stem' (F-17)"
+                echo "OBJECT COLLISION: two sources map to object stem '$stem' (F-17)" >&2
+                exit 1
+            fi
+        done
+        OBJECT_STEMS+=("$stem")
+        obj="$ELF_OUT.$stem.o"
         # F-16: watchdog.c only - supply the sim-only static its unguarded
         # cancestry_watchdog_sim_tick() references (target builds never
         # happened in v1.0.0 CI). See t2_target_compat.h.
@@ -105,7 +130,16 @@ mkdir -p "$(dirname "$ELF_OUT")"
         OBJECTS+=("$obj")
     done
     for src in "${DRIVER_SOURCES[@]}"; do
-        obj="$ELF_OUT.$(echo "${src##*/}" | tr . _).o"
+        stem="$(obj_name "$src" "$DRIVER_DIR")"
+        for used in "${OBJECT_STEMS[@]}"; do
+            if [ "$used" = "$stem" ]; then
+                echo "OBJECT COLLISION: two sources map to object stem '$stem' (F-17)"
+                echo "OBJECT COLLISION: two sources map to object stem '$stem' (F-17)" >&2
+                exit 1
+            fi
+        done
+        OBJECT_STEMS+=("$stem")
+        obj="$ELF_OUT.$stem.o"
         echo "$CC $CFLAGS ${INCLUDES[*]} -c $src -o $obj"
         $CC $CFLAGS "${INCLUDES[@]}" -c "$src" -o "$obj"
         OBJECTS+=("$obj")

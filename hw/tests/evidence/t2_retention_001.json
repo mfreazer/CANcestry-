@@ -43,7 +43,7 @@
     "hw/tests/oracles/or_001_holdup.py": "sha256:0be9fe0869c355a9780f73d17981f92dba4af1bbfc2b1be392930402a5f63b9d",
     "hw/tests/oracles/registry.csv": "sha256:7e478f80772bf29e09b02981684e06784646adb7459fe95afd38982d8836a6ba",
     "hw/tests/oracles/registry.json": "sha256:9480431021cb56920a3236968accebf60b98a6ef0ac5835957cd471538b00345",
-    "hw/virtual-bench/firmware/build_firmware.sh": "sha256:5decfa5019e30bdd7f9a3b42d074b692bb0836efa0363a73e81120263a3370bd",
+    "hw/virtual-bench/firmware/build_firmware.sh": "sha256:b600a2ec5e6e92533617ccf1c7acc12cd54510b09768b24763b7ac4c6fa1833a",
     "hw/virtual-bench/firmware/main.c": "sha256:10a805faa0a84af388c58aac215f31e2de8e0b929ea5f7c6db19acad8a5f9d9d",
     "hw/virtual-bench/firmware/startup.s": "sha256:8182c84a3c7028723006271fa0678f8c54bd0040d0476fc3ee2d93ca1e9e5606",
     "hw/virtual-bench/firmware/t2_target_compat.h": "sha256:a3b0c72c96bbc475e63a13e9f9c5003f7cf42d102fe959d6b0cc56b5c26555d1",
