@@ -3,12 +3,12 @@
   "schema_version": "0.1.0",
   "source": {
     "manufacturer": "ISO (standards publisher; not a component manufacturer)",
-    "document_id": "ISO 16750-2:2012(E), fourth edition 2012-11-01, §4.6.4.2.3, Figure 9 / Table 6, printed pp. 12–13",
+    "document_id": "ISO 16750-2:2012(E), fourth edition 2012-11-01, §4.6.4.2.3, Figure 9 / Table 6, printed pp. 12–13; §4.6.4.2.2, Figure 8 / Table 5, printed pp. 11–12",
     "retrieval_date": "2026-09-19",
     "source_pdf_hash": null,
     "source_url": "https://files.infocentre.io/files/docs_clients/126_2007734326_746656_16750-2%20ISO%20Environmental%20conditions%20and%20testing%20for%20electrical....pdf"
   },
-  "note": "HW-FR-004 source correction from PR #39 review. Numeric facts transcribed from the publicly mirrored standard using the document reader; raw PDF bytes could not be downloaded in the sandbox and are not retained, so no PDF digest is claimed. No new physical part or qualification result is created. The old ISO 7637-2:2011 §5.6.2 Table 11 attribution and 40 V level were incorrect for this normative 12 V Test B baseline.",
+  "note": "HW-FR-004 source correction from PR #39 review. Numeric facts transcribed from the publicly mirrored standard using the document reader; raw PDF bytes could not be downloaded in the sandbox and are not retained, so no PDF digest is claimed. No new physical part or qualification result is created. The old ISO 7637-2:2011 §5.6.2 Table 11 attribution and 40 V level were incorrect for this normative 12 V Test B baseline. H-06 (issue #49, retrieved and verified against the same mirror on 2026-09-21): added the pulse5a block for ISO 16750-2:2012 §4.6.4.2.2 'Test A – without centralized load dump suppression', Figure 8 / Table 5, printed pp. 11–12. Citation disposition: the H-06 issue body cited '§4.6.4.2.2 / Table 6' for pulse 5a; normative confirmation shows the Test A parameters are tabulated in Table 5 (Table 6 belongs to Test B), so Table 5 is cited here. The pulse5a block carries shape_qualification_pending: true referencing issue #41: the numeric ranges are transcribed facts, the reduced fixture waveform shape is not qualified against Figure 8. Figure 8 measurement definitions transcribed where available: t_r is the rising slope reaching 0.9(Us−UA)+UA and t_d the pulse duration ending at 0.1(Us−UA)+UA, with UA the supply voltage for generator in operation per ISO 16750-1. Facts not transcribable from the source (exact generator decay shape between the Figure 8 measurement points, unclamped-source topology behavior, §4.6.4.3 functional-status outcome) are recorded as absent in the fixture's not-covered lists, not guessed.",
   "entries": [
     {
       "name": "Us_star_12V",
@@ -97,6 +97,86 @@
       "condition": "Interval between Test B pulses.",
       "source": "standard",
       "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.3, Figure 9 and Table 6, pp. 12–13 (12 V Test B)"
+    },
+    {
+      "name": "Us_pulse5a_min_12V",
+      "value": 79.0,
+      "unit": "V",
+      "condition": "Pulse 5a (Test A, without centralized load dump suppression) unclamped generator voltage lower bound: 79 ≤ Us ≤ 101 V for a 12 V system. This is the unclamped generator level Us, distinct from the suppressed Us* (35 V, Test B / Table 6). Table 5 footnote a: unless otherwise agreed, the lower voltage level pairs with the lower internal resistance. shape_qualification_pending: true — the reduced fixture waveform is not qualified against Figure 8; deferred to issue #41.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.2, Figure 8 and Table 5, pp. 11–12 (12 V Test A)"
+    },
+    {
+      "name": "Us_pulse5a_max_12V",
+      "value": 101.0,
+      "unit": "V",
+      "condition": "Pulse 5a (Test A) unclamped generator voltage upper bound. Table 5 footnote a: unless otherwise agreed, the upper voltage level pairs with the upper internal resistance. shape_qualification_pending: true — deferred to issue #41.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.2, Figure 8 and Table 5, pp. 11–12 (12 V Test A)"
+    },
+    {
+      "name": "Ri_pulse5a_min_12V",
+      "value": 0.5,
+      "unit": "ohm",
+      "condition": "Pulse 5a (Test A) lower source-resistance bound; not proof that the present unloaded model exercises impedance. shape_qualification_pending: true — deferred to issue #41.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.2, Figure 8 and Table 5, pp. 11–12 (12 V Test A)"
+    },
+    {
+      "name": "Ri_pulse5a_max_12V",
+      "value": 4.0,
+      "unit": "ohm",
+      "condition": "Pulse 5a (Test A) upper source-resistance bound. Table 5 footnote a pairs the voltage and resistance endpoint choices unless otherwise agreed. shape_qualification_pending: true — deferred to issue #41.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.2, Figure 8 and Table 5, pp. 11–12 (12 V Test A)"
+    },
+    {
+      "name": "td_pulse5a_min_12V",
+      "value": 0.04,
+      "unit": "s",
+      "condition": "Pulse 5a (Test A) lower pulse-duration bound: 40 ≤ td ≤ 400 ms. Figure 8 measurement definition: t_d is the pulse duration, ending where the test voltage has decayed to 0.1(Us − UA) + UA, with UA the supply voltage for generator in operation per ISO 16750-1; the reduced model's td/3 time constant is not this definition. shape_qualification_pending: true — deferred to issue #41.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.2, Figure 8 and Table 5, pp. 11–12 (12 V Test A)"
+    },
+    {
+      "name": "td_pulse5a_max_12V",
+      "value": 0.4,
+      "unit": "s",
+      "condition": "Pulse 5a (Test A) upper pulse-duration bound. shape_qualification_pending: true — deferred to issue #41.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.2, Figure 8 and Table 5, pp. 11–12 (12 V Test A)"
+    },
+    {
+      "name": "tr_pulse5a_min",
+      "value": 0.005,
+      "unit": "s",
+      "condition": "Lower bound of the pulse 5a (Test A) tabulated rising slope 10 ms with −5/+0 ms tolerance. Figure 8 measurement definition: t_r is the rising slope, reaching 0.9(Us − UA) + UA; the reduced model's linear edge is not a verified standard definition. shape_qualification_pending: true — deferred to issue #41.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.2, Figure 8 and Table 5, pp. 11–12 (12 V Test A)"
+    },
+    {
+      "name": "tr_pulse5a_max",
+      "value": 0.01,
+      "unit": "s",
+      "condition": "Upper bound of the pulse 5a (Test A) tabulated rising slope (10 ms, −5/+0 ms). shape_qualification_pending: true — deferred to issue #41.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.2, Figure 8 and Table 5, pp. 11–12 (12 V Test A)"
+    },
+    {
+      "name": "minimum_pulse_count_pulse5a",
+      "value": 10,
+      "unit": "pulses",
+      "condition": "Minimum Test A repetition count: 10 pulses at 1 min intervals (Table 5 minimum test requirements). Test B requires 5 (Table 6); the minimum_pulse_count entry above is the Test B value. The reduced single-pulse fixture does not exercise repetition. shape_qualification_pending: true — deferred to issue #41.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.2, Figure 8 and Table 5, pp. 11–12 (12 V Test A)"
+    },
+    {
+      "name": "pulse_interval_pulse5a",
+      "value": 60.0,
+      "unit": "s",
+      "condition": "Interval between Test A (pulse 5a) pulses. shape_qualification_pending: true — deferred to issue #41.",
+      "source": "standard",
+      "citation": "ISO 16750-2:2012 (fourth edition), §4.6.4.2.2, Figure 8 and Table 5, pp. 11–12 (12 V Test A)"
     }
   ]
 }

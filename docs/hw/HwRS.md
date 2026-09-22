@@ -3,11 +3,11 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Hardware Requirements Specification |
-| **Version** | 0.2.0 |
-| **Status** | Approved — H-Phase 1 baseline |
+| **Version** | 0.3.0 |
+| **Status** | Approved — H-Phase 1 baseline; the v0.3.0 HW-FR-004 amendment (H-06, issue #49) is pending QA pass-1 approval per the issue #49 two-pass review protocol |
 | **Owner** | System Engineer |
 | **Approver** | QA Lead (validation), Release Manager (baseline) |
-| **Last Review** | 2026-09-19 |
+| **Last Review** | 2026-09-21 |
 | **Repository location** | `docs/hw/HwRS.md` |
 | **Governing documents** | `docs/hw/HW-PLAN.md` v1.0.0, `docs/safety/SafetyManual.md` v1.0.0, `docs/system/SyRS.md` |
 
@@ -38,7 +38,7 @@ ID scheme: `HW-SF-*` safety, `HW-FR-*` functional, `HW-NF-*` non-functional. Ver
 | HW-FR-001 | The MCU shall provide ≥2 FDCAN or bxCAN instances, DWT CYCCNT, IWDG, RTC with backup domain (≥1 backup register), and a register map matching `platform/cortex_m` at v1.0.0. | C3; SW-FR-BM-001..008 | T0 reference-manual review; T2 (v1.0.0 ELF boots and passes bare-metal conformance in Renode) | CL2 | (b) vendor reference manual | `analysis-pending` |
 | HW-FR-002 | The board shall provide three CAN interfaces with independent transceivers and independent TXE/TXD control: CH1 VCU-facing, CH2 pack-facing, CH3 diagnostic. | SyRS interfaces; gateway mission | T0 review; T2 | CL2 | (d) Capella interface consistency check | `draft` |
 | HW-FR-003 | Each CAN interface shall meet ISO 11898-2:2016 including FD at 2 Mbit/s nominal / 5 Mbit/s data phase. Operational environment: ≤ 4 nodes, ≤ 10 m harness. Termination shall be switchable (120 Ω) per channel. Conformance measured against the standard test setup defined in ISO 11898-2 §12. | SW-FR-CANFD-001..006 | T1 bus sim (sample point, eye margin); T4 | CL3 | (b) ISO 11898-2 tables (OR-003); (a) line calc; T4 (c) | `sim-pending` |
-| HW-FR-004 | The board shall operate from 9–16 V DC (12 V nominal) and withstand ISO 7637-2 pulses 1, 2a, 2b, 3a, 3b, 4 and ISO 16750-2 pulse 5b without damage, without violating HW-SF-002, and without spurious TX assertion. | Vehicle environment; G1 | T1 transient sim; T4 | CL3 | (b) ISO 7637-2 tabulated waveforms (OR-002); T4 (c) | `sim-pending` |
+| HW-FR-004 | The board shall operate from 9–16 V DC (12 V nominal) and withstand ISO 7637-2 pulses 1, 2a, 2b, 3a, 3b, 4 and the ISO 16750-2:2012 load-dump transients — pulse 5b (Test B, with centralized load dump suppression: suppressed Us* per §4.6.4.2.3, Figure 9 / Table 6) and pulse 5a (Test A, without centralized load dump suppression: unclamped generator Us per §4.6.4.2.2, Figure 8 / Table 5) — without damage, without violating HW-SF-002, and without spurious TX assertion. Verification posture (v0.3.0 amendment, H-06 issue #49): T1 simulation pending for both load-dump pulses; T4 bench correlation is tracked by issue #41; this amendment extends coverage only and makes no qualification claim and no status promotion. | Vehicle environment; G1 | T1 transient sim; T4 | CL3 | (b) ISO 7637-2 tabulated waveforms (OR-002); T4 (c) | `sim-pending` |
 | HW-FR-005 | In sleep mode with all transceivers in low-power listen, total board current shall be ≤ 2.0 mA at 12 V, 25 °C. **Design target: ≤ 1.5 mA** to absorb production spread. The Modelica test asserts the design target, not the requirement. | Aftermarket parasitic-drain budget | T1 power model; T4 | CL1 | (b) datasheet sleep-current tables (OR-006) | `sim-pending` |
 | HW-FR-006 | The MCU shall provide Flash ≥ 512 KiB and RAM ≥ 128 KiB with ECC or parity, such that v1.0.0 linker sections (`.cancestry_core`, `.cancestry_rings`, `.cancestry_ram`) occupy ≤ 70 % of each region. | `cancestry_baremetal.ld`; margin rule | T0 map arithmetic + datasheet | CL1 | (a) linker-map arithmetic | `analysis-pending` |
 | HW-FR-007 | Main-clock total accuracy (initial + temperature + 10 y aging) shall be ≤ **±0.5 %** over −40…+85 °C. Derived from CAN FD bit-timing budget: with NBT = 20 TQ, SJW = 4 TQ, phase_seg2 = 4 TQ, sample point 80 %, the theoretical maximum df is 0.78 %; the requirement is set at 0.5 % to provide 35 % margin. Implies a crystal oscillator; the internal HSI is inadequate. | ISO 11898-1/2 bit timing | T0 budget calc (OR-003) | CL3 | (a) bit-timing budget closed form; (b) crystal datasheet; T4 (c) | `analysis-pending` |
@@ -94,3 +94,4 @@ None outstanding as of v0.2.0. Rulings Q1–Q4 from the v0.1.0 review are incorp
 |---|---|---|
 | 0.1.0 | 2026-09-19 | Initial draft from HW-PLAN v1.0.0 and repo evidence |
 | 0.2.0 | 2026-09-19 | QA review applied: HW-SF-002 references hold-up per HW-FR-009 (HwRS-F1); HW-SF-004 BOR level 3 explicit (HwRS-F2); HW-FR-003 clarified as operational environment + ISO 11898-2 test setup (HwRS-F4); HW-FR-007 tightened to ±0.5% with derivation (HwRS-F3); HW-SF-003 rewritten for external watchdog, HW-FR-010 added (Q1); HW-FR-005 design target 1.5 mA (Q2); Req. CL = CL3 for all safety-relevant rows, closure policy added to §1 (Q4). |
+| 0.3.0 | 2026-09-21 | H-06 (issue #49), QA pass-1 gate: HW-FR-004 extended to the ISO 16750-2:2012 Test A load-dump transient pulse 5a (without centralized suppression; unclamped generator Us per §4.6.4.2.2, Figure 8 / Table 5 — confirmed against the normative source, which places the Test A parameters in Table 5, not Table 6); pulse 5b (Test B, §4.6.4.2.3 / Table 6) unchanged. Explicit verification posture recorded: T1 simulation pending, T4 bench per issue #41; no qualification claim, no new traceability rows, no status promotion. No other requirement touched. |

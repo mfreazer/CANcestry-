@@ -1,13 +1,13 @@
 {
   "case_id": "pulse_7637_001",
   "credibility_level": "CL0",
-  "evidence_of": "HW-FR-004 qualification is PENDING. The compiled stateless pulse source is exercised as a numerical regression only; successful peak/time/decay assertions do not establish a standard-qualified oracle or complete pulse coverage. Pulse 4 is an engineering dip fixture. Test B/5b has a corrected 35 V suppressed level but an incomplete source waveform. See issue #41. No HW-FR-004 closure or passing plot is authorized by this manifest.",
+  "evidence_of": "HW-FR-004 qualification is PENDING. The compiled stateless pulse source is exercised as a numerical regression only; successful peak/time/decay assertions do not establish a standard-qualified oracle or complete pulse coverage. Pulse 4 is an engineering dip fixture. Test B/5b has a corrected 35 V suppressed level but an incomplete source waveform. Test A/5a (H-06, #49) is a reduced unclamped-level fixture at the Table 5 lower-bound operating point; its invariant regression qualifies no Figure 8 waveform, and the pulse_5a_001 case manifest plus its pending placeholder plot share this disposition. See issue #41. No HW-FR-004 closure or passing plot is authorized by this manifest.",
   "inherited_validation_gap": "openmodelica: Compiler semantics outside independently validated output remain unqualified; OR-001/OR-002 regressions do not cover all translation and solver behavior.",
   "not_covered": [
     "DUT immunity and loaded source/protection response; Ri is unused metadata.",
     "Pulse 4: current 13.5 V -> 6 V dip uses 1 ms fall, 20 ms dwell, 1 ms rise. No full ISO 16750-2:2012 \u00a74.6.3.2 starting profile, temperature dependence, battery ESR variation or alternator recovery. Qualification CL0, pending #41.",
     "Pulse 5b: ISO 16750-2:2012 \u00a74.6.4.2.3 Figure 9 / Table 6 is normative. Us* corrected to 35 V, but separate unclamped Us, suppressed plateau, source-impedance placement, standard edge/duration definitions and repetition remain unqualified; pending #41.",
-    "Pulse 5a is not implemented; H-06.",
+    "Pulse 5a: ISO 16750-2:2012 \u00a74.6.4.2.2 Figure 8 / Table 5 is normative (Test A, unsuppressed). The H-06 fixture binds unclamped Us=79 V (Table 5 lower bound with the footnote a lower-Ri pairing), td=350 ms and tr=5 ms, but the Figure 8 0.9(Us-UA)+UA / 0.1(Us-UA)+UA edge and duration measurement definitions, the unclamped-generator topology, exercised source impedance and the 10-pulse repetition at 1 min intervals remain unqualified; pending #41.",
     "Linear edges, excursion conventions and td/3 decay are fixture assumptions, not an independently qualified standard waveform oracle.",
     "Pulse bursts, parasitics, EMC and T4 physical correlation remain pending."
   ],
@@ -90,6 +90,22 @@
       "provisional": true,
       "status": "pending"
     },
+    "pulse5a": {
+      "coverage": "partial",
+      "follow_up": "https://github.com/mfreazer/CANcestry-/issues/41",
+      "modeled": "Unclamped generator level Us=79 V per ISO 16750-2:2012 \u00a74.6.4.2.2 Figure 8 / Table 5 lower bound (footnote a pairs it with the lower Ri bound), bound from the schema-validated datasheet extract through the shared sim case (pulse_selector 8). Current fixture uses a 5 ms full linear edge to the 79 V absolute peak and td/3 decay with td=350 ms; Ri=0.5 ohm is unused metadata.",
+      "not_modeled": [
+        "Figure 8 0.9(Us-UA)+UA / 0.1(Us-UA)+UA edge and duration measurement definitions; td/3 decay is not a qualified oracle.",
+        "Unclamped-generator topology and exercised source impedance.",
+        "Table 5 ranges beyond the lower-bound operating point (Us to 101 V, Ri to 4 ohm, td to 400 ms) and the 10 ms -5/+0 rising-slope tolerance.",
+        "Ten-pulse sequence at 60 s intervals; loaded DUT response.",
+        "T4 physical correlation (bench-pending)."
+      ],
+      "oracle_confidence": "CL0 for complete Test A qualification: the OR-002 pulse5a tabulation is an engineering fixture transcribed from the normative extract, not a qualified Figure 8 waveform. Pending #41; never promote based on numeric regression alone.",
+      "oracle_credibility": "CL0",
+      "provisional": true,
+      "status": "pending"
+    },
     "pulse5b": {
       "coverage": "partial",
       "follow_up": "https://github.com/mfreazer/CANcestry-/issues/41",
@@ -112,22 +128,25 @@
   "source_hashes": {
     "ci/docker/Dockerfile": "sha256:49703d8b330e41c58e5411bdede3310aec55199e3fb77fc973189b9ee7358102",
     "ci/docker/base-image.digest": "sha256:fbe0594ac4ef88a211f86be44892d6d24efaefd22b747fe6aca41f512e38614f",
-    "docs/hw/pulse-coverage.md": "sha256:3fc19c68415717e63f53ba2d9ee1ce91aec0ede17e7da206e6f8f9c5c57664fb",
-    "docs/hw/tool-qualification.md": "sha256:3842872210c99da0674ff89ccac9494c5fb766ed4a24551ac8fb6f9c54399870",
-    "hw/bom/datasheets/extract-iso16750-2-2012.json": "sha256:6cdbce66a512ecd2db050ed7f140e8b96664fb81480579ae804fe1404f37fc2b",
-    "hw/model/CancestryLib/Power/PulseISO7637_2.mo": "sha256:2b40bf045381ac11bbed7e00a2c05b9929154681eb62ef584be1506f149aad25",
+    "docs/hw/pulse-coverage.md": "sha256:510049ea2969667fee1c79f61cf02b4225e5974f1f9d412d212528d28daeab43",
+    "docs/hw/tool-qualification.md": "sha256:62987ef08d8ab15a81266d62aa8d316b7125fc57ae2766613e03aa1426502880",
+    "hw/bom/datasheets/extract-iso16750-2-2012.json": "sha256:10484dee40e91d6f75a458fdd34614b8434d3074cce5436e428b4f9fb4da7e6b",
+    "hw/model/CancestryLib/Power/PulseISO7637_2.mo": "sha256:dfc42d3391515aaa160c670e42a45d6c775d373f7ade84a33daab93f5f2b624a",
     "hw/model/CancestryLib/Power/package.mo": "sha256:b764dcccf84d3660c855d2d9712ed63bf7ff3e617a7409fd72d4381a0d527c33",
     "hw/model/CancestryLib/package.mo": "sha256:53662fe968facb4cc3ca5d6ccb0ec8a7b7382224c0122ab5af19b748694e2372",
-    "hw/tests/cases/pulse_7637_001.simcase.json": "sha256:1a91231e94a8003aaa09e717cca43bc7757f6b0335f3c5de360bb158c5e2278e",
-    "hw/tests/oracles/or_002_pulse7637.py": "sha256:55f782e0e90facdd2d7231bdd85b2bacd30c657dfa7c66dcfd1dd182f6e628e2",
-    "hw/tests/oracles/registry.csv": "sha256:b9d2d2228742ca3bc0d412e20cb720b27d35e1692f4f67e88cffd903b70146d2",
-    "hw/tests/oracles/registry.json": "sha256:432a6ee5e340acca558e6382e4d6e083437d26b584944a70602a3662c326f269",
-    "hw/tests/test_evidence_determinism.py": "sha256:2576cb298ba158d9f98cf15aefc90f67b3c3b84623b6fbbd8c53fc363f6b6869",
+    "hw/tests/cases/pulse_7637_001.simcase.json": "sha256:74b570797c1d8892551abeefd727281427127a36c8299851d24f74c319ee34e6",
+    "hw/tests/evidence/pulse_5a_001.json": "sha256:a7bd14c1ce283c6833360c3f7a67801e1151f051f1f57becd26eb361a58f16c1",
+    "hw/tests/evidence/pulse_5a_001.plot.json": "sha256:708bfb8d7bf1b60dd8ac4dc083028e47b17a6ce06fbf0a4ba204c1cb6b5c260c",
+    "hw/tests/oracles/or_002_pulse7637.py": "sha256:0d34e4cfe4c4386962fe4f36f9094c558a1df8ea2ad4a7941c9690913e09b9d5",
+    "hw/tests/oracles/registry.csv": "sha256:7e478f80772bf29e09b02981684e06784646adb7459fe95afd38982d8836a6ba",
+    "hw/tests/oracles/registry.json": "sha256:9480431021cb56920a3236968accebf60b98a6ef0ac5835957cd471538b00345",
+    "hw/tests/test_evidence_determinism.py": "sha256:6e4432a3ce39923bf4cc53d57b6768c21502df3023b2278d5a47454cf7d97aee",
     "hw/tests/test_power_sim.py": "sha256:26194fe5303bec1242ed2e2717e0fb4050ba64795905df7631d3e82b3b173487",
-    "hw/tests/test_pulse_sim.py": "sha256:79254c33cb6a9dd8549cef78c546b2c440093a0bfc9f6f762cd1ed0b2877180f",
+    "hw/tests/test_pulse_sim.py": "sha256:c798759d945b2888002ae55cf8ff744af06059646feb29d20a6ce76665a5117a",
     "schemas/hw/hw-datasheet-extract-0.1.0.schema.json": "sha256:cd9de8b653e8b774926eaa3953c7122ea64bd1d3ec64de906b48ec0465ac5eff",
     "schemas/hw/hw-oracle-registry-0.1.0.schema.json": "sha256:7bd0a15770f2bae185600bd554198a791ab94dceb59b4d8084111d5bf01e6123",
-    "schemas/hw/hw-pulse-evidence-0.1.0.schema.json": "sha256:7e7754d2dca70f71e6865428baac766f1ef953584f5671520c73d15264dbf9b1",
+    "schemas/hw/hw-plot-data-0.1.0.schema.json": "sha256:c00fec2faee3ab208d9c0efed84236b79f9acb2a5793d9713fe17d0f3042f637",
+    "schemas/hw/hw-pulse-evidence-0.1.0.schema.json": "sha256:c3fd6826c02969106f410198a3630dbb40a75975c22cde8939e26bccdc01f64e",
     "schemas/hw/hw-sim-0.1.0.schema.json": "sha256:efa2591e203a56f9fe3792d0bbdd891ce3b3b01bab52e2976b11ad417bd35f6a",
     "schemas/hw/hw-traceability-0.1.0.schema.json": "sha256:5d2e23704dd7b2125b534fd85f1930cca12df40b8d321e2cc8822aac0808afeb"
   },
@@ -152,6 +171,7 @@
   "unexercised_parameters": [
     "Ri_pulse1",
     "Ri_pulse2a",
-    "Ri_pulse5b"
+    "Ri_pulse5b",
+    "Ri_pulse5a"
   ]
 }

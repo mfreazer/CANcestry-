@@ -1,0 +1,67 @@
+{
+  "credibility_level": "CL0",
+  "generated_at": "2026-09-21T00:00:00Z",
+  "method": "virtual_bench",
+  "oracle_id": "OR-002",
+  "plot_description": "Pending placeholder view per docs/hw/visual-evidence-plan.md section 5: no model or oracle series exist because the ISO 16750-2:2012 Figure 8 waveform is not yet qualified (issue #41; shape_qualification_pending in hw/bom/datasheets/extract-iso16750-2-2012.json). The zero-width hatched band over the intended 0..0.365 s window (tr=5 ms rise plus td=350 ms plus 10 ms margin) marks the PENDING disposition of the H-06 pulse_5a_001 case manifest; it is not a tolerance claim (HwAGENTS rule 14). Rendering this view creates no evidence, raises no credibility and promotes nothing (HwAGENTS rule 13).",
+  "plot_id": "pulse_5a_001",
+  "plot_title": "HW-FR-004 pulse 5a (ISO 16750-2:2012 Test A) - PENDING qualification placeholder",
+  "plot_version": "0.1.0",
+  "provenance_notes": "H-06 (issue #49) pending placeholder: the picture is never the proof; the hash chain pulse_5a_001.plot.json -> pulse_5a_001.json -> pinned sources is. Status, provisional and credibility are inherited from the case manifest and never improved here.",
+  "provisional": true,
+  "renderer_tool": "cancestry-render-modelica",
+  "renderer_tool_digest": "sha256:c50a6b0592117c081dc9c8dbc5cfcb69d50ef8e33b520c1a4d740e80ce4ac614",
+  "renderer_tool_version": "0.1.0",
+  "schema_version": "0.1.0",
+  "series": [
+    {
+      "description": "Zero-width placeholder lower edge; no data is claimed.",
+      "name": "pending_band_lower",
+      "non_color_encoding": {
+        "line_style": "dotted",
+        "marker": "none"
+      },
+      "role": "tolerance_lower",
+      "x": [
+        0.0,
+        0.365
+      ],
+      "x_units": "s",
+      "y": [
+        0.0,
+        0.0
+      ],
+      "y_units": "V"
+    },
+    {
+      "description": "Zero-width placeholder upper edge; no data is claimed.",
+      "name": "pending_band_upper",
+      "non_color_encoding": {
+        "line_style": "dotted",
+        "marker": "none"
+      },
+      "role": "tolerance_upper",
+      "x": [
+        0.0,
+        0.365
+      ],
+      "x_units": "s",
+      "y": [
+        0.0,
+        0.0
+      ],
+      "y_units": "V"
+    }
+  ],
+  "source_evidence_hash": "sha256:a7bd14c1ce283c6833360c3f7a67801e1151f051f1f57becd26eb361a58f16c1",
+  "source_evidence_path": "hw/tests/evidence/pulse_5a_001.json",
+  "source_requirement": "HW-FR-004",
+  "status": "pending",
+  "tolerance_band": {
+    "description": "PENDING: no qualified tolerance band; Figure 8 waveform qualification deferred to issue #41 (zero-width placeholder, not a tolerance claim)",
+    "hatch": "xxx",
+    "lower_series": "pending_band_lower",
+    "units": "V",
+    "upper_series": "pending_band_upper"
+  }
+}

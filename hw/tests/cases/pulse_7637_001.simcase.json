@@ -2,12 +2,12 @@
   "schema_version": "0.1.0",
   "case_id": "pulse_7637_001",
   "requirement_id": "HW-FR-004",
-  "scenario": "HW-FR-004 reduced unloaded source regression, NOT passing standards evidence. Tests compare deterministic fixture invariants for pulses 1, 2a, 2b, 3a, 3b, 4 and 5b. Pulse 4 and Test B/5b remain partial and pending (#41); correcting 5b Us* to 35 V does not qualify the waveform.",
+  "scenario": "HW-FR-004 reduced unloaded source regression, NOT passing standards evidence. Tests compare deterministic fixture invariants for pulses 1, 2a, 2b, 3a, 3b, 4, 5b and 5a. Pulse 4 and Test B/5b remain partial and pending (#41); correcting 5b Us* to 35 V does not qualify the waveform. Test A/5a (H-06, #49) is a reduced unclamped-level fixture at the Table 5 lower-bound operating point (Us=79 V); its invariant checks are regressions, not qualification, and remain pending #41.",
   "not_covered": [
     "DUT immunity and loaded source/protection response; Ri is unused metadata.",
     "Pulse 4: current 13.5 V -> 6 V dip uses 1 ms fall, 20 ms dwell, 1 ms rise. No full ISO 16750-2:2012 §4.6.3.2 starting profile, temperature dependence, battery ESR variation or alternator recovery. Qualification CL0, pending #41.",
     "Pulse 5b: ISO 16750-2:2012 §4.6.4.2.3 Figure 9 / Table 6 is normative. Us* corrected to 35 V, but separate unclamped Us, suppressed plateau, source-impedance placement, standard edge/duration definitions and repetition remain unqualified; pending #41.",
-    "Pulse 5a is not implemented; H-06.",
+    "Pulse 5a: ISO 16750-2:2012 §4.6.4.2.2 Figure 8 / Table 5 is normative (Test A, unsuppressed). The H-06 fixture binds unclamped Us=79 V (Table 5 lower bound with the footnote a lower-Ri pairing), td=350 ms and tr=5 ms, but the Figure 8 0.9(Us-UA)+UA / 0.1(Us-UA)+UA edge and duration measurement definitions, the unclamped-generator topology, exercised source impedance and the 10-pulse repetition at 1 min intervals remain unqualified; pending #41.",
     "Linear edges, excursion conventions and td/3 decay are fixture assumptions, not an independently qualified standard waveform oracle.",
     "Pulse bursts, parasitics, EMC and T4 physical correlation remain pending."
   ],
@@ -37,7 +37,11 @@
     "Us_pulse5b": 35.0,
     "td_pulse5b": 0.35,
     "tr_pulse5b": 0.005,
-    "Ri_pulse5b": 0.5
+    "Ri_pulse5b": 0.5,
+    "Us_pulse5a": 79.0,
+    "td_pulse5a": 0.35,
+    "tr_pulse5a": 0.005,
+    "Ri_pulse5a": 0.5
   },
   "tolerances": {
     "peak_relative": 0.02,

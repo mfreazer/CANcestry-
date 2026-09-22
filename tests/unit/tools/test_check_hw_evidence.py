@@ -636,10 +636,27 @@ def test_cli_defaults_to_the_current_directory(tmp_path, monkeypatch, capsys):
     assert "PASS" in capsys.readouterr().out
 
 
-def test_repository_manifest_is_the_empty_initial_state():
-    """Commit 3 of #36: the committed manifest is empty and green."""
+def test_repository_manifest_registers_only_the_pending_pulse_5a_view():
+    """H-06 (#49): the first committed view is the pending pulse_5a_001 placeholder.
+
+    Supersedes the #36 commit-3 snapshot ("the committed manifest is empty and
+    green"): H-06 registers exactly one view, and it must stay a pending
+    placeholder while HW-FR-004 qualification is deferred to #41 — no passing
+    plot may appear, every entry must be structurally complete, and the
+    manifest hashes must match the committed bytes.
+    """
     manifest = json.loads((REPO_ROOT / MANIFEST_REL).read_text(encoding="utf-8"))
-    assert manifest == {"schema_version": "0.1.0", "entries": []}
+    assert manifest["schema_version"] == "0.1.0"
+    assert [entry["plot_id"] for entry in manifest["entries"]] == ["pulse_5a_001"]
+    entry = manifest["entries"][0]
+    assert sorted(entry) == sorted(check_hw_evidence.ENTRY_KEYS)
+    plot_rel = "hw/tests/evidence/pulse_5a_001.plot.json"
+    svg_rel = "hw/tests/evidence/renders/pulse_5a_001.svg"
+    plot = json.loads((REPO_ROOT / plot_rel).read_text(encoding="utf-8"))
+    assert plot["status"] == "pending", "HW-FR-004 is pending; no passing plot"
+    assert plot["provisional"] is True and plot["credibility_level"] == "CL0"
+    assert entry["plot_data_sha256"] == sha256_path(REPO_ROOT / plot_rel)
+    assert entry["expected_svg_sha256"] == sha256_path(REPO_ROOT / svg_rel)
 
 
 def test_committed_clean_fixture_is_self_consistent():
