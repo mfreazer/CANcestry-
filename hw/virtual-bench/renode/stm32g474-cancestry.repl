@@ -46,7 +46,7 @@
 //
 // Event-capture contract (consumed by hw/virtual-bench/fmi_bridge.py):
 //
-//   0x60000000  magic      0x54324353 ("T2CS"), written by cancestry-hw.resc
+//   0x60000000  magic      0x54324353 (T2CS), written by cancestry-hw.resc
 //   0x60000004  flags      reserved (0)
 //   0x60000008  retention_write_us   cpu symbol hook:
 //               cancestry_watchdog_write_retention_register
@@ -72,7 +72,7 @@
 // Note for reviewers: the scripted peripherals (Python.PythonPeripheral,
 // IronPython 2) implement register semantics only. Peripheral-script API:
 // request.IsInit/IsRead/IsWrite/Value/Offset and self per Renode
-// documentation (renode.readthedocs.io, "Using Python in Renode"). The
+// documentation (renode.readthedocs.io, 'Using Python in Renode'). The
 // pinned Renode version is checked by the T2 runner before loading this
 // platform; on any scripted-peripheral API mismatch the platform fails to
 // load and the T2 run aborts (fail-closed).

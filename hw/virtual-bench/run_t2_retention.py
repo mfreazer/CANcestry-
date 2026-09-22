@@ -429,7 +429,7 @@ def launch_renode(renode_bin, elf_path, port,
     return process
 
 
-def _console_tail(path, lines=40):
+def _console_tail(path, lines=120):
     """Last ``lines`` of the Renode console transcript ('' when absent)."""
     try:
         text = Path(path).read_text(encoding="utf-8", errors="replace")
