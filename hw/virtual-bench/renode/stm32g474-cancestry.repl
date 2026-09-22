@@ -36,7 +36,13 @@
 //     core debug block is owned by the Renode CPU model; the firmware's DWT
 //     timestamps are NOT load-bearing for the T2 retention ordering (events
 //     are captured from emulation virtual time), so DWT accuracy carries the
-//     renode TCL2 validation gap (docs/hw/tool-qualification.md section 3);
+//     renode TCL2 validation gap (docs/hw/tool-qualification.md section 3).
+//     F-27 (issue #55, per Lead SE decision 2026-09-22): verified that the
+//     T2 ELF call graph (hw/virtual-bench/firmware/main.c plus the v1.0.0
+//     cancestry_watchdog_* / cancestry_event_hard_fault_escalate paths it
+//     invokes) never touches DWT/DEMCR - the driver deliberately bypasses
+//     cancestry_watchdog_init and hal_stm32_clock_init - so NO DWT extension
+//     of this platform is required for T2;
 //   - BOR/power supervisor reset on brownout: the passive fail-safe topology
 //     is a requirement (HwAGENTS.md rule 6); modelling its reset behavior is
 //     safety-relevant and deferred to a Human-Reviewer-approved change. The
@@ -78,20 +84,35 @@
 // load and the T2 run aborts (fail-closed).
 
 // CPU: Cortex-M4F. Virtual time is driven exclusively by the FMI bridge's
-// fixed `emulation RunFor` quanta. The CPU's instruction rate in the
-// pinned Renode 1.16.1 is the core's built-in fixed default (100 MIPS;
-// bring-up finding F-10): 1.16.1 exposes NO configurable MIPS property -
-// dispatch 16 (run 35778907099) failed with DLR error E25 ('Could not
-// find suitable constructor for ...CortexM') when 'performanceInMips: 100'
-// was declared; that property exists only in newer Renode releases. The
-// rate is therefore pinned by the runner's Renode version pin, not by a
-// platform property. The NVIC systick base (170 MHz, the STM32G474 main
-// clock) is modeled but unused: the T2 driver never enables systick.
+// fixed `emulation RunFor` quanta. The instruction rate is pinned
+// EXPLICITLY at 100 MIPS (bring-up finding F-10; the T2 timing window in
+// hw/virtual-bench/firmware/main.c is designed against 100 MIPS).
+// DLR subtlety (v1.16.1, source-verified in F-27): a .repl attribute is a
+// property assignment IFF its name starts with an UPPERCASE letter - any
+// other case is treated as a constructor argument (ConstructorOrProperty
+// Attribute.IsPropertyAttribute). 'PerformanceInMips' is a property on
+// BaseCPU (the CPU base class; constructor default 100) - the official
+// platforms/cpus/stm32f746.repl declares 'PerformanceInMips: 462' in
+// uppercase property form. Dispatch 16 (run 35778907099) failed with DLR
+// error E25 ('Could not find suitable constructor for ...CortexM')
+// because the camelCase 'performanceInMips: 100' was classified as a
+// constructor argument with no matching parameter (unused attribute ->
+// constructor rejected); F-26 removed the line (harmless - the default is
+// 100 - but a misdiagnosis), and F-27 restores it in the property form
+// below. 'cpuType: "cortex-m4f"' (FPU enabled) is the official idiom for
+// M4F (platforms/cpus/stm32f412.repl, v1.16.1). 'systickFrequency' on the
+// NVIC is a genuine constructor argument (lowercase is correct there);
+// the 170 MHz systick base (STM32G474 main clock) is modeled but unused -
+// the T2 driver never enables systick. 'IRQ -> cpu@0' is the canonical
+// NVIC-to-CPU interrupt line (official stm32f4.repl / stm32f746.repl);
+// the T2 driver raises no interrupts, so it is inert here.
 nvic: IRQControllers.NVIC @ sysbus 0xE000E000
     systickFrequency: 170000000
+    IRQ -> cpu@0
 
 cpu: CPU.CortexM @ sysbus
     cpuType: "cortex-m4f"
+    PerformanceInMips: 100
     nvic: nvic
 
 // Memory per platform/cortex_m/cancestry_baremetal.ld (MEMORY block).
@@ -150,11 +171,13 @@ t2_trace: Memory.MappedMemory @ sysbus 0x60000000
     size: 0x200
 
 // F-25 (issue #55): the previous 'sysbus: init: Tag <range> "name"' block
-// was removed - Renode has no 'Tag' monitor command (only the read-only
-// 'tags' lister; Monitor command set, v1.16.1) and no official platform
-// .repl uses a machine 'init:' block, so the block broke the platform
-// load (dispatch 15, run 35777946390: parse/creation error naming the
-// 'cpu: CPU.CortexM @ sysbus' line - the last object parsed before the
-// block). The address-range labels it carried are decorative; the ranges
-// are documented in the header table above, and the FMI bridge (the only
-// consumer) addresses them directly.
+// was removed. CORRECTION (F-27, source-verified against v1.16.1): the
+// block was NOT a syntax fault - 'sysbus: init: Tag' IS valid in v1.16.1
+// (the official platforms/cpus/stm32f412.repl uses exactly that form).
+// Dispatch 15 (run 35777946390) failed with the same E25 constructor
+// error on the 'cpu: CPU.CortexM @ sysbus' line that dispatch 16 did -
+// the camelCase 'performanceInMips' attribute, diagnosed in F-27 - which
+// the truncated diagnostics of the time misattributed to the Tag block.
+// The removal stands on its own merits: the range labels were decorative,
+// the ranges are documented in the header table above, and the FMI bridge
+// (the only consumer) addresses them directly.
