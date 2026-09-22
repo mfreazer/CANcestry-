@@ -148,8 +148,12 @@ fdcan2_scratch: Memory.MappedMemory @ sysbus 0x40006800
 t2_trace: Memory.MappedMemory @ sysbus 0x60000000
     size: 0x200
 
-sysbus:
-    init:
-        Tag <0x40006400,0x400067FF> "FDCAN1"
-        Tag <0x40006800,0x40006BFF> "FDCAN2"
-        Tag <0x60000000,0x600001FF> "T2_TRACE"
+// F-25 (issue #55): the previous 'sysbus: init: Tag <range> "name"' block
+// was removed - Renode has no 'Tag' monitor command (only the read-only
+// 'tags' lister; Monitor command set, v1.16.1) and no official platform
+// .repl uses a machine 'init:' block, so the block broke the platform
+// load (dispatch 15, run 35777946390: parse/creation error naming the
+// 'cpu: CPU.CortexM @ sysbus' line - the last object parsed before the
+// block). The address-range labels it carried are decorative; the ranges
+// are documented in the header table above, and the FMI bridge (the only
+// consumer) addresses them directly.

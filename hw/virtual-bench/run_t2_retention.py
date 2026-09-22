@@ -484,7 +484,7 @@ def _diagnostic_summary(error):
             idx = rx_stream.lower().find(keyword.lower())
             if idx >= 0:
                 snippet = re.sub(r"\s+", " ",
-                                 rx_stream[max(0, idx - 40):idx + 160])
+                                 rx_stream[max(0, idx - 40):idx + 280])
                 parts.append("first-transcript-error=%s" % snippet)
                 break
     except OSError:

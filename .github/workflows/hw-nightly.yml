@@ -202,7 +202,18 @@ jobs:
               tail -160 /tmp/t2-output.log
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
-            echo "::error::$(tail -80 /tmp/t2-output.log | tr '\n' ' ' | tr -d '\r')"
+            # F-25 (issue #55): the runner's T2-DIAG line (the failure
+            # output's final line, <=1000 chars) carries the whole
+            # bring-up state; prefer it for the error annotation instead
+            # of a space-joined tail that GitHub truncates at 1000 chars
+            # before the diagnostic line is reached (dispatch 15, run
+            # 35777946390).
+            DIAG_LINE="$(grep '^T2-DIAG ' /tmp/t2-output.log | tail -1 || true)"
+            if [ -n "$DIAG_LINE" ]; then
+              echo "::error::${DIAG_LINE}"
+            else
+              echo "::error::$(tail -5 /tmp/t2-output.log | tr '\n' ' ' | tr -d '\r')"
+            fi
           fi
           exit "$DOCKER_STATUS"
 
