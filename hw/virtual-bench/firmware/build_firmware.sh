@@ -38,7 +38,12 @@ DRIVER_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Cortex-M4F (FPU = fpv4-sp-d16 hard float), matching the platform model
 # cpuType "cortex-m4f" and the v1.0.0 platform assumptions.
 CPU_FLAGS="-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard"
-CFLAGS="-O0 -g -Wall -Wextra -std=c99 $CPU_FLAGS"
+# -include stddef.h: the v1.0.0 sources (read-only) assume NULL is provided
+# transitively - the host (glibc) build leaks <stddef.h> through other
+# headers, but newlib under strict -std=c99 does not (e.g.
+# core/event/src/clock.c). Force-include it on the BUILD side instead of
+# patching the firmware (bring-up finding F-15, issue #55).
+CFLAGS="-O0 -g -Wall -Wextra -std=c99 $CPU_FLAGS -include stddef.h"
 
 mkdir -p "$(dirname "$ELF_OUT")"
 

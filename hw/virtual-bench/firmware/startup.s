@@ -90,7 +90,8 @@ Reset_Handler:
     /* Default interrupt handler (park). Lives in .text: it must NOT be
      * emitted inside .isr_vector, or its body would shift the vector
      * table and the initial SP word would no longer sit at the flash
-     * origin (the CPU would load SP = 0xBE00 on reset). */
+     * origin (the CPU would load SP = 0xBE00 on reset).
+     * Bring-up finding F-14 (issue #55). */
     .thumb_func
     .type g_default_irq, %function
     .global g_default_irq
