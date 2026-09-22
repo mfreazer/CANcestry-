@@ -32,8 +32,8 @@
   "source_hashes": {
     "ci/docker/Dockerfile": "sha256:49703d8b330e41c58e5411bdede3310aec55199e3fb77fc973189b9ee7358102",
     "ci/docker/base-image.digest": "sha256:fbe0594ac4ef88a211f86be44892d6d24efaefd22b747fe6aca41f512e38614f",
-    "docs/hw/tool-qualification.md": "sha256:62987ef08d8ab15a81266d62aa8d316b7125fc57ae2766613e03aa1426502880",
-    "docs/hw/virtual-bench-plan.md": "sha256:022d4640e66d47207438d1fe4a8464b5d77f7ffee1b2d3f29f402154c20cd86c",
+    "docs/hw/tool-qualification.md": "sha256:51509f080b4b114345a6285c01e9275a86e9d324c0aa27ffe6425fdfaf78ff53",
+    "docs/hw/virtual-bench-plan.md": "sha256:8d5a3f5d07730c9d63090d740bf17466979d913174b3c6c8b9032700f86c84fe",
     "hw/model/CancestryLib/Power/Holdup.mo": "sha256:20af059a03aa6537bbf462fe3b1873ae7dd7a5faa9daca0cbf92fdf4322946b4",
     "hw/model/CancestryLib/Power/package.mo": "sha256:b764dcccf84d3660c855d2d9712ed63bf7ff3e617a7409fd72d4381a0d527c33",
     "hw/model/CancestryLib/package.mo": "sha256:53662fe968facb4cc3ca5d6ccb0ec8a7b7382224c0122ab5af19b748694e2372",

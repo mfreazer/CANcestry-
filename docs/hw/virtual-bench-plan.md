@@ -3,12 +3,12 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Virtual Bench Plan |
-| **Version** | 0.4.2 |
-| **Status** | Draft — H-04, pending QA approval |
+| **Version** | 0.5.0 |
+| **Status** | Draft — H-07, pending QA approval |
 | **Owner** | System Engineer |
 | **Co-author** | QA Lead (oracle rule, credibility scheme) |
 | **Approver** | Release Manager |
-| **Last Review** | 2026-09-21 |
+| **Last Review** | 2026-09-22 |
 | **Repository location** | `docs/hw/virtual-bench-plan.md` |
 | **Governing documents** | `docs/hw/HW-PLAN.md` v1.0.0, `docs/qa/hw-validation-matrix.md` v0.1.0 |
 
@@ -92,6 +92,13 @@ Evidence artifact per run: tool digests, ELF sha256, trace CSV sha256, oracle de
 - `hw-fast.yml` (PR): schema checks, Capella parse + orphan/unlinked checks, Modelica compile, FMPy smoke FMU, traceability gate.
 - `hw-nightly.yml`: full transient sweep, thermal sweep, T2 scenario replay of the Phase 12 fault set (Bus-Off, CRC storm, brownout) on the virtual bench.
 
+The hosted runners carry no Renode (HW-PLAN C5): the T2 pipeline under
+`hw/virtual-bench/` executes on Renode-equipped, self-hosted
+infrastructure. The hosted gates still enforce the T2 *ledger* — the
+traceability row, the evidence schema and the visual hash chain — but an
+executed T2 run exists only where the toolchain exists; the pending
+manifest disposition is what hosted CI can and does verify.
+
 ## 8. Exit criteria to physical bench
 
 `docs/qa/hw-validation-matrix.md` §6 triggers (discretization gap, model boundary, oracle absence) are evaluated per requirement at H-Phase 1 exit; results published to `bench-required.md` (seed list in HwRS §5 is the starting set).
@@ -116,6 +123,24 @@ future fidelity work remains in the bench-trigger planning; this table must
 not make nonexistent model files appear implemented. H-03/H-04 no longer
 serve as promised Renode or vendor-SPICE completion dates.
 
+### 8.3 T2 foundation (H-07, issue #53)
+
+H-07 delivers the T2 *foundation* — the machinery, not a verification claim:
+
+| Artifact | Content |
+|---|---|
+| `hw/virtual-bench/renode/stm32g474-cancestry.repl` (+ scripted peripherals, bring-up `.resc`) | Renode platform model of exactly the `platform/cortex_m` register surface (virtual-bench-plan §3); CPU symbol hooks stamp the QA-EV-01 escalation events with exact emulation times; IWDG expiry drives the scripted reset; RTC_BKP0R retention persists across it. Everything else is `not_simulated` with rationale in the platform header (BOR/supervisor reset is safety-relevant, HwAGENTS.md rule 6). |
+| `hw/virtual-bench/fmi_bridge.py` | Deterministic FMI 3.0 master: 100 µs master step, 1 µs FMU internal step, discrete events at actual occurrence times (§6, VB-Q1); no wall clock, no randomness. |
+| `hw/virtual-bench/run_t2_retention.py` | Orchestration: build the Holdup FMU (FMI 3.0), launch Renode with the v1.0.0 ELF, run 150 ms, assert the strict retention < safe-latch < IWDG-fire ordering against the OR-001-anchored plant, write `t2_retention_001.json`; `--check` requires byte-identical reproduction. |
+| `schemas/hw/hw-t2-evidence-0.1.0.schema.json` | T2 evidence contract: pending/pairing discipline; passing artifacts carry the event timestamps, ordering record and the ELF+FMU+bridge+trace hash chain. |
+| `hw/tests/evidence/t2_retention_001.json` (+ placeholder plot) | **Pending** manifest (pass=false, CL0): no T2 run exists yet. The ledger row (HW-SF-002, virtual_bench) is `sim-pending`; it becomes `passing(virtual_bench,CL2,provisional)` only after an executed, deterministic, Renode-backed run with hashed evidence and Human-Reviewer visibility of the retention model (rule 6). |
+
+Known T2 foundation gaps (recorded in the pending manifest's `not_covered`):
+the QA-EV-01 escalation stimulus injection (fault recipe via CAN traffic),
+BOR/supervisor reset modeling, DWT accuracy, golden Renode-trace
+correlation for the renode TCL2 classification
+(`docs/hw/tool-qualification.md` §3/§4.3, v0.2.7).
+
 ## 9. Open questions for QA
 
 None outstanding as of v0.3.0.
@@ -130,4 +155,5 @@ None outstanding as of v0.3.0.
 | 0.4.0 | 2026-09-19 | H-04 #38: schema-validated JSON oracle registry, generated CSV/table, explicit pending-oracle gaps, OR-010 renumbering and tabulated fidelity/charge-path roadmap. |
 | 0.3.0 | 2026-09-19 | Residual state reconciliation (issue #35): declared `hw/tests/oracles/registry.csv` source of truth for oracles and added `validation_gap` column to rendered view (§4); added Model fidelity roadmap (§8.1) defining T1 idealizations, trigger classes, and closure steps per `CancestryLib` model. |
 | 0.4.2 | 2026-09-21 | H-06 (#49): OR-002 scope note and §8.1 roadmap row updated for the pulse 5a (Test A) reduced fixture — unclamped Us=79 V per ISO 16750-2:2012 §4.6.4.2.2 Figure 8 / Table 5; shape qualification remains deferred to #41, no promotion. Generated §4 registry view re-exported from registry.json. |
+| 0.5.0 | 2026-09-22 | H-07 (#53): §8.3 T2 foundation record (Renode platform model, deterministic FMI bridge, orchestration, hw-t2-evidence schema, pending t2_retention_001 manifest + placeholder view, sim-pending (HW-SF-002, virtual_bench) ledger row); §7 note that T2 executes on Renode-equipped self-hosted infrastructure (HW-PLAN C5) while hosted gates enforce the ledger. No executed T2 run exists; no promotion. |
 
