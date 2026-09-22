@@ -24,20 +24,24 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
 
 # Cross toolchain for the T2 firmware ELF (tag v1.0.0 sources, off-tree
-# driver). arm-none-eabi-gcc ships the newlib C library needed by the
-# -nostartfiles link. The minimal OM base may lack curl; install it with
-# the cross toolchain.
-# arm-none-eabi-gcc lives in the 'universe' component on Ubuntu; if the
-# base's apt configuration is trimmed to main only, the first install
-# attempt fails and the retry below enables universe (classic
-# sources.list and deb822 .sources formats). On bases where the package
-# is already available (e.g. Debian main), the first attempt succeeds and
-# the universe edit is never made (a base without a universe component
-# must not be told to use one).
+# driver). The minimal OM base is ubuntu:jammy (see the OpenModelica
+# v1.24.0 image build sources), whose apt configuration enables 'main'
+# only. On Ubuntu the ARM cross toolchain lives in 'universe' under
+# Ubuntu's package names (verified against the jammy package index):
+#   gcc-arm-none-eabi       - the arm-none-eabi-gcc cross compiler
+#   libnewlib-arm-none-eabi - newlib C library for the target
+#   libnewlib-dev           - newlib headers
+# (the Debian-style name arm-none-eabi-newlib does NOT exist on Ubuntu).
+# If the first install attempt fails, the retry below enables universe
+# (classic sources.list and deb822 .sources formats); a base where the
+# packages are already available (e.g. Debian main) never takes that
+# branch, and a base without a universe component must not be told to
+# use one. A second failure dumps apt diagnostics for triage.
 RUN set -eux; \
     apt-get update; \
     (apt-get install -y --no-install-recommends \
-        arm-none-eabi-gcc arm-none-eabi-newlib ca-certificates curl) \
+        gcc-arm-none-eabi libnewlib-arm-none-eabi libnewlib-dev \
+        ca-certificates curl) \
     || { \
          echo "first install attempt failed - enabling 'universe' and retrying"; \
          if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then \
@@ -53,7 +57,16 @@ RUN set -eux; \
          fi; \
          apt-get update; \
          apt-get install -y --no-install-recommends \
-             arm-none-eabi-gcc arm-none-eabi-newlib ca-certificates curl; \
+             gcc-arm-none-eabi libnewlib-arm-none-eabi libnewlib-dev \
+             ca-certificates curl \
+         || { \
+              echo "retry failed - apt diagnostics:" >&2; \
+              cat /etc/os-release >&2; \
+              cat /etc/apt/sources.list 2>/dev/null >&2 || true; \
+              cat /etc/apt/sources.list.d/* 2>/dev/null >&2 || true; \
+              apt-cache policy gcc-arm-none-eabi libnewlib-arm-none-eabi libnewlib-dev >&2 || true; \
+              exit 1; \
+            }; \
        }; \
     rm -rf /var/lib/apt/lists/*
 

@@ -31,7 +31,7 @@
   "sim_case": "hw/tests/cases/holdup_001.simcase.json",
   "source_hashes": {
     "ci/docker/Dockerfile": "sha256:49703d8b330e41c58e5411bdede3310aec55199e3fb77fc973189b9ee7358102",
-    "ci/docker/Dockerfile.t2": "sha256:739aaa0da51244f6d25a8166ccf87ddf817e6ae38b416ac11cac44402ccc1a51",
+    "ci/docker/Dockerfile.t2": "sha256:79b533163dc4919f4cd45f9581c0a119a150b15efde6061e5747160a2c09cf85",
     "ci/docker/base-image.digest": "sha256:fbe0594ac4ef88a211f86be44892d6d24efaefd22b747fe6aca41f512e38614f",
     "ci/docker/renode-1.16.1.pin": "sha256:091ef14d0677440408bc2436530442e4fea1690439b1827a7bd08d495c6b44f1",
     "docs/hw/tool-qualification.md": "sha256:51509f080b4b114345a6285c01e9275a86e9d324c0aa27ffe6425fdfaf78ff53",
