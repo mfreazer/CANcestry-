@@ -311,3 +311,36 @@ def test_orchestrator_rejects_ordering_violation_before_evidence():
     with pytest.raises(fmi_bridge.BridgeError, match="ordering contract"):
         raise fmi_bridge.BridgeError(
             "QA-EV-01 ordering contract failed: %s" % violation)
+
+def test_diagnostic_summary_compresses_failure_state(tmp_path, monkeypatch):
+    """F-23c: the final failure line carries the whole bring-up state.
+
+    GitHub's error annotation surfaces only the step's LAST log line, so
+    _diagnostic_summary must compress the console step markers (with
+    probe values), the first error-looking text of the reconstructed
+    monitor RX stream (the monitor delivers it in 1-5 byte chunks), and
+    the bridge error into one annotation-sized line.
+    """
+    console = tmp_path / "console.log"
+    console.write_text(
+        "12:00:00.000 [INFO] Including script(s): x.resc\n"
+        "12:00:00.100 [INFO] [cancestry-hw] step0: python logger channel OK, elf=@/work/x.elf\n"
+        "12:00:00.200 [INFO] [cancestry-hw] step2: machine created\n"
+        "12:00:00.300 [INFO] [cancestry-hw] step2b: repl path /work/y.repl isfile=True\n",
+        encoding="utf-8")
+    transcript = tmp_path / "transcript.log"
+    chunks = [b"Could no", b"t find file '", b"stm32g474-c",
+              b"ancestry", b".repl'\n"]
+    lines = ["line %d [1790104856.%03d] RX %r" % (i + 1, i, c)
+             for i, c in enumerate(chunks)]
+    transcript.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    monkeypatch.setattr(runner, "RENODE_CONSOLE_LOG", console)
+    monkeypatch.setattr(runner, "RENODE_TRANSCRIPT_LOG", transcript)
+    summary = runner._diagnostic_summary(
+        fmi_bridge.BridgeError("magic 0x0 != 0x54324353"))
+    assert summary.startswith("T2-DIAG ")
+    assert "step2b: repl path /work/y.repl isfile=True" in summary
+    assert "first-transcript-error=" in summary
+    assert "Could not find file" in summary
+    assert "magic 0x0" in summary
+    assert len(summary) <= 1000

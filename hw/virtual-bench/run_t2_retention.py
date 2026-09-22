@@ -42,6 +42,7 @@ Environment:
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -441,6 +442,58 @@ def _console_tail(path, lines=120):
     return "\n".join(tail)
 
 
+def _diagnostic_summary(error):
+    """One compact line with the whole bring-up state (F-23c, issue #55).
+
+    Printed LAST in the failure output: GitHub Actions records the step's
+    final line as its error annotation, so this line - and only this line
+    - is what shows up in the run's Annotations view and in the log
+    summary. It compresses the console step markers (with their probe
+    values), the first error-looking line of the monitor transcript
+    (command errors go to the client terminal, never to the console), and
+    the bridge error - into a single annotation-sized line.
+    """
+    parts = []
+    try:
+        console = RENODE_CONSOLE_LOG.read_text(encoding="utf-8",
+                                               errors="replace")
+        payloads = re.findall(r"\[cancestry-hw\] ([^\n]+)", console)
+        if payloads:
+            parts.append("console=" + " | ".join(
+                payload.strip()[:70] for payload in payloads))
+    except OSError:
+        pass
+    try:
+        trans = RENODE_TRANSCRIPT_LOG.read_text(encoding="utf-8",
+                                                errors="replace")
+        # The monitor delivers text in 1-5 byte chunks, so an error
+        # message spans many transcript lines; reconstruct the raw RX
+        # stream before searching (the repr is parseable via literal_eval).
+        rx_stream = ""
+        for line in trans.splitlines():
+            if " RX " in line:
+                try:
+                    rx_stream += ast.literal_eval(
+                        line.split(" RX ", 1)[1]).decode(
+                            "utf-8", "replace")
+                except (ValueError, SyntaxError):
+                    pass
+        rx_stream = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", rx_stream)
+        for keyword in ("Could not find", "There was an error",
+                        "Exception", "failed"):
+            idx = rx_stream.lower().find(keyword.lower())
+            if idx >= 0:
+                snippet = re.sub(r"\s+", " ",
+                                 rx_stream[max(0, idx - 40):idx + 160])
+                parts.append("first-transcript-error=%s" % snippet)
+                break
+    except OSError:
+        pass
+    parts.append("err=%s" % str(error).strip()[:160])
+    summary = "T2-DIAG " + " | ".join(parts)
+    return summary[:1000]
+
+
 def connect_monitor(port, deadline_s=60.0, transcript_path=None,
                     clock=None):
     """Connect to the Renode monitor, retrying until the deadline."""
@@ -702,6 +755,9 @@ def main(argv=None):
             print("== monitor transcript (%d of %d lines) =="
                   % (len(shown), len(t_lines)))
             print("\n".join(shown))
+        # F-23c: the final line is the compact diagnostic - it is the one
+        # line GitHub's error annotation surfaces for the failed step.
+        print(_diagnostic_summary(error))
         return 2
 
     document = passing_document(run_body)

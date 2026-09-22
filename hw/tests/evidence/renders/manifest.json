@@ -14,9 +14,9 @@
       "expected_renderer_tool": "cancestry-render-modelica",
       "expected_renderer_tool_digest": "sha256:c50a6b0592117c081dc9c8dbc5cfcb69d50ef8e33b520c1a4d740e80ce4ac614",
       "expected_renderer_tool_version": "0.1.0",
-      "expected_svg_sha256": "sha256:65d1dcbe194263261f3e89b04578b3855279b9d9cb84f1feb400ebc8c638a005",
+      "expected_svg_sha256": "sha256:628a28994e8c204a0c20638b5af076281d4c00179ccd387cd9f796ab2c69d335",
       "last_updated": "2026-09-22T00:00:00Z",
-      "plot_data_sha256": "sha256:97d0fd6941602fa9d26730f6c106249628722efd51bdc9f41e1ba8558a552c81",
+      "plot_data_sha256": "sha256:e3c1d9164719d2e4d44402569290cc44fe535e19ec351821c007933945d0e77f",
       "plot_id": "t2_retention_001",
       "plot_version": "0.1.0"
     }
