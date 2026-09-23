@@ -343,4 +343,4 @@ def test_diagnostic_summary_compresses_failure_state(tmp_path, monkeypatch):
     assert "first-transcript-error=" in summary
     assert "Could not find file" in summary
     assert "magic 0x0" in summary
-    assert len(summary) <= 1000
+    assert len(summary) <= 2400  # F-28: 2400-char T2-DIAG cap

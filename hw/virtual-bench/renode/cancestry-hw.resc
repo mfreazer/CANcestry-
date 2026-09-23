@@ -69,6 +69,20 @@ machine LoadPlatformDescription $ORIGIN/stm32g474-cancestry.repl
 python "_clog.Logger.Info('[cancestry-hw] step3: platform loaded')"
 python "_clog.Logger.Info('[cancestry-hw] step3b: scope after load: sysbus=%s machine=%s monitor.Machine=%s' % ('sysbus' in dir() and 'yes' or 'NO', 'machine' in dir() and 'yes' or 'NO', 'yes' if monitor.Machine is not None else 'NO'))"
 
+# F-28 (issue #55): register the four scripted register models HERE, with
+# $ORIGIN-absolute paths (see the F-28 note in stm32g474-cancestry.repl).
+# `machine PyDevFromFile <path> <address> <size> [initable] [name]` is the
+# public Machine extension (PythonPeripheralExtensions, v1.16.1) that
+# constructs a PythonPeripheral and registers it on the machine's sysbus -
+# the same object the previous inline .repl declarations created, minus
+# the CWD-relative `filename:` resolution that broke dispatch 17
+# (run 35805300102).
+machine PyDevFromFile $ORIGIN/iwdg_model.py 0x40003000 0x14 true iwdg
+machine PyDevFromFile $ORIGIN/rtc_backup_model.py 0x40002800 0x64 false rtc_backup
+machine PyDevFromFile $ORIGIN/gpioa_model.py 0x48000000 0x400 true gpioa
+machine PyDevFromFile $ORIGIN/rcc_model.py 0x40021000 0x98 true rcc
+python "import os; _clog.Logger.Info('[cancestry-hw] step3c: 4 pydev registered, cwd=%s' % os.getcwd())"
+
 # Deterministic execution (virtual-bench-plan section 6): fixed global
 # quantum (100 us master step) and a fixed seed for the only Renode
 # randomness source. `emulation RunFor` advances virtual time exactly - no

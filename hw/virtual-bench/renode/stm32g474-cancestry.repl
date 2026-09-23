@@ -129,32 +129,23 @@ ccmram: Memory.MappedMemory @ sysbus 0x10000000
 // access; the co-simulation master polls after every RunFor quantum, which
 // bounds the fire-timestamp quantization by the master step while the hook
 // timestamps above stay exact.
-iwdg: Python.PythonPeripheral @ sysbus 0x40003000
-    size: 0x14
-    initable: true
-    filename: "iwdg_model.py"
-
-// RTC backup domain: only RTC_BKP0R (offset 0x50) is modeled; the value is
-// persisted in the T2 trace area so it survives the scripted IWDG reset
-// (that persistence IS the HW-SF-002 sub-event (i) behavior under test).
-rtc_backup: Python.PythonPeripheral @ sysbus 0x40002800
-    size: 0x64
-    initable: false
-    filename: "rtc_backup_model.py"
-
-// GPIOA: MODER/ODR/BSRR semantics for the safe-latch path (watchdog.c:
-// GPIOA_BSRR = (1 << 24) | (1 << 25) resets the CAN TX / contactor pins).
-gpioa: Python.PythonPeripheral @ sysbus 0x48000000
-    size: 0x400
-    initable: true
-    filename: "gpioa_model.py"
-
-// RCC: reset-cause readback (CSR at +0x94: IWDGRSTF bit 29 set by the IWDG
-// model, RMVF bit 23 clears it). Other RCC registers read as 0.
-rcc: Python.PythonPeripheral @ sysbus 0x40021000
-    size: 0x98
-    initable: true
-    filename: "rcc_model.py"
+//
+// F-28 (issue #55): the four scripted register models below (IWDG,
+// RTC/BKP, GPIOA, RCC) are NOT declared in this file - cancestry-hw.resc
+// creates them via `machine PyDevFromFile $ORIGIN/<file> ...`. Reason:
+// PythonPeripheral resolves a bare `filename:` CWD-relative IN ITS
+// CONSTRUCTOR (File.Exists, PythonPeripheral.cs, v1.16.1), and headless
+// CI's effective process CWD is not this script's directory (dispatch 17,
+// run 35805300102: 'Could not find source file for the script:
+// iwdg_model.py' at this file's iwdg line; dispatch 14, run 35773043927:
+// the same CWD behavior broke the .resc load until the $ORIGIN fix).
+// $ORIGIN-absolute paths remove the CWD dependence (Lead SE pre-authorized
+// absolute/$ORIGIN paths, 2026-09-22). Addresses/sizes/initable are
+// unchanged from the previous inline declarations:
+//   iwdg       0x40003000 size 0x14 initable
+//   rtc_backup 0x40002800 size 0x64
+//   gpioa      0x48000000 size 0x400 initable
+//   rcc        0x40021000 size 0x98 initable
 
 // FDCAN register scratch for the HAL bases (hal_stm32.c FDCAN1_BASE /
 // FDCAN2_BASE). Protocol engine not_simulated (see header).

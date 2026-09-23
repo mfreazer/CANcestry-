@@ -449,9 +449,15 @@ def _diagnostic_summary(error):
     final line as its error annotation, so this line - and only this line
     - is what shows up in the run's Annotations view and in the log
     summary. It compresses the console step markers (with their probe
-    values), the first error-looking line of the monitor transcript
+    values), the first error-looking span of the monitor transcript
     (command errors go to the client terminal, never to the console), and
-    the bridge error - into a single annotation-sized line.
+    the bridge error - into a single annotation line.
+
+    The transcript context is 1400 chars (F-28, issue #55): a DLR E25
+    'Constructor selection report' spans ~15 lines (per-parameter details
+    plus the rejection reason), and dispatches 15/16 (runs 35777946390,
+    35778907099) proved a 280-char capture truncates exactly before the
+    decisive lines. The overall line cap is 2400 chars.
     """
     parts = []
     try:
@@ -484,14 +490,14 @@ def _diagnostic_summary(error):
             idx = rx_stream.lower().find(keyword.lower())
             if idx >= 0:
                 snippet = re.sub(r"\s+", " ",
-                                 rx_stream[max(0, idx - 40):idx + 280])
+                                 rx_stream[max(0, idx - 40):idx + 1400])
                 parts.append("first-transcript-error=%s" % snippet)
                 break
     except OSError:
         pass
     parts.append("err=%s" % str(error).strip()[:160])
     summary = "T2-DIAG " + " | ".join(parts)
-    return summary[:1000]
+    return summary[:2400]
 
 
 def connect_monitor(port, deadline_s=60.0, transcript_path=None,
