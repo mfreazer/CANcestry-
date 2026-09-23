@@ -1,13 +1,18 @@
 # T2 Virtual Bench Bring-Up — Handover (H-08, issue #55)
 
-**Status: RE-BUDGETED 21–30 — dispatch 21 EXECUTED (failed), F-33
-applied, ready for dispatch 22.** Dispatch 21 (run `35893814425` @
-`2306a36`, hw-nightly #26, 2026-09-23) delivered the **first complete
-include** — step0…step8 all green, i.e. F-32 runtime-verified (step5
-ELF load, step6 hooks, step7 magic `0x54324353`, step8 include
-complete) — then failed closed with the bare EOF
-`err=Renode monitor closed the connection` (no `first-transcript-error=`).
-The EOF root cause is **not yet determined**: the discriminating
+**Status: RE-BUDGETED 21–30 — dispatches 21 and 22 executed (both
+failed), F-33 applied, ready for dispatch 23.** Dispatch 21 (run
+`35893814425` @ `2306a36`, hw-nightly #26, 2026-09-23 17:10) delivered
+the **first complete include** — step0…step8 all green, i.e. F-32
+runtime-verified (step5 ELF load, step6 hooks, step7 magic
+`0x54324353`, step8 include complete) — then failed closed with the
+bare EOF `err=Renode monitor closed the connection` (no
+`first-transcript-error=`). Dispatch 22 (run `35924809178`, hw-nightly
+#27, 21:49:45Z) **raced the F-33 push by ~6 minutes** — it executed
+the stale `2306a36` head (page title `CANcestry-@2306a36`, no F-33
+code, no `t2-ci-logs` artifact step) and produced a byte-identical
+annotation + the same zip failure: zero new information, cycle
+consumed. The EOF root cause is **not yet determined** — the discriminating
 evidence (which in-flight command, Renode's exit state, console crash
 tail) was not persisted — the T2 artifact zip failed for the third
 consecutive run (19/20/21) and job-log egress is blocked from the
@@ -32,16 +37,19 @@ HTML (blob pages include `rawLines` — see §3 for the no-API source
 recipe). `gh workflow dispatch` remains 403 anyway — dispatches stay
 human-triggered from the UI (§5.1).
 
-**Next action:** reconnect GitHub (above), then trigger `hw-nightly`
-from the UI **on `arena/01a0cbe2-cancestry`** for **dispatch 22**
-(cycle 2 of the re-budget) at the pushed head (F-33). Expected
-annotation on any repeat failure: `T2-DIAG … console-crash=… |
+**Next action:** trigger `hw-nightly` from the UI **on
+`arena/01a0cbe2-cancestry`** for **dispatch 23** (cycle 3 of the
+re-budget) — origin tip `3d37f86` carries F-33 (verify the run page
+shows that SHA before waiting on results; dispatch 22 raced the push).
+Expected annotation on any failure: `T2-DIAG … console-crash=… |
 proc=… | err=… while awaiting response to '…'` (or `… banner read`)
 — that line now decides the next step: a named-command EOF with
 `proc=already-exited` vs `alive-at-failure`, or a `console-crash=`
-signature. If the enriched diagnostics point at firmware/FMU internals,
-**stop and surface to the Lead SE** (memo §3/§4); otherwise the fault
-stays in the platform-script lane for 21–30.
+signature; the `t2-ci-logs-<sha>` artifact should also appear (first
+time the split upload is in the workflow). If the enriched diagnostics
+point at firmware/FMU internals, **stop and surface to the Lead SE**
+(memo §3/§4); otherwise the fault stays in the platform-script lane
+for cycles remaining (23–30; hard stop 30).
 
 This document is internal continuity documentation for the bring-up. It is
 not a safety claim and promotes nothing (HwAGENTS.md rules 13/14).
@@ -213,8 +221,11 @@ Post-dispatch-21 source audit (all from pinned refs; fetched via
 ## 4. Dispatch history (hw-nightly, workflow_dispatch, this branch)
 
 Run IDs verified against `gh run list`; older entries per the session
-record. Cycles are the SE budget unit (19 used: 18 at stop + re-budget
-dispatch 21).
+record. Cycles are the SE budget unit (20 used: 18 at stop + re-budget
+dispatches 21 and 22; remaining 23–30, hard stop at 30). One
+stop-period **stray** dispatch (run `35854449839` @ `a7b0455`,
+2026-09-23 11:25Z) sits outside the re-budget numbering — see the
+footnote below the table; flagged for Lead SE whether it is chargeable.
 
 | # | run | commit | outcome |
 |---|---|---|---|
@@ -228,13 +239,24 @@ dispatch 21).
 | 18 | 35806027349 | 8269dca (F-28) | all 4 PythonPeripherals construct; **E39** on `t2_trace` (size 0x200 not 0x400-aligned) → F-29 diagnosed |
 | 19 | 35807326391 | c185cee (F-29) | **F-29 PROVEN** — `step3: platform loaded` (full `.repl` incl. `t2_trace`); new fault: `machine PyDevFromFile … Parameters did not match the signature` at the first name arg → **F-30** (bare LiteralToken rejected for `string` param); F-31 (quoted seed → `SetSeed(int)`) pre-diagnosed in the same audit → both fixed pre-dispatch-20 |
 | 20 | 35851511484 | 6662659 (F-30/F-31) | **F-30/F-31 PROVEN** — `step3c: 4 pydev registered, cwd=/opt/renode`; `step4: quantum and seed set`; fault at `sysbus LoadELF $elf` (**F-32**: runner stores `$elf` as quoted StringToken with literal `@`; `ReadFilePath` validation fails) → **STOP, criterion 1 (20/20)**; report written; follow-up = issue #60 |
-| 21 | 35893814425 | 2306a36 (F-32) | **FIRST COMPLETE INCLUDE** — step0…step8 green (step5 ELF load + SP readback, step6 hooks, step7 magic `0x54324353`, step8 paused) ⇒ F-32 runtime-verified; then fail-closed `err=Renode monitor closed the connection` (bare EOF, no transcript-error keyword); artifact zip failed 3/3; **F-33 applied** (EOF context + `proc=`/`console-crash=` + separate CI-logs artifact) → dispatch 22 carries it. Cycle 1 of the re-budget. |
+| 21 | 35893814425 | 2306a36 (F-32) | **FIRST COMPLETE INCLUDE** — step0…step8 green (step5 ELF load + SP readback, step6 hooks, step7 magic `0x54324353`, step8 paused) ⇒ F-32 runtime-verified; then fail-closed `err=Renode monitor closed the connection` (bare EOF, no transcript-error keyword); artifact zip failed 3/3; **F-33 applied** (EOF context + `proc=`/`console-crash=` + separate CI-logs artifact) → was meant for dispatch 22. Cycle 1 of the re-budget. |
+| 22 | 35924809178 | 2306a36 (**stale**) | hw-nightly #27, manually triggered 21:49:45Z — **raced the F-33 push (~21:55) by ~6 min**, so the run executed pre-F-33 code: byte-identical T2-DIAG (bare EOF), same zip failure, no `t2-ci-logs` artifact step. Zero new information; cycle consumed. Cycle 2 of the re-budget (remaining: 23–30). |
 
 Note on dispatch 18's pydev row: the `✅ construct (F-28)` entries in
 section 2 were **source-verified, not runtime-proven** — the E39 aborted
 the include before the `.resc` pydev lines ever ran (dispatch 18's
 console markers stop at `step2b`). Runtime proof of the pydev
 registrations arrives with dispatch 20 (step3c).
+
+Stray footnote (disclosure): run `35854449839` @ `a7b0455`
+(workflow_dispatch, 2026-09-23 11:25:29Z) fired **during the stop
+period**, ~30 min after dispatch 20's failure and before the re-budget
+terms existed; it was never recorded in this table. Its T2-DIAG shows
+the known F-32-era fault verbatim (`elf=@/work/…`, `sysbus LoadELF
+$elf` signature error, magic `0x00000000`) — zero new information. It
+is disclosed here rather than absorbed silently: the Lead SE decides
+whether it is chargeable against the 21–30 budget (if charged,
+remaining cycles become 23–29 with hard stop 30).
 
 ## 5. Procedures that work in this environment
 

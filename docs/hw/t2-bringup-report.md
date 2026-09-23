@@ -285,6 +285,20 @@ crash (CrashHandler prints `Fatal error:` to the merged stderr —
 exactly what F-33 now surfaces) and a Python-peripheral runtime throw
 (`PeripheralPythonEngine.Execute` has no per-call error callback).
 
+**Dispatch 22** — `hw-nightly` #27, run `35924809178`, manual
+dispatch at 2026-09-23 21:49:45Z, head **`2306a36` (stale)**, failure
+after 1 m 23 s. The trigger raced the F-33 push by ~6 minutes (the
+recovery push landed ~21:55 while the run had already been queued at
+the then-current origin tip), so the cycle executed pre-F-33 code and
+produced a **byte-identical** T2-DIAG (same console markers, same bare
+`err=Renode monitor closed the connection`) and the same zip error —
+zero new information; cycle consumed; F-33 first applies from
+dispatch 23 (head `3d37f86`). Disclosure: an untracked stray dispatch
+(run `35854449839` @ `a7b0455`, 11:25Z, during the stop period before
+the re-budget existed) re-ran the known F-32 fault and likewise carries
+no new information — flagged for the Lead SE to rule whether it is
+chargeable against cycles 21–30 (handover §4 footnote).
+
 *Fault-class verdict (working, stated for Lead SE override):*
 monitor-socket EOF after a complete include = bridge↔Renode transport
 = **platform-script/runner class** → in-lane for dispatches 21–30
