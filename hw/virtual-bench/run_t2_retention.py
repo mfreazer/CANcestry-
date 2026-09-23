@@ -405,7 +405,14 @@ def launch_renode(renode_bin, elf_path, port,
     """Start Renode headless with the platform script; return the process."""
     command = [
         str(renode_bin), "--disable-xwt", "--port", str(port),
-        "-e", '$elf="@%s"' % elf_path.resolve(),
+        # F-32 (issue #60): the quoted $elf value must NOT carry the '@'
+        # path marker. A StringToken strips the quotes but never trims '@'
+        # (unlike PathToken), and `sysbus LoadELF $elf` converts the value
+        # to ReadFilePath, whose validator runs File.Exists on it raw -
+        # '@/work/...' does not exist, the RecoverableException is swallowed
+        # by TryPrepareParameters, and the include dies with 'Parameters did
+        # not match the signature' (dispatch 20, run 35851511484).
+        "-e", '$elf="%s"' % elf_path.resolve(),
         "-e", "include @cancestry-hw.resc",
     ]
     process = subprocess.Popen(

@@ -1,21 +1,26 @@
 # T2 Virtual Bench Bring-Up — Handover (H-08, issue #55)
 
-**Status: STOPPED — Lead SE stop criterion 1 (20/20 dispatch cycles
-exhausted; dispatch 20 = run 35851511484 @ `6662659`, 2026-09-23).
-Dispatch 20 proved F-30 and F-31 at runtime (`step3c: 4 pydev
-registered`, `step4: quantum and seed set`) and stopped at
-`sysbus LoadELF $elf` — F-32, pre-diagnosed (runner line 408 stores
-`$elf` as a quoted StringToken keeping the literal `@`;
-`ReadFilePath.Validate` then fails `File.Exists("@/…")`). The
-documented-outcome report is written: `docs/hw/t2-bringup-report.md`.
-The SE-mandated follow-up (F-32 fix + re-budget request for
-dispatches 21+) is issue #60. Ledger row unchanged (sim-pending/CL0).**
+**Status: RE-BUDGETED — dispatches 21–30 GRANTED (Lead SE memo
+"RE: T2 Bring-Up Stop at Dispatch 20 — PR #59 Merge Authorized,
+Issue #60 Re-Budget Granted (21–30)"; stop at 20/20 endorsed, PR #59
+merge authorized, F-32 fix authorized with the §3 fault-class
+condition). The condition check passed (touch set: runner `$elf` form,
+`.resc` header comment, named regression test, evidence re-issue —
+firmware/FMU/schema/oracle verified untouched) and F-32 IS APPLIED at
+head: `-e '$elf="…"'` without the `@` marker + regression test
+`test_f32_elf_variable_is_quoted_without_path_marker`. Evidence
+re-issued canonically; gates green. Stop criteria carry forward
+verbatim: dispatch 30 hard stop; fault outside platform script →
+stop; non-identical two-run hashes → stop; no doubles, no gate
+weakening.**
 
-**Next action: NONE inside this bring-up — do NOT dispatch
-`hw-nightly` for T2 without an explicit Lead SE re-budget referencing
-issue #60. The next engineering step is #60 (apply F-32 + regression
-test, then dispatch under a fresh budget; same stop criteria
-otherwise).**
+**Next action:** trigger `hw-nightly` from the UI (workflow_dispatch;
+`gh` dispatch is 403 from the sandbox) **on
+`arena/01a0cbe2-cancestry`** for **dispatch 21** (cycle 1 of the
+re-budget). Expected: `step5` vector-SP readback → hooks → step7
+magic `0x54324353` → step8 → first live scenario (FMU + invariant) →
+RUN 2. On any fault: read the T2-DIAG annotation (section 5.2);
+apply the §4 stop criteria (now the memo's 21–30 restatement).
 
 This document is internal continuity documentation for the bring-up. It is
 not a safety claim and promotes nothing (HwAGENTS.md rules 13/14).

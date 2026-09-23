@@ -137,6 +137,32 @@ def test_omc_build_script_is_fully_formatted():
         assert 'loadFile("%s")' % (runner.MODEL_ROOT / name) in text
 
 
+def test_f32_elf_variable_is_quoted_without_path_marker():
+    """F-32 (issue #60): ``$elf`` must be a quoted StringToken with NO ``@``.
+
+    Dispatch 20 (run 35851511484, the final cycle of the first budget)
+    died at ``sysbus LoadELF $elf`` with 'Parameters did not match the
+    signature': the runner's old ``$elf="@..."`` form stored the literal
+    '@' inside a StringToken (StringToken strips quotes; unlike PathToken
+    it never trims '@'), LoadELF's ReadFilePath validator then ran
+    ``File.Exists("@/...")`` -> false, and TryPrepareParameters swallows
+    the RecoverableException into a signature mismatch. The value must be
+    the clean absolute path so the validator sees a real file.
+    """
+    src = (REPO_ROOT / "hw/virtual-bench/run_t2_retention.py").read_text(
+        encoding="utf-8")
+    assert "'$elf=\"@%s\"'" not in src, (
+        "F-32 regression: '@' inside the quoted $elf value would fail "
+        "LoadELF's ReadFilePath validation")
+    assert "'$elf=\"%s\"'" in src, (
+        "F-32: expected the runner to set $elf as a clean quoted path")
+    # The .resc consumption point stays the plain variable form (the fix
+    # belongs to the runner, not to the platform script's LoadELF line).
+    resc = (REPO_ROOT / "hw/virtual-bench/renode/cancestry-hw.resc").read_text(
+        encoding="utf-8")
+    assert "sysbus LoadELF $elf" in resc
+
+
 # ---------------------------------------------------------------------------
 # HW-T2-E2E: full pipeline (Renode-equipped infrastructure only)
 # ---------------------------------------------------------------------------

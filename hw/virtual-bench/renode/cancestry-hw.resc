@@ -15,9 +15,15 @@
 #
 # The script is driven by the T2 runner (hw/virtual-bench/run_t2_retention.py):
 #
-#   $elf   path of the v1.0.0 firmware ELF (mandatory; set with
-#          `set $elf @...` before including this script - the runner always
-#          sets it, and the guard below fails closed when it is missing)
+#   $elf   path of the v1.0.0 firmware ELF (mandatory; the runner sets it
+#          before including this script via `-e '$elf="<abs path>"'` -
+#          quoted, with NO '@' path marker. F-32 (issue #60): a StringToken
+#          strips the quotes but never trims '@' (only PathToken does), and
+#          `sysbus LoadELF $elf` converts the value to ReadFilePath whose
+#          validator runs File.Exists on the raw value - so '@/...' fails
+#          binding with 'Parameters did not match the signature'. The
+#          runner always sets it, and the guard below fails closed when it
+#          is missing)
 #   $seed  optional deterministic seed (fixed default below; overriding it
 #          is a reviewable, evidence-affecting change)
 #

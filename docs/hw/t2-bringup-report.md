@@ -195,3 +195,71 @@ byte-identical-to-canonical state (status `pending`, pass=false, CL0).
   is to find out whether the live co-simulation actually works — so if
   it doesn't, that is a successful outcome of the issue, reported
   honestly, not a failure to hide."*
+
+---
+
+## Postscript — Lead SE memo: stop endorsed, merge authorized, re-budget granted (21–30)
+
+Subsequent to this report's stop record, the Lead SE issued the memo
+*"RE: T2 Bring-Up Stop at Dispatch 20 — PR #59 Merge Authorized,
+Issue #60 Re-Budget Granted (21–30)"*. For the record:
+
+1. **Stop endorsed** as correct execution of the budget directive
+   (including the dispatch-18 pydev overclaim correction).
+2. **PR #59 merge authorized** (Release Manager action) at the stop
+   commit `a7b0455`.
+3. **Re-budget: GRANTED, bounded — dispatches 21–30.** Dispatch 30 is
+   the new hard stop with the same mandatory report-or-stop.
+4. **F-32 fix: AUTHORIZED with a fault-class condition** — pre-
+   authorized only for platform-script class; any fault touching the
+   firmware, FMU internals, evidence schema, or oracle must be
+   surfaced to the Lead SE *before* applying.
+   **Condition check performed before applying:** the fix's touch set
+   is `run_t2_retention.py` (the `$elf` `-e` form, line ~408), a
+   `.resc` *header comment* correction, one named regression test in
+   `test_t2_retention.py`, and the canonical evidence re-issue (the
+   runner is a pinned source; status stays `pending`). Verified
+   untouched: `platform/cortex_m/`, `hw/virtual-bench/firmware/`,
+   `hw/virtual-bench/fmi2_smoke_slave.c` / Holdup model,
+   `schemas/hw/hw-t2-evidence-0.1.0.schema.json`, and
+   `hw/tests/oracles/`. → **class check PASSED → applied.**
+5. **Stop criteria carried forward verbatim** into dispatches 21–30:
+   (1) dispatch 30 hard stop; (2) any fault outside the platform
+   script → stop and document, do not spend the budget debugging it;
+   (3) non-identical two-run evidence hashes → stop and flag; no
+   test-double fallback, no gate weakening.
+6. Success definition unchanged: live co-sim with the invariant
+   checked against OR-001 and byte-identical two-run hashes, **or**
+   the next honest stop-report naming the next blocker.
+
+This report remains the honest stop-record for the 20/20 budget. It
+will be replaced by the success-path variant (issue #55 deliverables
+3–4) if a re-budgeted run lands live evidence, or superseded by a
+second stop-report if the re-budget exhausts.
+
+## Appendix A — Workspace-reset recovery (provenance note for auditors)
+
+Twice during this bring-up the sandbox workspace reset rewound the
+**local** branch pointer of `arena/01a0cbe2-cancestry` to the merge
+base `8857bfa` while leaving the worktree content in place (the
+documented hazard in `docs/hw/t2-bringup-handover.md` §6; occurrences:
+before committing the stop-report at `a7b0455`, and again after the
+re-budget memo, before applying F-32). Recovery was mechanical, not
+editorial, both times:
+
+1. `origin` is the source of truth: fetched
+   `refs/heads/arena/01a0cbe2-cancestry` (first `6662659`, then
+   `a7b0455`).
+2. **Every key worktree file was hash-verified** against the origin
+   blob (`git hash-object <f>` vs `git rev-parse origin/<branch>:<f>`)
+   — the platform script, `.repl`, runner, tests, evidence artifacts,
+   this report, and the handover all `MATCH`ed before any reset.
+3. Only then: `git reset --hard origin/<branch>`; in the first
+   occurrence (uncommitted report/handover edits existed) the two
+   in-flight files were copied aside beforehand and restored
+   byte-for-byte afterwards.
+
+No committed content was hand-edited during recovery; each recovery
+is visible in the push history as a fast-forward of verified state.
+The tree this report describes is provably reconstructed from origin,
+not re-authored.
