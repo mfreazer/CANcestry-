@@ -1,18 +1,20 @@
 # T2 Virtual Bench Bring-Up — Handover (H-08, issue #55)
 
-**Status: PAUSED by direction (2026-09-23) at dispatch 18 of the 20-cycle
-budget set by the Lead SE (memo 2026-09-22). Branch `arena/01a0c6d8-cancestry`
-head `8269dca` (F-28). No dispatch has been run on any newer state; two
-cycles remain (19, 20).**
+**Status: F-29 APPLIED — awaiting human-triggered dispatch 19
+(2026-09-23). Continuation session on branch `arena/01a0cbe2-cancestry`
+(all 21 commits of `arena/01a0c6d8-cancestry` fast-forwarded in, then
+F-29 at head). 18 of the 20-cycle budget set by the Lead SE (memo
+2026-09-22) are used; two cycles remain (19, 20). No dispatch has been
+run on any state newer than `8269dca`.**
 
-**Next action (one line, pre-diagnosed):** apply F-29 — change
-`t2_trace: Memory.MappedMemory` `size: 0x200` → `size: 0x400` in
-`hw/virtual-bench/renode/stm32g474-cancestry.repl` (dispatch 18, run
-35806027349: `Error E39: Could not register memory at offset 0x60000000
-and size 0x200 - the size has to be aligned to guest page size 0x400`),
-re-issue the evidence (section 5.4), run the gates, commit, and trigger
-dispatch 19. The trace layout ends at 0x60000104; 0x400 covers it and
-nothing else is mapped in that virtual FMC-bank region.
+**Next action:** trigger `hw-nightly` from the UI (workflow_dispatch;
+`gh` dispatch is 403 from the sandbox) **on
+`arena/01a0cbe2-cancestry`** for dispatch 19. F-29 is already committed
+(`t2_trace` size `0x200` → `0x400`, evidence re-issued canonically,
+gates green) — do not re-apply. On failure, read the T2-DIAG annotation
+(section 5.2); if the fault is outside the platform script (`.repl`/
+`.resc`), apply SE stop criterion 2/3 (section 1): stop, write the
+documented-outcome report, ledger unchanged, separate follow-up issue.
 
 This document is internal continuity documentation for the bring-up. It is
 not a safety claim and promotes nothing (HwAGENTS.md rules 13/14).
@@ -245,7 +247,8 @@ gate battery; platform construction through the four scripted
 PythonPeripherals (dispatch 18).
 
 **Unproven (the actual bring-up):** `t2_trace` registration (F-29
-pending); ELF execution (vector SP 0x20018000 readback); preflight magic
+applied at head; awaiting dispatch 19 confirmation); ELF execution
+(vector SP 0x20018000 readback); preflight magic
 0x54324353; FMU load + 100 µs/1 µs co-simulation stepping; the three
 symbol-hook timestamps; the invariant vs OR-001; RTC_BKP0R/RCC shadow
 persistence across the scripted IWDG reset; RUN-2 byte-identical
@@ -261,8 +264,12 @@ the report — it documents the CWD behavior for tool-qualification);
 
 ## 8. PR, ledger, promotion
 
-- **PR** (this branch → main): bring-up only; opened 2026-09-23 at
-  `8269dca` (+ this handover doc). It does not claim a live run.
+- **PR**: superseded mid-bring-up — the original PR #58
+  (`arena/01a0c6d8-cancestry` → main, opened 2026-09-23 at `8269dca` +
+  this handover doc) was replaced by the continuation PR from
+  `arena/01a0cbe2-cancestry`, which contains all of #58's commits
+  fast-forwarded plus the F-29 fix. Bring-up only; no live run is
+  claimed until dispatch 19/20 evidence lands.
 - **Ledger:** `hw/tests/traceability.csv` row `HW-SF-002,virtual_bench`
   stays `sim-pending` / CL0 with empty evidence cells — no promotion,
   grep-checkable.
@@ -280,7 +287,7 @@ the report — it documents the CWD behavior for tool-qualification);
 
 | path | what it is |
 |---|---|
-| `hw/virtual-bench/renode/stm32g474-cancestry.repl` | the platform model (F-29 pending here: `t2_trace` size) |
+| `hw/virtual-bench/renode/stm32g474-cancestry.repl` | the platform model (F-29 applied: `t2_trace` size 0x400, guest-page aligned) |
 | `hw/virtual-bench/renode/cancestry-hw.resc` | bring-up script: steps 0→8, `PyDevFromFile` registrations, symbol hooks, magic |
 | `hw/virtual-bench/renode/{iwdg,rtc_backup,gpioa,rcc}_model.py` | scripted register models (bus-address based) |
 | `hw/virtual-bench/run_t2_retention.py` | the T2 runner: preflight, launch, monitor, T2-DIAG, evidence rendering (`expected_pending_manifest`, `render_evidence_bytes`) |
