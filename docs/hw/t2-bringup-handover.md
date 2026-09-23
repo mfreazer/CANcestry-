@@ -178,6 +178,13 @@ registrations arrives with dispatch 20 (step3c).
 (coordinator/SE) triggers `hw-nightly` from the UI** on the branch. Note a
 fresh run may not appear in `gh run list` for a few seconds.
 
+**Also 403 this session (2026-09-23): issue API writes.** `gh issue
+comment`/`gh issue edit` → `Resource not accessible by integration`
+(PR comments still work). The post-memo F-32/re-budget update that could
+not go on issue #60 lives in the **PR #59 comment** (`5797344789`), the
+report postscript/Appendix A, and this handover — do not retry issue
+comments expecting a different result until the token scope changes.
+
 ### 5.2 Reading results (log fetch is blocked)
 `gh run view <id> --log` / the logs API are blocked (results-receiver
 egress). Use the **annotations API** — the T2-DIAG line is a stored
