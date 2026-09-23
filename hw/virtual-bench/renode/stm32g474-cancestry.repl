@@ -155,11 +155,17 @@ fdcan1_scratch: Memory.MappedMemory @ sysbus 0x40006400
 fdcan2_scratch: Memory.MappedMemory @ sysbus 0x40006800
     size: 0x400
 
-// T2 event-capture area (virtual; unused FMC bank on this board). Size 0x200:
-// the header layout above ends at 0x60000100 (retention_shadow), so the
-// region must cover through 0x600001FF.
+// T2 event-capture area (virtual; unused FMC bank on this board).
+// F-29 (issue #55): size 0x400, NOT the previous 0x200. Dispatch 18
+// (run 35806027349) failed with 'Error E39: Could not register memory at
+// offset 0x60000000 and size 0x200 - the size has to be aligned to guest
+// page size 0x400' (MappedMemory registration, v1.16.1). The header
+// layout above ends at 0x60000104 (retention_shadow word at
+// 0x60000100), which one 0x400 guest page starting at 0x60000000 fully
+// covers (through 0x600003FF); nothing else is mapped in this virtual
+// FMC-bank region, so the extra half-page is unused address space only.
 t2_trace: Memory.MappedMemory @ sysbus 0x60000000
-    size: 0x200
+    size: 0x400
 
 // F-25 (issue #55): the previous 'sysbus: init: Tag <range> "name"' block
 // was removed. CORRECTION (F-27, source-verified against v1.16.1): the
