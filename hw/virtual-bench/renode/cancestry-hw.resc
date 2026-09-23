@@ -28,7 +28,17 @@
 using sysbus
 
 # Fixed deterministic seed (HwAGENTS.md rule 5).
-$t2_seed?="123456789"
+# F-31 (issue #55): the value is UNQUOTED on purpose. The monitor stores the
+# `?=` value's token as-is and later substitutes it verbatim (Monitor.cs
+# Parse/ExpandVariables, v1.16.1 pin add012af), and `emulation SetSeed` binds
+# to `Emulation.SetSeed(int)` - the monitor's acceptable-token-type table
+# accepts only DecimalIntegerToken for int parameters, so a quoted
+# "123456789" (StringToken) would fail with 'Parameters did not match the
+# signature' at step4 (same failure class as F-30). Unquoted, the tokenizer
+# produces a DecimalIntegerToken and the binding succeeds. The seed VALUE is
+# unchanged and must stay equal to FIXED_SEED in fmi_bridge.py
+# (asserted by test_fixed_seed_is_pinned).
+$t2_seed?=123456789
 
 # Fail-closed guard: T2 executes the REAL v1.0.0 ELF (HW-PLAN section 8.3);
 # the bench never falls back to a reimplementation of the firmware.
@@ -77,10 +87,22 @@ python "_clog.Logger.Info('[cancestry-hw] step3b: scope after load: sysbus=%s ma
 # the same object the previous inline .repl declarations created, minus
 # the CWD-relative `filename:` resolution that broke dispatch 17
 # (run 35805300102).
-machine PyDevFromFile $ORIGIN/iwdg_model.py 0x40003000 0x14 true iwdg
-machine PyDevFromFile $ORIGIN/rtc_backup_model.py 0x40002800 0x64 false rtc_backup
-machine PyDevFromFile $ORIGIN/gpioa_model.py 0x48000000 0x400 true gpioa
-machine PyDevFromFile $ORIGIN/rcc_model.py 0x40021000 0x98 true rcc
+#
+# F-30 (issue #55): the NAME argument must be QUOTED. Dispatch 19
+# (run on c185cee) failed at the first line with
+# 'Parameters did not match the signature': PyDevFromFile's name parameter
+# is `string`, and the monitor's acceptable-token-type table
+# (MonitorCommands.cs, v1.16.1 pin add012af) accepts only StringToken or
+# PathToken for string parameters - a bare `iwdg` tokenizes as a
+# LiteralToken and is rejected during binding (the path itself was fine:
+# $ORIGIN expands to a PathToken whose trimmed value exists, HexToken
+# derives from DecimalIntegerToken so the hex size binds to int, and ulong
+# address has no token-type restriction). Quoting yields StringTokens and
+# the binding succeeds.
+machine PyDevFromFile $ORIGIN/iwdg_model.py 0x40003000 0x14 true "iwdg"
+machine PyDevFromFile $ORIGIN/rtc_backup_model.py 0x40002800 0x64 false "rtc_backup"
+machine PyDevFromFile $ORIGIN/gpioa_model.py 0x48000000 0x400 true "gpioa"
+machine PyDevFromFile $ORIGIN/rcc_model.py 0x40021000 0x98 true "rcc"
 python "import os; _clog.Logger.Info('[cancestry-hw] step3c: 4 pydev registered, cwd=%s' % os.getcwd())"
 
 # Deterministic execution (virtual-bench-plan section 6): fixed global

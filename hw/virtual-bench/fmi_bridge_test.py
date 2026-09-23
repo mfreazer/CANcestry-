@@ -390,9 +390,16 @@ def test_fmpy_slave_fails_closed_without_executor(monkeypatch):
 
 
 def test_fixed_seed_is_pinned():
-    """HW-T2-BRIDGE-015: the bridge and the .resc seed stay in lockstep."""
+    """HW-T2-BRIDGE-015: the bridge and the .resc seed stay in lockstep.
+
+    F-31: the .resc value must stay UNQUOTED - the monitor substitutes the
+    stored token verbatim and `emulation SetSeed(int)` only accepts a
+    DecimalIntegerToken, not a quoted StringToken (see the F-31 comment
+    in cancestry-hw.resc).
+    """
     resc = (SCRIPT_DIR / "renode" / "cancestry-hw.resc").read_text()
-    assert '$t2_seed?="%s"' % FIXED_SEED in resc
+    assert '$t2_seed?=%s' % FIXED_SEED in resc
+    assert '$t2_seed?="%s"' % FIXED_SEED not in resc
 
 
 def test_monitor_prompt_regex_accepts_renode_prompt_forms():

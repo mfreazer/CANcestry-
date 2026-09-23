@@ -1,20 +1,27 @@
 # T2 Virtual Bench Bring-Up — Handover (H-08, issue #55)
 
-**Status: F-29 APPLIED — awaiting human-triggered dispatch 19
-(2026-09-23). Continuation session on branch `arena/01a0cbe2-cancestry`
-(all 21 commits of `arena/01a0c6d8-cancestry` fast-forwarded in, then
-F-29 at head). 18 of the 20-cycle budget set by the Lead SE (memo
-2026-09-22) are used; two cycles remain (19, 20). No dispatch has been
-run on any state newer than `8269dca`.**
+**Status: F-30 + F-31 APPLIED — awaiting human-triggered dispatch 20
+(THE FINAL CYCLE of the 20-cycle budget; 19 used as of this revision).
+Session branch `arena/01a0cbe2-cancestry` (continuation of
+`arena/01a0c6d8-cancestry`, whose 21 commits were fast-forwarded in).
+Dispatch 19 (run on `c185cee`) PROVED F-29: `step3 platform loaded` —
+the full `.repl` now constructs including `t2_trace`; the new fault was
+`PyDevFromFile … Parameters did not match the signature` (F-30, bare
+name tokens rejected for `string` params by the monitor's token-type
+table). F-31 (quoted `$t2_seed` → `SetSeed(int)` mismatch) was found in
+the same source audit BEFORE it could burn cycle 20. Evidence
+re-issued canonically; gates green.**
 
-**Next action:** trigger `hw-nightly` from the UI (workflow_dispatch;
+**Next action:** trigger `hw-nightly` (workflow_dispatch, from the UI —
 `gh` dispatch is 403 from the sandbox) **on
-`arena/01a0cbe2-cancestry`** for dispatch 19. F-29 is already committed
-(`t2_trace` size `0x200` → `0x400`, evidence re-issued canonically,
-gates green) — do not re-apply. On failure, read the T2-DIAG annotation
-(section 5.2); if the fault is outside the platform script (`.repl`/
-`.resc`), apply SE stop criterion 2/3 (section 1): stop, write the
-documented-outcome report, ledger unchanged, separate follow-up issue.
+`arena/01a0cbe2-cancestry`** for dispatch 20 — the LAST cycle. F-30 +
+F-31 are already committed — do not re-apply. On failure, read the
+T2-DIAG annotation (section 5.2); if the fault is outside the platform
+script, or this cycle is exhausted, apply SE stop criterion 1/2/3
+(section 1): stop, write the documented-outcome report, ledger
+unchanged, separate follow-up issue. **There is no cycle 21 —
+dispatch 20 must either land the live run or trigger the stop
+report.**
 
 This document is internal continuity documentation for the bring-up. It is
 not a safety claim and promotes nothing (HwAGENTS.md rules 13/14).
@@ -151,6 +158,13 @@ record. Cycles are the SE budget unit (18 used).
 | 16 | 35778907099 | 598a360 (F-25) | same E25 — true cause: camelCase `performanceInMips` (F-27 diagnosis) |
 | 17 | 35805300102 | 4beacd2 (F-27) | **E25 gone** (CPU constructs); new fault: `iwdg` PythonPeripheral "Could not find source file" (CWD-relative `File.Exists`) |
 | 18 | 35806027349 | 8269dca (F-28) | all 4 PythonPeripherals construct; **E39** on `t2_trace` (size 0x200 not 0x400-aligned) → F-29 diagnosed |
+| 19 | see check-runs on `c185cee` | c185cee (F-29) | **F-29 PROVEN** — `step3: platform loaded` (full `.repl` incl. `t2_trace`); new fault: `machine PyDevFromFile … Parameters did not match the signature` at the first name arg → **F-30** (bare LiteralToken rejected for `string` param); F-31 (quoted seed → `SetSeed(int)`) pre-diagnosed in the same audit → both fixed pre-dispatch-20 |
+
+Note on dispatch 18's pydev row: the `✅ construct (F-28)` entries in
+section 2 were **source-verified, not runtime-proven** — the E39 aborted
+the include before the `.resc` pydev lines ever ran (dispatch 18's
+console markers stop at `step2b`). Runtime proof of the pydev
+registrations arrives with dispatch 20 (step3c).
 
 ## 5. Procedures that work in this environment
 
@@ -243,14 +257,17 @@ deliberately carries **no** `evidence_sha256` (pending row) — leave it.
 **Proven:** T2 toolchain provisioning (Dockerfile.t2: Renode 1.16.1
 identity pin `ci/docker/renode-1.16.1.pin`, arm-none-eabi, fmpy 0.3.24);
 off-tree ELF build of the v1.0.0 sources; T2-DIAG diagnostics; the full
-gate battery; platform construction through the four scripted
-PythonPeripherals (dispatch 18).
+gate battery; **platform description load end-to-end (dispatch 19:
+`step3: platform loaded`, all peripherals incl. the F-29 `t2_trace`)**;
+the `$ORIGIN` expansion mechanism observed in the executed-command echo.
 
-**Unproven (the actual bring-up):** `t2_trace` registration (F-29
-applied at head; awaiting dispatch 19 confirmation); ELF execution
-(vector SP 0x20018000 readback); preflight magic
-0x54324353; FMU load + 100 µs/1 µs co-simulation stepping; the three
-symbol-hook timestamps; the invariant vs OR-001; RTC_BKP0R/RCC shadow
+**Unproven (the actual bring-up):** the four `PyDevFromFile`
+registrations at runtime (F-30 fix awaits dispatch 20, step3c); ELF
+execution (vector SP 0x20018000 readback); preflight magic
+0x54324353; `SetGlobalQuantum`/`SetSeed` (F-31); FMU load +
+100 µs/1 µs co-simulation stepping; the three symbol hooks
+(`cpu AddSymbolHook` exists in 1.16.1 — OsSymbolHook.cs, verified — but
+has never executed); the invariant vs OR-001; RTC_BKP0R/RCC shadow
 persistence across the scripted IWDG reset; RUN-2 byte-identical
 determinism.
 
