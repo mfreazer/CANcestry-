@@ -313,14 +313,21 @@ evidence re-issue (runner/bridge/tests are pinned; status stays
 
 ## Appendix A — Workspace-reset recovery (provenance note for auditors)
 
-Three times during this bring-up the sandbox workspace reset rewound
-the **local** branch pointer of `arena/01a0cbe2-cancestry` while
-leaving the worktree content in place (the documented hazard in
-`docs/hw/t2-bringup-handover.md` §6; occurrences: before committing
-the stop-report at `a7b0455`, after the re-budget memo before applying
-F-32, and after dispatch 21 before applying F-33 — the third rewind
-targeted the merge base again and was recovered to `2306a36`).
-Recovery was mechanical, not editorial, every time:
+Three (four counting the post-commit re-clone below) times during this
+bring-up the sandbox workspace reset rewound the **local** git state of
+`arena/01a0cbe2-cancestry` while leaving the worktree content in place
+(the documented hazard in `docs/hw/t2-bringup-handover.md` §6;
+occurrences: before committing the stop-report at `a7b0455`, after the
+re-budget memo before applying F-32, and after dispatch 21 before
+applying F-33 — the third rewind targeted the merge base again and was
+recovered to `2306a36`). A fourth occurrence, after F-33 was committed
+as `7b549fc`, was harsher: a fresh re-clone to `8857bfa` destroyed that
+commit object outright while the worktree files survived untracked;
+recovery used `git reset --mixed FETCH_HEAD` (= `2306a36`) so the
+index re-acquired the tracked files, verified the worktree diff was
+byte-identical to the lost commit (11 files, 492+/70−), recommitted as
+`0aa0b60`, and pushed. Recovery was mechanical, not editorial, every
+time:
 
 1. `origin` is the source of truth: fetched
    `refs/heads/arena/01a0cbe2-cancestry` (first `6662659`, then
