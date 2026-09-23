@@ -259,7 +259,20 @@ class RenodeMonitorEndpoint(RenodeEndpoint):
                     "console tail)" % (self._timeout, self._last_command)) \
                     from error
             if not chunk:
-                raise BridgeError("Renode monitor closed the connection")
+                # F-33 (issue #60, dispatch 21): an EOF must say WHERE it
+                # happened - banner handshake vs a named in-flight command -
+                # the way the timeout path already does (F-20). Dispatch 21
+                # (run 35893814425) died with a bare "closed the connection"
+                # right after the first complete include, leaving the EOF
+                # point unknown; without it the annotation cannot classify
+                # the fault (connect vs preflight vs the first RunFor).
+                if self._last_command is None:
+                    raise BridgeError(
+                        "Renode monitor closed the connection during the "
+                        "startup banner read")
+                raise BridgeError(
+                    "Renode monitor closed the connection while awaiting "
+                    "response to %r" % (self._last_command,))
             self._record("RX", chunk)
             self._buffer += chunk
 

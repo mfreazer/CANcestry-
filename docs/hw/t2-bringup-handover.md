@@ -1,26 +1,47 @@
 # T2 Virtual Bench Bring-Up — Handover (H-08, issue #55)
 
-**Status: RE-BUDGETED — dispatches 21–30 GRANTED (Lead SE memo
-"RE: T2 Bring-Up Stop at Dispatch 20 — PR #59 Merge Authorized,
-Issue #60 Re-Budget Granted (21–30)"; stop at 20/20 endorsed, PR #59
-merge authorized, F-32 fix authorized with the §3 fault-class
-condition). The condition check passed (touch set: runner `$elf` form,
-`.resc` header comment, named regression test, evidence re-issue —
-firmware/FMU/schema/oracle verified untouched) and F-32 IS APPLIED at
-head: `-e '$elf="…"'` without the `@` marker + regression test
-`test_f32_elf_variable_is_quoted_without_path_marker`. Evidence
-re-issued canonically; gates green. Stop criteria carry forward
-verbatim: dispatch 30 hard stop; fault outside platform script →
-stop; non-identical two-run hashes → stop; no doubles, no gate
-weakening.**
+**Status: RE-BUDGETED 21–30 — dispatch 21 EXECUTED (failed), F-33
+applied, ready for dispatch 22.** Dispatch 21 (run `35893814425` @
+`2306a36`, hw-nightly #26, 2026-09-23) delivered the **first complete
+include** — step0…step8 all green, i.e. F-32 runtime-verified (step5
+ELF load, step6 hooks, step7 magic `0x54324353`, step8 include
+complete) — then failed closed with the bare EOF
+`err=Renode monitor closed the connection` (no `first-transcript-error=`).
+The EOF root cause is **not yet determined**: the discriminating
+evidence (which in-flight command, Renode's exit state, console crash
+tail) was not persisted — the T2 artifact zip failed for the third
+consecutive run (19/20/21) and job-log egress is blocked from the
+sandbox. **F-33 (diagnostics enrichment) is applied at head** to close
+that gap: EOF messages name the banner/command, the runner records
+Renode's pre-reap exit state, the T2-DIAG line carries
+`console-crash=`/`proc=`, and the workflow now uploads `/tmp` CI logs
+as a **separate artifact first** (poisoned `build/hw/` can no longer
+take the failure output down). Touch set = runner + bridge transport +
+tests + workflow + evidence re-issue; firmware/FMU/schema/oracle
+verified untouched → class check passed (recorded in the report's
+re-budget log). Evidence re-issued canonically (status stays
+`pending`); gates green. Stop criteria carry forward verbatim.
 
-**Next action:** trigger `hw-nightly` from the UI (workflow_dispatch;
-`gh` dispatch is 403 from the sandbox) **on
-`arena/01a0cbe2-cancestry`** for **dispatch 21** (cycle 1 of the
-re-budget). Expected: `step5` vector-SP readback → hooks → step7
-magic `0x54324353` → step8 → first live scenario (FMU + invariant) →
-RUN 2. On any fault: read the T2-DIAG annotation (section 5.2);
-apply the §4 stop criteria (now the memo's 21–30 restatement).
+**⚠ GitHub connection outage (this session):** `GH_TOKEN`/`GITHUB_TOKEN`
+went invalid mid-session — every `gh api` call 401s (even with `gh auth`
+reporting "token no longer valid"), `git push` has no working
+credential, and `api.github.com` answers 401 for this egress even
+unauthenticated. **Reconnect GitHub in Arena** before the next
+push/PR-comment. Reads still work: `fetch_page`/`curl` on `github.com`
+HTML (blob pages include `rawLines` — see §3 for the no-API source
+recipe). `gh workflow dispatch` remains 403 anyway — dispatches stay
+human-triggered from the UI (§5.1).
+
+**Next action:** reconnect GitHub (above), then trigger `hw-nightly`
+from the UI **on `arena/01a0cbe2-cancestry`** for **dispatch 22**
+(cycle 2 of the re-budget) at the pushed head (F-33). Expected
+annotation on any repeat failure: `T2-DIAG … console-crash=… |
+proc=… | err=… while awaiting response to '…'` (or `… banner read`)
+— that line now decides the next step: a named-command EOF with
+`proc=already-exited` vs `alive-at-failure`, or a `console-crash=`
+signature. If the enriched diagnostics point at firmware/FMU internals,
+**stop and surface to the Lead SE** (memo §3/§4); otherwise the fault
+stays in the platform-script lane for 21–30.
 
 This document is internal continuity documentation for the bring-up. It is
 not a safety claim and promotes nothing (HwAGENTS.md rules 13/14).
@@ -93,7 +114,11 @@ apply SE stop criterion 2/3 — stop and document; do not keep patching.**
 *Superseded by events: dispatch 19/20 ran — F-29/F-30/F-31 all
 landed as predicted through `step4`, then dispatch 20 stopped at
 `LoadELF` (F-32) with criterion 1 (20/20) triggering the stop; see
-section 4 and `docs/hw/t2-bringup-report.md`.*
+section 4 and `docs/hw/t2-bringup-report.md`. **Dispatch 21 (re-budget
+cycle 1) then ran the include to completion (step5–step8 proven) and
+failed at the monitor EOF — see section 4's row 21 and the report's
+re-budget log.** The table above is therefore stale below `step4`;
+trust the dispatch table, not this snapshot.*
 
 ## 3. Source-verified facts about Renode 1.16.1 (do not re-derive)
 
@@ -147,10 +172,49 @@ conclusion; always verify the gitlink.
   invokes) never touches DWT/DEMCR — DWT stays `NOT_SIMULATED` in the
   platform (Lead SE decision, 2026-09-22).
 
+Post-dispatch-21 source audit (all from pinned refs; fetched via
+`gh api …/contents?ref=… | base64 -d` while auth worked, then via
+`github.com` blob HTML `rawLines` after the API token died — see §6):
+
+- **`BlockPythonEngine.cs` (infra `add012af`,
+  `src/Emulator/Extensions/Hooks/`)**: `InnerInit` does
+  `Scope.SetVariable(Core.Machine.MachineKeyword, Machine)` +
+  `cpu` + `self` ⇒ **the resc's symbol-hook bodies DO have `machine`**
+  (the step3b monitor-python `machine=NO` does not apply inside hooks);
+  every hook body runs through `Execute(code, error => CPU.Log(Error,
+  "Python runtime error: …"))` ⇒ **a hook exception is logged, never
+  fatal** — the "hook NameError kills Renode" hypothesis is dead.
+- **`Program.cs` (v1.16.1, `src/Renode/`)**: worker thread runs
+  `CommandLineInterface.Run` then `Emulator.FinishExecutionAsMainThread()`;
+  main thread blocks in `ExecuteAsMainThread` (`Emulator.cs`:
+  `while (actionsOnMainThread.TryTake(out action, -1))`) ⇒ **the process
+  does not self-exit from loop drain**; exit requires a posted
+  action — the wiring is in `CommandLineInterface.PrepareShell`:
+  `shell.Quitted += Emulator.Exit` (and `monitor.Quitted += shell.Stop`).
+- **AntShell `Shell.Start` → `term.Run(stopOnError=true)`**: the run
+  loop ends only on `Stop()`/cancel (input `null`) or a null read ⇒
+  Quitted ⇒ `Emulator.Exit`. A clean "exit-after-the-`-e`-queue-drains"
+  would have killed dispatch 20's post-include preflight read — it
+  returned data — so that theory is **refuted**; the EOF needs a
+  different mechanism (or a crash).
+- **`CrashHandler.cs`**: unhandled .NET exceptions print
+  `Fatal error:` + stack to **stderr** (merged into the runner's console
+  log) before the runtime kills the process — F-33's `console-crash=`
+  scan targets exactly those signatures.
+- **`SocketServerProvider.cs`**: single accepted client (backlog 1),
+  writer/reader threads Join before the next Accept; no server-side
+  close of a healthy connection — a FIN before our `quit` therefore
+  means process death or a stream-level error, not a server replace.
+- **`PeripheralPythonEngine.cs`**: peripheral call bodies execute via
+  bare `Execute(code)` (no per-call error callback visible) — a Python
+  peripheral runtime throw may propagate (unlike hooks); keep as an
+  open vector until `console-crash=`/`proc=` speak.
+
 ## 4. Dispatch history (hw-nightly, workflow_dispatch, this branch)
 
 Run IDs verified against `gh run list`; older entries per the session
-record. Cycles are the SE budget unit (18 used).
+record. Cycles are the SE budget unit (19 used: 18 at stop + re-budget
+dispatch 21).
 
 | # | run | commit | outcome |
 |---|---|---|---|
@@ -164,6 +228,7 @@ record. Cycles are the SE budget unit (18 used).
 | 18 | 35806027349 | 8269dca (F-28) | all 4 PythonPeripherals construct; **E39** on `t2_trace` (size 0x200 not 0x400-aligned) → F-29 diagnosed |
 | 19 | 35807326391 | c185cee (F-29) | **F-29 PROVEN** — `step3: platform loaded` (full `.repl` incl. `t2_trace`); new fault: `machine PyDevFromFile … Parameters did not match the signature` at the first name arg → **F-30** (bare LiteralToken rejected for `string` param); F-31 (quoted seed → `SetSeed(int)`) pre-diagnosed in the same audit → both fixed pre-dispatch-20 |
 | 20 | 35851511484 | 6662659 (F-30/F-31) | **F-30/F-31 PROVEN** — `step3c: 4 pydev registered, cwd=/opt/renode`; `step4: quantum and seed set`; fault at `sysbus LoadELF $elf` (**F-32**: runner stores `$elf` as quoted StringToken with literal `@`; `ReadFilePath` validation fails) → **STOP, criterion 1 (20/20)**; report written; follow-up = issue #60 |
+| 21 | 35893814425 | 2306a36 (F-32) | **FIRST COMPLETE INCLUDE** — step0…step8 green (step5 ELF load + SP readback, step6 hooks, step7 magic `0x54324353`, step8 paused) ⇒ F-32 runtime-verified; then fail-closed `err=Renode monitor closed the connection` (bare EOF, no transcript-error keyword); artifact zip failed 3/3; **F-33 applied** (EOF context + `proc=`/`console-crash=` + separate CI-logs artifact) → dispatch 22 carries it. Cycle 1 of the re-budget. |
 
 Note on dispatch 18's pydev row: the `✅ construct (F-28)` entries in
 section 2 were **source-verified, not runtime-proven** — the E39 aborted
@@ -197,7 +262,12 @@ gh api repos/mfreazer/CANcestry-/check-runs/$CR/annotations \
 ```
 T2-DIAG format (final line of the failed step): `T2-DIAG console=<70-char
 capped step markers> | first-transcript-error=<1400-char context> |
-err=<160-char runner error>`.
+console-crash=<230-char unhandled-crash signature, F-33> |
+proc=<Renode pre-reap exit state, F-33> | err=<200-char runner
+error>`, total ≤ 2400 — under pressure the console/transcript parts
+shrink and `err=` is never truncated (F-33; pre-F-33 the head-slice
+ate the error tail). F-33 EOF wording: `… during the startup banner
+read` vs `… while awaiting response to '<command>'`.
 
 ### 5.3 Gates (local CI parity)
 A venv with the exact CI pins: `capellambse==0.6.17`, `fmpy==0.3.24`,
@@ -260,8 +330,16 @@ deliberately carries **no** `evidence_sha256` (pending row) — leave it.
   FETCH_HEAD`; re-apply. **Origin is the source of truth.**
 - **Egress**: `raw.githubusercontent.com`, release-asset CDN, and
   results-receiver are TLS-blocked; `api.github.com` (via `gh`) and pypi
-  work. Consequence: the Renode 1.16.1 binary **cannot be downloaded** —
-  no local platform-load reproduction; CI is the only runtime.
+  work **only while the Arena GitHub connection is valid** — on
+  2026-09-23 the session token expired: every `gh api` 401s and even
+  header-less `curl api.github.com` gets 401 from this egress
+  (reconnect GitHub in Arena to restore). `github.com` **HTML** keeps
+  working unauthenticated: public blob pages embed the file text in a
+  `rawLines` JSON array — fetch with `curl` + regex-extract (this is
+  how the post-dispatch-21 source audit continued after the token
+  died; recipe recorded in §3). Consequence: the Renode 1.16.1 binary
+  **cannot be downloaded** — no local platform-load reproduction; CI
+  is the only runtime.
 - GitHub log fetches for run logs are blocked — use section 5.2.
 
 ## 7. Proven vs unproven
@@ -273,16 +351,21 @@ T2-DIAG diagnostics; the full gate battery; **platform description
 load end-to-end (dispatch 19/20 `step3`)**; **four PyDevFromFile
 registrations (dispatch 20 `step3c`, F-30)**; **quantum + seed
 (dispatch 20 `step4`, F-31)**; the `$ORIGIN` expansion mechanism
-observed in executed-command echoes.
+observed in executed-command echoes; **`sysbus LoadELF` + vector SP
+readback `0x20018000` (dispatch 21 `step5`)**; **three `cpu
+AddSymbolHook` installs (`step6`)**; **preflight magic `0x54324353`
+written/read back on the real platform (`step7`)**; **the include
+running to completion with the machine paused (`step8`)** — the
+latter four first proven at dispatch 21.
 
-**Unproven (the actual bring-up; stopped at `LoadELF`):** ELF
-execution (vector SP 0x20018000 readback, step5+); preflight magic
-0x54324353; the three `cpu AddSymbolHook` hooks (exist in 1.16.1 —
-OsSymbolHook.cs — but never executed); FMU load + 100 µs/1 µs
-co-simulation stepping; the invariant vs OR-001; RTC_BKP0R/RCC shadow
-persistence across the scripted IWDG reset; RUN-2 byte-identical
-determinism. F-32 (pre-diagnosed, see issue #60) is the next fault
-in line.
+**Unproven (the actual bring-up):** bridge-driven monitor traffic
+beyond connect (dispatch 21's EOF aborted it — F-33 exists to classify
+the abort); live scenario execution (FMU doStep + `RunFor` loop); the
+invariant vs OR-001; RTC_BKP0R/RCC shadow persistence across the
+scripted IWDG reset; RUN-2 byte-identical determinism. Note the
+hooks/magic steps are **platform bring-up proofs**, not firmware
+execution proofs — the ELF still has not executed a single instruction
+as of dispatch 21.
 
 Watch items for the first live scenario: (a) the IWDG model's scripted
 reset and whether the `machine` reset preserves `t2_trace` contents

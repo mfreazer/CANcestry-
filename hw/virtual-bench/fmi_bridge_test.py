@@ -253,6 +253,66 @@ def test_monitor_endpoint_protocol():
     ]
 
 
+def _run_eof_scenario(close_after_banner, command_text=None):
+    """Accept one client, optionally serve the banner, then close hard."""
+    ready = threading.Event()
+    state = {"port": None}
+
+    def _server():
+        srv = socket.socket()
+        srv.bind(("127.0.0.1", 0))
+        srv.listen(1)
+        state["port"] = srv.getsockname()[1]
+        ready.set()
+        conn, _ = srv.accept()
+        with conn:
+            if not close_after_banner:
+                conn.sendall(b"Renodefake monitor\n(monitor) ")
+                conn.recv(4096)  # the command line (best effort)
+            # close here == FIN with no prompt / no response
+        srv.close()
+
+    thread = threading.Thread(target=_server, daemon=True)
+    thread.start()
+    ready.wait(timeout=5.0)
+    try:
+        endpoint = RenodeMonitorEndpoint("127.0.0.1", state["port"],
+                                         timeout=5.0)
+        if command_text is not None:
+            endpoint.command(command_text)
+        raise AssertionError("expected a BridgeError for the EOF")
+    except BridgeError as error:
+        return str(error)
+    finally:
+        try:
+            endpoint.close()
+        except (UnboundLocalError, OSError, AttributeError):
+            pass
+        thread.join(timeout=5.0)
+
+
+def test_monitor_endpoint_eof_during_banner_is_named():
+    """F-33: an EOF before any command names the banner read (dispatch 21)."""
+    message = _run_eof_scenario(close_after_banner=True)
+    assert "closed the connection" in message
+    assert "banner" in message
+
+
+def test_monitor_endpoint_eof_names_inflight_command():
+    """F-33: an EOF mid-exchange names the command that was awaiting reply.
+
+    Dispatch 21 (run 35893814425) failed with the old bare
+    'Renode monitor closed the connection', which cannot tell the
+    annotation whether the EOF landed on connect, on the preflight read,
+    or on the first 'emulation RunFor'.
+    """
+    command = "emulation RunFor \"0.000100\""
+    message = _run_eof_scenario(close_after_banner=False,
+                                command_text=command)
+    assert "closed the connection" in message
+    assert command in message
+
+
 # ---------------------------------------------------------------------------
 # HW-T2-BRIDGE-006..009: co-simulation loop, exact-time capture, ordering
 # ---------------------------------------------------------------------------

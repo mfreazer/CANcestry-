@@ -370,3 +370,77 @@ def test_diagnostic_summary_compresses_failure_state(tmp_path, monkeypatch):
     assert "Could not find file" in summary
     assert "magic 0x0" in summary
     assert len(summary) <= 2400  # F-28: 2400-char T2-DIAG cap
+
+
+def test_diagnostic_summary_carries_exit_state_and_crash_tail(
+        tmp_path, monkeypatch):
+    """F-33: the annotation carries Renode's exit state + crash signature.
+
+    Dispatch 21 (run 35893814425) failed with a bare monitor EOF after a
+    complete include; the console tail and transcript never persisted
+    (the CI artifact zip fails since run 19), so the two discriminating
+    facts - did Renode exit on its own, and did an unhandled crash print
+    to the merged stderr - must live in the T2-DIAG line itself.
+    """
+    console = tmp_path / "console.log"
+    console.write_text(
+        "12:00:00.100 [INFO] [cancestry-hw] step8: include complete, "
+        "machine left paused\n"
+        "Fatal error:\n"
+        "System.InvalidOperationException: boom while stepping\n"
+        "   at Emulator.Run()\n",
+        encoding="utf-8")
+    state = tmp_path / "process_state.txt"
+    state.write_text("renode_exit=already-exited rc=0\n", encoding="utf-8")
+    missing = tmp_path / "no-such-transcript.log"
+    monkeypatch.setattr(runner, "RENODE_CONSOLE_LOG", console)
+    monkeypatch.setattr(runner, "RENODE_TRANSCRIPT_LOG", missing)
+    monkeypatch.setattr(runner, "RENODE_PROCESS_STATE_LOG", state)
+    eof_message = (
+        "Renode monitor closed the connection while awaiting response to "
+        "'emulation RunFor \"0.000100\"'")
+    summary = runner._diagnostic_summary(fmi_bridge.BridgeError(eof_message))
+    assert summary.startswith("T2-DIAG ")
+    assert "step8: include complete" in summary
+    assert "console-crash=" in summary
+    assert "Fatal error" in summary
+    assert "boom while stepping" in summary
+    assert "proc=already-exited rc=0" in summary
+    assert summary.rstrip().endswith("err=" + eof_message)
+    assert len(summary) <= 2400
+
+
+def test_diagnostic_summary_budget_never_truncates_err(tmp_path, monkeypatch):
+    """F-33: under a full 2400-char load the err= tail survives intact.
+
+    The pre-F-33 implementation head-truncated the assembled line, i.e.
+    the bridge error - the single most important segment - was the first
+    casualty of any long transcript. Budget pressure must squeeze the
+    console markers and the transcript context instead.
+    """
+    console = tmp_path / "console.log"
+    console.write_text(
+        "".join(
+            "12:00:%02d.000 [INFO] [cancestry-hw] step%d: marker payload "
+            "padding padding padding\n" % (i % 60, i)
+            for i in range(40)),
+        encoding="utf-8")
+    transcript = tmp_path / "transcript.log"
+    transcript.write_text(
+        "line 0 [1790104856.000] RX %r\n"
+        % (b"There was an error evaluating the request: "
+           + b"X" * 2000 + b"\n"),
+        encoding="utf-8")
+    state = tmp_path / "process_state.txt"
+    state.write_text("renode_exit=alive-at-failure (killed by runner)\n",
+                     encoding="utf-8")
+    monkeypatch.setattr(runner, "RENODE_CONSOLE_LOG", console)
+    monkeypatch.setattr(runner, "RENODE_TRANSCRIPT_LOG", transcript)
+    monkeypatch.setattr(runner, "RENODE_PROCESS_STATE_LOG", state)
+    tail = "the decisive closing sentence of the bridge error"
+    summary = runner._diagnostic_summary(
+        fmi_bridge.BridgeError(tail))
+    assert len(summary) <= 2400
+    assert summary.rstrip().endswith("err=" + tail)
+    assert "proc=alive-at-failure (killed by runner)" in summary
+    assert "first-transcript-error=" in summary

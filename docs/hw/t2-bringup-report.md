@@ -237,27 +237,102 @@ will be replaced by the success-path variant (issue #55 deliverables
 3–4) if a re-budgeted run lands live evidence, or superseded by a
 second stop-report if the re-budget exhausts.
 
+## Re-budget log — dispatch 21 (cycle 1 of 21–30) and F-33
+
+**Dispatch 21** — `hw-nightly` #26, run `35893814425`, manual
+dispatch, 2026-09-23 17:10, head `2306a36` (F-32), job exit 2 after
+1 m 29 s (run total 1 m 37 s).
+
+*Milestone — first complete include.* The step markers ran green
+through the entire platform script for the first time in the bring-up:
+
+`step0 … step2: machine created | step2b: repl isfile=True | step3:
+platform loaded | step3b: sysbus=NO machine=NO monitor.Machine=yes |
+step3c: 4 pydev registered | step4: quantum and seed set | step5:
+vector SP=0x20018000 (ELF loaded) | step6: symbol hooks installed |
+step7: t2_trace readback=0x54324353 | step8: include complete,
+machine left paused`
+
+F-32 is therefore runtime-verified (step5 would have aborted at
+`sysbus LoadELF` otherwise), and steps 5–8 join the proven list.
+
+*Failure.* `err=Renode monitor closed the connection` — the bare EOF
+(pre-F-33 wording) from `fmi_bridge._read_prompt`'s `recv() == b""`
+branch, with **no** `first-transcript-error=` segment (the RX stream
+carried no error keyword). The connection was accepted (banner read
+succeeded), our own `quit` is only ever sent in `close()` after the
+error, so the FIN arrived from Renode's side before teardown.
+
+*Evidence situation (why the root cause is still open).* The T2
+artifact zip failed for the third consecutive run ("error while
+creating the zip file"; mechanism candidate: `Dockerfile.t2` has no
+`USER` directive → `build/hw/` is root-owned on the runner), and job
+log blobs are egress-blocked from the sandbox. The only surviving
+failure record is the 2400-char annotation — which, by construction
+pre-F-33, could not say which command was in flight, whether Renode
+had exited, or what its console carried. **No root cause is claimed.**
+
+*Source audit (pinned refs; see handover §3 for the recipe and full
+facts).* Symbol-hook bodies run with `machine` in scope and their
+Python errors are logged, not fatal (`BlockPythonEngine.cs`);
+`ExecuteAsMainThread` blocks indefinitely, so a clean self-exit must be
+a posted action — wired as `shell.Quitted → Emulator.Exit` after
+`term.Run` ends (`Program.cs`/`CommandLineInterface.cs`/AntShell
+`Shell.cs`); a clean "exit after the `-e` queue drains" is refuted by
+dispatch 20's post-include preflight response; `SocketServerProvider`
+never closes a healthy single client. Open vectors: an unhandled
+crash (CrashHandler prints `Fatal error:` to the merged stderr —
+exactly what F-33 now surfaces) and a Python-peripheral runtime throw
+(`PeripheralPythonEngine.Execute` has no per-call error callback).
+
+*Fault-class verdict (working, stated for Lead SE override):*
+monitor-socket EOF after a complete include = bridge↔Renode transport
+= **platform-script/runner class** → in-lane for dispatches 21–30
+(firmware never executed; the FMU instantiated; no timestep ran). Not
+a memo stop-class (firmware HardFault / FMU load-step / bridge sync
+contract / schema-oracle). If the F-33-enriched annotation of the next
+dispatch points into firmware or FMU internals instead, stop and
+surface to the Lead SE before touching anything.
+
+**F-33 applied** (diagnostics enrichment; condition check per the
+memo's §3 discipline): touch set = `fmi_bridge.py` EOF raise (banner
+vs `_last_command` context, mirroring F-20) + `run_t2_retention.py`
+(pre-reap `proc=` state file; `console-crash=` scan for CrashHandler
+signatures; budget-safe summary assembly so `err=` is never
+head-truncated) + `hw-nightly.yml` (separate `/tmp` CI-logs artifact
+uploaded *before* the `build/hw/` zip) + four named tests
+(`test_monitor_endpoint_eof_during_banner_is_named`,
+`test_monitor_endpoint_eof_names_inflight_command`,
+`test_diagnostic_summary_carries_exit_state_and_crash_tail`,
+`test_diagnostic_summary_budget_never_truncates_err`) + canonical
+evidence re-issue (runner/bridge/tests are pinned; status stays
+`pending`). Verified untouched: `platform/cortex_m/`,
+`hw/virtual-bench/firmware/`, `fmi2_smoke_slave.c` / `Holdup.mo`,
+`schemas/hw/hw-t2-evidence-0.1.0.schema.json`, `hw/tests/oracles/`,
+`.resc` execution logic. → **class check PASSED → applied.**
+
 ## Appendix A — Workspace-reset recovery (provenance note for auditors)
 
-Twice during this bring-up the sandbox workspace reset rewound the
-**local** branch pointer of `arena/01a0cbe2-cancestry` to the merge
-base `8857bfa` while leaving the worktree content in place (the
-documented hazard in `docs/hw/t2-bringup-handover.md` §6; occurrences:
-before committing the stop-report at `a7b0455`, and again after the
-re-budget memo, before applying F-32). Recovery was mechanical, not
-editorial, both times:
+Three times during this bring-up the sandbox workspace reset rewound
+the **local** branch pointer of `arena/01a0cbe2-cancestry` while
+leaving the worktree content in place (the documented hazard in
+`docs/hw/t2-bringup-handover.md` §6; occurrences: before committing
+the stop-report at `a7b0455`, after the re-budget memo before applying
+F-32, and after dispatch 21 before applying F-33 — the third rewind
+targeted the merge base again and was recovered to `2306a36`).
+Recovery was mechanical, not editorial, every time:
 
 1. `origin` is the source of truth: fetched
    `refs/heads/arena/01a0cbe2-cancestry` (first `6662659`, then
-   `a7b0455`).
+   `a7b0455`, then `2306a36`).
 2. **Every key worktree file was hash-verified** against the origin
    blob (`git hash-object <f>` vs `git rev-parse origin/<branch>:<f>`)
    — the platform script, `.repl`, runner, tests, evidence artifacts,
-   this report, and the handover all `MATCH`ed before any reset.
-3. Only then: `git reset --hard origin/<branch>`; in the first
-   occurrence (uncommitted report/handover edits existed) the two
-   in-flight files were copied aside beforehand and restored
-   byte-for-byte afterwards.
+   this report, and the handover all `MATCH`ed before any reset (12/12
+   on the third occurrence).
+3. Only then: `git reset --hard origin/<branch>`; when uncommitted
+   edits existed (first occurrence) the in-flight files were copied
+   aside beforehand and restored byte-for-byte afterwards.
 
 No committed content was hand-edited during recovery; each recovery
 is visible in the push history as a fast-forward of verified state.

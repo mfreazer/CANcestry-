@@ -217,6 +217,25 @@ jobs:
           fi
           exit "$DOCKER_STATUS"
 
+      # F-33 (issue #60, dispatch 21): the combined zip failed on runs
+      # 19/20/21 ("error while creating the zip file"), which killed the
+      # only persistent copy of the failure output (console tail +
+      # full transcript printed by the runner). The /tmp logs upload is
+      # the same /tmp-only shape the renderer job's artifact (which has
+      # always succeeded) uses - land it FIRST so a poisoned build/hw/
+      # (Dockerfile.t2 has no USER directive: files are root-owned on the
+      # runner) can no longer take the diagnostic logs down with it.
+      - name: Upload T2 CI logs
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: t2-ci-logs-${{ github.sha }}
+          path: |
+            /tmp/t2-output.log
+            /tmp/t2-build.log
+          if-no-files-found: ignore
+
       - name: Upload T2 run artifacts
         if: always()
         continue-on-error: true

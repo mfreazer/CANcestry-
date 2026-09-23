@@ -86,6 +86,11 @@ BUILD_DIR = REPO_ROOT / "build" / "hw"
 RENODE_CONSOLE_LOG = BUILD_DIR / "t2_retention_001_renode_console.log"
 # F-22 (issue #55): raw monitor-socket transcript (diagnostics only).
 RENODE_TRANSCRIPT_LOG = BUILD_DIR / "t2_retention_001_monitor_transcript.log"
+# F-33 (issue #60, dispatch 21): Renode self-exit state, written by
+# run_scenario() BEFORE the runner reaps the process. Distinguishes a
+# Renode that exited on its own (clean rc=0 shell exit vs signal/crash)
+# from a socket closed while the process was still alive.
+RENODE_PROCESS_STATE_LOG = BUILD_DIR / "t2_renode_process_state.txt"
 SCHEMA_PATH = REPO_ROOT / "schemas" / "hw" / "hw-t2-evidence-0.1.0.schema.json"
 
 MODEL = "CancestryLib.Power.Holdup"
@@ -464,18 +469,38 @@ def _diagnostic_summary(error):
     'Constructor selection report' spans ~15 lines (per-parameter details
     plus the rejection reason), and dispatches 15/16 (runs 35777946390,
     35778907099) proved a 280-char capture truncates exactly before the
-    decisive lines. The overall line cap is 2400 chars.
+    decisive lines. The overall line cap is 2400 chars; under pressure
+    the console markers and the transcript context shrink (F-33) so the
+    err= tail - never the first casualty - stays intact.
     """
-    parts = []
+    console_part = ""
     try:
         console = RENODE_CONSOLE_LOG.read_text(encoding="utf-8",
                                                errors="replace")
         payloads = re.findall(r"\[cancestry-hw\] ([^\n]+)", console)
         if payloads:
-            parts.append("console=" + " | ".join(
-                payload.strip()[:70] for payload in payloads))
+            console_part = "console=" + " | ".join(
+                payload.strip()[:70] for payload in payloads)
+        # F-33 (issue #60, dispatch 21): surface an unhandled-crash
+        # signature from the merged console stream (CrashHandler writes
+        # "Fatal error:" + the stack to stderr, which the runner merges
+        # into stdout). None of this is visible to the old [cancestry-hw]
+        # scan, and the CI artifact zip that would carry the full console
+        # log has failed since run 19 - so the annotation must carry it.
+        crash_part = ""
+        crash = re.search(
+            r"^(.*(?:Fatal error|Traceback \(most recent call last\)|"
+            r"Unhandled exception|StackOverflow|OutOfMemory)[^\n]*)\n"
+            r"([^\n]*)", console, re.M)
+        if crash:
+            snippet = re.sub(r"\s+", " ", " ".join(
+                group.strip() for group in crash.groups()
+                if group and group.strip()))
+            crash_part = "console-crash=%s" % snippet[:230]
     except OSError:
-        pass
+        console = ""
+        crash_part = ""
+    trans_part = ""
     try:
         trans = RENODE_TRANSCRIPT_LOG.read_text(encoding="utf-8",
                                                 errors="replace")
@@ -498,13 +523,61 @@ def _diagnostic_summary(error):
             if idx >= 0:
                 snippet = re.sub(r"\s+", " ",
                                  rx_stream[max(0, idx - 40):idx + 1400])
-                parts.append("first-transcript-error=%s" % snippet)
+                trans_part = "first-transcript-error=%s" % snippet
                 break
     except OSError:
         pass
-    parts.append("err=%s" % str(error).strip()[:160])
-    summary = "T2-DIAG " + " | ".join(parts)
-    return summary[:2400]
+    # F-33: Renode's pre-reap exit state (self-exit rc/signal vs still
+    # alive) - written by run_scenario()'s finally block.
+    proc_part = ""
+    try:
+        state = RENODE_PROCESS_STATE_LOG.read_text(
+            encoding="utf-8").strip()
+        if state:
+            proc_part = "proc=%s" % state.split("=", 1)[-1][:90]
+    except OSError:
+        pass
+    # err is assembled FIRST at its full cap and the variable parts are
+    # fitted around it: the old head-truncation (summary[:2400]) cut the
+    # TAIL, i.e. exactly the error line, whenever the transcript context
+    # was long - the worst possible failure mode for the annotation.
+    err_part = "err=%s" % str(error).strip()[:200]
+    sep = " | "
+    head = "T2-DIAG "
+
+    def _assemble(console_text, trans_text):
+        seq = [p for p in (console_text, trans_text,
+                           crash_part, proc_part, err_part) if p]
+        return head + sep.join(seq)
+
+    summary = _assemble(console_part, trans_part)
+    # Priority under pressure: the console step markers shrink first
+    # (keeping the TAIL - the last executed steps are the failure
+    # frontier; reaching step N proves steps 0..N-1), then the transcript
+    # context shrinks from the back (the error keyword sits at its head).
+    # err/proc/crash are never shrunk, so no measured overflow can reach
+    # them even before the final belt-and-braces slice.
+    if len(summary) > 2400 and console_part:
+        excess = len(summary) - 2400
+        if excess >= len(console_part):
+            console_part, excess = "", excess - len(console_part)
+        else:
+            payload = console_part[len("console="):]
+            # new = "console=" + "…" + payload[cut:]  =>  cut = excess + 1
+            keep = payload[excess + 1:]
+            console_part = ("console=…" + keep) if keep else ""
+        summary = _assemble(console_part, trans_part)
+    if len(summary) > 2400 and trans_part:
+        excess = len(summary) - 2400
+        trans_part = trans_part[:max(0, len(trans_part) - excess)]
+        summary = _assemble(console_part, trans_part)
+    if len(summary) > 2400:
+        summary = summary[:2400]
+        if not summary.rstrip().endswith(err_part.rstrip()):
+            # Safety slice must never eat err: rebuild from the fixed
+            # parts alone (their caps guarantee they fit).
+            summary = _assemble("", "")[:2400]
+    return summary
 
 
 def connect_monitor(port, deadline_s=60.0, transcript_path=None,
@@ -557,6 +630,12 @@ def run_scenario(renode_bin, elf_path, fmu_path, build_dir=BUILD_DIR):
     """Execute the full T2 retention scenario; return the evidence body."""
     from fmi_bridge import FmpyFmuSlave
 
+    # F-33: never let a previous run's exit state leak into this run's
+    # diagnostic summary (build/hw may persist across local runs).
+    try:
+        RENODE_PROCESS_STATE_LOG.unlink()
+    except OSError:
+        pass
     port = _free_port()
     process = launch_renode(renode_bin, elf_path, port)
     endpoint = None
@@ -638,6 +717,25 @@ def run_scenario(renode_bin, elf_path, fmu_path, build_dir=BUILD_DIR):
     finally:
         if endpoint is not None:
             endpoint.close()
+        # F-33: capture Renode's exit state BEFORE the runner reaps it.
+        # poll() here reports a genuine self-exit (the shell-quit path is
+        # `shell.Quitted -> Emulator.Exit`, and an unhandled crash ends
+        # the process after CrashHandler's stderr dump); None means the
+        # process outlived the failure and the EOF came from the socket
+        # layer alone. Recorded for _diagnostic_summary + the CI log.
+        pre_exit = process.poll()
+        try:
+            build_dir.mkdir(parents=True, exist_ok=True)
+            if pre_exit is None:
+                state = "alive-at-failure (killed by runner)"
+            elif pre_exit < 0:
+                state = "already-exited signal=%d" % (-pre_exit)
+            else:
+                state = "already-exited rc=%d" % pre_exit
+            (build_dir / RENODE_PROCESS_STATE_LOG.name).write_text(
+                "renode_exit=%s\n" % state, encoding="utf-8")
+        except OSError:
+            pass
         if process.poll() is None:
             process.kill()
         process.wait(timeout=30)
