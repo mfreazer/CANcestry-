@@ -33,6 +33,8 @@
 # contract (IronPython 2 scope semantics).
 #
 # Requirements traced: HW-SF-002, HW-SF-003; HwAGENTS.md rules 2 and 5.
+# F-34: self.Machine -> monitor.Machine (PythonPeripheral scope carries
+# no Machine attribute - see iwdg_model.py header; dispatch 23).
 
 IWDGRSTF = 1 << 29
 RMVF = 1 << 23
@@ -45,7 +47,7 @@ elif request.IsWrite:
     if request.Offset == CSR_OFFSET:
         value = request.Value & 0xFFFFFFFF
         if rcc_csr is None:
-            rcc_csr = self.Machine['sysbus'].ReadDoubleWord(SHADOW_ADDR)
+            rcc_csr = monitor.Machine['sysbus'].ReadDoubleWord(SHADOW_ADDR)
         if (value & RMVF) != 0:
             # Write-1-to-clear: reset-cause flags, then drop RMVF itself.
             rcc_csr = rcc_csr & ~IWDGRSTF & 0xFFFFFFFF
@@ -53,11 +55,11 @@ elif request.IsWrite:
             # Event-style write (IWDG expiry carries the post-event value);
             # persist everything except the W1C RMVF bit.
             rcc_csr = value & ~RMVF & 0xFFFFFFFF
-        self.Machine['sysbus'].WriteDoubleWord(SHADOW_ADDR, rcc_csr)
+        monitor.Machine['sysbus'].WriteDoubleWord(SHADOW_ADDR, rcc_csr)
 elif request.IsRead:
     if request.Offset == CSR_OFFSET:
         if rcc_csr is None:
-            rcc_csr = self.Machine['sysbus'].ReadDoubleWord(SHADOW_ADDR)
+            rcc_csr = monitor.Machine['sysbus'].ReadDoubleWord(SHADOW_ADDR)
         request.Value = rcc_csr
     else:
         request.Value = 0x0

@@ -444,3 +444,37 @@ def test_diagnostic_summary_budget_never_truncates_err(tmp_path, monkeypatch):
     assert summary.rstrip().endswith("err=" + tail)
     assert "proc=alive-at-failure (killed by runner)" in summary
     assert "first-transcript-error=" in summary
+
+
+def test_peripheral_models_reach_machine_via_monitor_scope():
+    """F-34: PythonPeripheral bodies must never use `self.Machine`.
+
+    Dispatch 23 (run 35928186369 @ fc3fc93) died on the first
+    `emulation RunFor` with ``Python runtime error: 'PythonPeripheral'
+    object has no attribute 'Machine'`` - a MissingMemberException from
+    the bus path, wrapped by PythonEngine.Execute into a
+    RecoverableException that escaped unhandled through TlibExecute and
+    killed Renode (the F-33 console-crash channel caught it). The
+    peripheral scope carries only request/self/size (+ base vars); the
+    machine is reached via ``monitor.Machine`` - registered by the CLI's
+    Monitor surrogate, runtime-proven as the resc step5/step7 fallback
+    and used by official scripts/single-node/segger-rtt.py.
+    """
+    models = sorted((runner.BRIDGE_DIR / "renode").glob("*_model.py"))
+    assert len(models) >= 4, "expected the four scripted peripheral models"
+
+    def _code_only(text):
+        # Strip comments: the F-34 provenance headers quote the banned
+        # token while explaining why it must not come back.
+        return "\n".join(line.split("#", 1)[0] for line in text.splitlines())
+
+    for model in models:
+        code = _code_only(model.read_text(encoding="utf-8"))
+        assert "self.Machine" not in code, (
+            "%s uses self.Machine - PythonPeripheral has no Machine "
+            "attribute; use monitor.Machine (F-34)" % model.name)
+    for name in ("iwdg_model.py", "rcc_model.py", "rtc_backup_model.py"):
+        code = _code_only((runner.BRIDGE_DIR / "renode" / name).read_text(
+            encoding="utf-8"))
+        assert "monitor.Machine" in code, (
+            "%s lost its monitor.Machine bus access (F-34)" % name)

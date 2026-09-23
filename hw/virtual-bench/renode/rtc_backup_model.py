@@ -15,18 +15,20 @@
 # HW-SF-002 (i) check, see hw/virtual-bench/run_t2_retention.py).
 #
 # Requirements traced: HW-SF-002; HwAGENTS.md rules 2 and 5.
+# F-34: self.Machine -> monitor.Machine (PythonPeripheral scope carries
+# no Machine attribute - see iwdg_model.py header; dispatch 23).
 # initable is false: no reset-time reinitialization of the retained value.
 
 RETENTION_SHADOW_ADDR = 0x60000100
 
 if request.IsWrite:
     if request.Offset == 0x50:
-        self.Machine['sysbus'].WriteDoubleWord(RETENTION_SHADOW_ADDR,
+        monitor.Machine['sysbus'].WriteDoubleWord(RETENTION_SHADOW_ADDR,
                                                request.Value & 0xFFFFFFFF)
         self.NoisyLog("RTC_BKP0R <- 0x%08x" % (request.Value & 0xFFFFFFFF))
 elif request.IsRead:
     if request.Offset == 0x50:
-        request.Value = self.Machine['sysbus'].ReadDoubleWord(RETENTION_SHADOW_ADDR)
+        request.Value = monitor.Machine['sysbus'].ReadDoubleWord(RETENTION_SHADOW_ADDR)
     else:
         # Only RTC_BKP0R is modeled; other RTC/BKP registers read as 0
         # (not_simulated, virtual-bench-plan section 3).

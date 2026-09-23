@@ -237,7 +237,7 @@ will be replaced by the success-path variant (issue #55 deliverables
 3–4) if a re-budgeted run lands live evidence, or superseded by a
 second stop-report if the re-budget exhausts.
 
-## Re-budget log — dispatch 21 (cycle 1 of 21–30) and F-33
+## Re-budget log — dispatches 21–23 (cycles 1–3 of 21–30); F-33 and F-34
 
 **Dispatch 21** — `hw-nightly` #26, run `35893814425`, manual
 dispatch, 2026-09-23 17:10, head `2306a36` (F-32), job exit 2 after
@@ -299,14 +299,60 @@ the re-budget existed) re-ran the known F-32 fault and likewise carries
 no new information — flagged for the Lead SE to rule whether it is
 chargeable against cycles 21–30 (handover §4 footnote).
 
-*Fault-class verdict (working, stated for Lead SE override):*
-monitor-socket EOF after a complete include = bridge↔Renode transport
-= **platform-script/runner class** → in-lane for dispatches 21–30
-(firmware never executed; the FMU instantiated; no timestep ran). Not
-a memo stop-class (firmware HardFault / FMU load-step / bridge sync
-contract / schema-oracle). If the F-33-enriched annotation of the next
-dispatch points into firmware or FMU internals instead, stop and
-surface to the Lead SE before touching anything.
+**Dispatch 23** — `hw-nightly`, run `35928186369` @ `fc3fc93`
+(trigger time confirmed by the dispatcher before the run), failure.
+This run **determined the EOF root cause** and proved F-33 in
+production — all three new channels fired in one annotation:
+
+```
+console-crash=Fatal error: Python runtime error: 'PythonPeripheral' object has no attribute 'Machine'
+proc=alive-at-failure (killed by runner)
+err=Renode monitor closed the connection while awaiting response to 'emulation RunFor "0.000100"'
+```
+
+The full 151-line monitor transcript (captured in the failure output)
+shows the complete bridge protocol working: banner + `-e` echo during
+include, machine prompt, preflight magic `0x54324353` ✓, all four
+slot reads answered, `emulation RunFor "0.000100"` sent — and no
+response, then our teardown `quit`. Root-cause chain, source-pinned:
+the first bus access of real firmware execution hit a scripted
+PythonPeripheral whose body used `self.Machine`; the PythonPeripheral
+scope carries only `request`/`self`/`size` (+ base vars — no
+`machine`); IronPython raised `MissingMemberException`, which
+`PythonEngine.Execute` wraps as `RecoverableException("Python runtime
+error: …")`; thrown from the CPU bus path (`ReadDoubleWordFromBusWrapper`
+→ `ExceptionKeeper.ThrowExceptions` → `TlibExecute`) it is unhandled →
+CrashHandler `Fatal error:` → process death → monitor FIN → bridge EOF
+on the in-flight RunFor. **Fault class: the virtual-bench platform
+models — platform-script class → in-lane.** Firmware executed correctly
+up to its first peripheral access (no HardFault); FMU instantiated
+cleanly; no schema/oracle involvement.
+
+**F-34 applied** (the `self.Machine` → `monitor.Machine` fix; condition
+check per memo §3): touch set = `iwdg_model.py` (5 sites),
+`rcc_model.py` (3), `rtc_backup_model.py` (2) + named regression test
+`test_peripheral_models_reach_machine_via_monitor_scope` + canonical
+evidence re-issue. The replacement binding is the officially endorsed
+one: `monitor` is injected into every peripheral scope by
+`PythonEngine.InnerInit` (CLI registers the Monitor surrogate for the
+whole emulation lifetime), the `.resc` step5/step7 fallback
+`monitor.Machine['sysbus']` is runtime-proven on this platform, official
+`scripts/single-node/segger-rtt.py` uses `monitor.Machine.SystemBus`,
+and `IMachine` (:97 `RequestReset`, :173 `ElapsedVirtualTime`) is the
+same interface the resc hooks already target. Verified untouched:
+`platform/cortex_m/`, `hw/virtual-bench/firmware/`, `fmi2_smoke_slave.c`
+/ `Holdup.mo`, `schemas/`, `hw/tests/oracles/`, the `.resc`, the runner,
+and the bridge. → **class check PASSED → applied.**
+
+*Fault-class verdict (now determined at dispatch 23, stated for Lead SE
+override):* the EOF was a **symptom** — the cause is a scripted
+PythonPeripheral model raising on first execution (`self.Machine`).
+Models, resc, runner, and bridge together are the **platform script**
+→ in-lane for dispatches 21–30. Not a memo stop-class: no firmware
+HardFault (the ELF ran correctly up to its first peripheral access),
+no FMU load/step failure, no bridge sync-contract violation, no
+schema/oracle issue. F-34 fixes the determined cause; if dispatch 24
+surfaces a *different* fault past the RunFor, re-classify then.
 
 **F-33 applied** (diagnostics enrichment; condition check per the
 memo's §3 discipline): touch set = `fmi_bridge.py` EOF raise (banner

@@ -12,6 +12,22 @@
 # reset, writing the fire timestamp into the T2 trace area (0x60000014).
 #
 # Requirements traced: HW-SF-002, HW-SF-003; HwAGENTS.md rules 2, 5 and 6.
+#
+# F-34 (issue #60, dispatch 23 run 35928186369): the PythonPeripheral
+# scope has NO `machine`/`Machine` variable (PeripheralPythonEngine
+# sets only request/self/size on top of the base scope), so the former
+# `self.Machine` raised MissingMemberException - wrapped by
+# PythonEngine.Execute as RecoverableException("Python runtime error:
+# 'PythonPeripheral' object has no attribute 'Machine'") - on the first
+# bus access during `emulation RunFor`, which escaped unhandled through
+# the CPU bus path and killed Renode (CrashHandler "Fatal error:").
+# The machine is reached via `monitor.Machine`: the CLI registers the
+# Monitor surrogate for the whole emulation lifetime
+# (CommandLineInterface.Run -> ObjectCreator), the same pattern the
+# resc uses as its step5/step7 fallback (runtime-proven) and official
+# scripts/single-node/segger-rtt.py (monitor.Machine.SystemBus).
+# RequestReset/ElapsedVirtualTime are IMachine members (IMachine.cs
+# :97/:173; official STM32_IndependentWatchdog uses machine.RequestReset).
 # Script API: Renode Python.PythonPeripheral (request.IsInit/IsRead/IsWrite/
 # Value/Offset, self.NoisyLog); the peripheral evaluates expiry lazily on bus
 # access - the FMI bridge polls after every 100 us master step, so the
@@ -31,11 +47,11 @@ elif request.IsWrite:
             iwdg_unlocked = True
         elif request.Value == 0xAAAA:
             # Reload: restart the countdown window.
-            iwdg_started_at = self.Machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds
+            iwdg_started_at = monitor.Machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds
         elif request.Value == 0xCCCC:
             # Start: watchdog becomes live from now.
             iwdg_running = True
-            iwdg_started_at = self.Machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds
+            iwdg_started_at = monitor.Machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds
             iwdg_unlocked = False
         else:
             self.NoisyLog("IWDG_KR ignored write 0x%x" % request.Value)
@@ -49,7 +65,7 @@ elif request.IsWrite:
         pass  # WINR: windowing not_simulated (watchdog.c never sets it)
 elif request.IsRead:
     if iwdg_running and not iwdg_fired:
-        now = self.Machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds
+        now = monitor.Machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds
         # LSI 32 kHz (OR-007); STM32G4 IWDG prescaler (RM0440 table):
         # division = 2^(PR+2) = 4*2^PR, so PR=0 -> /4 ... PR=3 -> /32
         # (1 kHz tick) ... PR=7 -> /512. The v1.0.0 firmware arms with
@@ -59,7 +75,7 @@ elif request.IsRead:
         if (now - iwdg_started_at) >= timeout_s:
             iwdg_fired = True
             fire_us = int(round(now * 1000000.0))
-            sysbus = self.Machine['sysbus']
+            sysbus = monitor.Machine['sysbus']
             # Record the fire time in the T2 trace area.
             sysbus.WriteDoubleWord(0x60000014, fire_us)
             # Set IWDGRSTF (bit 29) in RCC_CSR at 0x40021094.
@@ -68,7 +84,7 @@ elif request.IsRead:
             self.NoisyLog("IWDG reset fired at %d us (RLR=%d PR=%d)"
                           % (fire_us, iwdg_rlr, iwdg_pr))
             # HW-SF-002 (i): the IWDG reset takes its bounded course.
-            self.Machine.RequestReset()
+            monitor.Machine.RequestReset()
     if request.Offset == 0x0:
         request.Value = 0x0  # KR reads as 0
     elif request.Offset == 0x4:

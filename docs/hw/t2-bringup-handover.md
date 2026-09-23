@@ -1,55 +1,54 @@
 # T2 Virtual Bench Bring-Up — Handover (H-08, issue #55)
 
-**Status: RE-BUDGETED 21–30 — dispatches 21 and 22 executed (both
-failed), F-33 applied, ready for dispatch 23.** Dispatch 21 (run
-`35893814425` @ `2306a36`, hw-nightly #26, 2026-09-23 17:10) delivered
-the **first complete include** — step0…step8 all green, i.e. F-32
-runtime-verified (step5 ELF load, step6 hooks, step7 magic
-`0x54324353`, step8 include complete) — then failed closed with the
-bare EOF `err=Renode monitor closed the connection` (no
-`first-transcript-error=`). Dispatch 22 (run `35924809178`, hw-nightly
-#27, 21:49:45Z) **raced the F-33 push by ~6 minutes** — it executed
-the stale `2306a36` head (page title `CANcestry-@2306a36`, no F-33
-code, no `t2-ci-logs` artifact step) and produced a byte-identical
-annotation + the same zip failure: zero new information, cycle
-consumed. The EOF root cause is **not yet determined** — the discriminating
-evidence (which in-flight command, Renode's exit state, console crash
-tail) was not persisted — the T2 artifact zip failed for the third
-consecutive run (19/20/21) and job-log egress is blocked from the
-sandbox. **F-33 (diagnostics enrichment) is applied at head** to close
-that gap: EOF messages name the banner/command, the runner records
-Renode's pre-reap exit state, the T2-DIAG line carries
-`console-crash=`/`proc=`, and the workflow now uploads `/tmp` CI logs
-as a **separate artifact first** (poisoned `build/hw/` can no longer
-take the failure output down). Touch set = runner + bridge transport +
-tests + workflow + evidence re-issue; firmware/FMU/schema/oracle
-verified untouched → class check passed (recorded in the report's
-re-budget log). Evidence re-issued canonically (status stays
+**Status: RE-BUDGETED 21–30 — dispatches 21–23 executed (all failed
+closed), F-33 verified in production, F-34 applied, ready for dispatch
+24.** Dispatch 21 (run `35893814425` @ `2306a36`) delivered the
+**first complete include** — step0…step8 green, F-32 runtime-verified
+— then hit the bare monitor EOF. Dispatch 22 (run `35924809178`)
+raced the F-33 push and duplicated that failure on stale `2306a36`
+(zero new information; cycle consumed). **Dispatch 23 (run
+`35928186369` @ `fc3fc93`, dispatcher-confirmed SHA) determined the
+root cause through all three F-33 channels:**
+`err=Renode monitor closed the connection while awaiting response to
+'emulation RunFor "0.000100"'` (the first CPU execution) +
+`console-crash=Fatal error: Python runtime error: 'PythonPeripheral'
+object has no attribute 'Machine'` + `proc=alive-at-failure (killed
+by runner)` — plus the full 151-line transcript showing banner, `-e`
+echo, preflight magic ✓, all slot reads answered, then no RunFor
+reply. Chain: a scripted model's `self.Machine` raised
+MissingMemberException on the first real bus access →
+`PythonEngine.Execute` wrapped it as `RecoverableException("Python
+runtime error: …")` → unhandled on the CPU bus path
+(`ReadDoubleWordFromBusWrapper` → `ExceptionKeeper` → `TlibExecute`)
+→ CrashHandler → process death → FIN → bridge EOF. **F-34** replaces
+all 10 `self.Machine` sites (iwdg 5 / rcc 3 / rtc_backup 2) with
+`monitor.Machine` — the binding injected by `PythonEngine.InnerInit`
+(CLI Monitor surrogate), runtime-proven by the resc step5/step7
+fallback and official `segger-rtt.py`; `IMachine` :97 `RequestReset`
+/ :173 `ElapsedVirtualTime` verified. Named regression test
+`test_peripheral_models_reach_machine_via_monitor_scope`; class check
+passed (platform models only — firmware/FMU/schema/oracle/`.resc`/
+runner/bridge untouched); evidence re-issued canonically (status stays
 `pending`); gates green. Stop criteria carry forward verbatim.
 
-**⚠ GitHub connection outage (this session):** `GH_TOKEN`/`GITHUB_TOKEN`
-went invalid mid-session — every `gh api` call 401s (even with `gh auth`
-reporting "token no longer valid"), `git push` has no working
-credential, and `api.github.com` answers 401 for this egress even
-unauthenticated. **Reconnect GitHub in Arena** before the next
-push/PR-comment. Reads still work: `fetch_page`/`curl` on `github.com`
-HTML (blob pages include `rawLines` — see §3 for the no-API source
-recipe). `gh workflow dispatch` remains 403 anyway — dispatches stay
-human-triggered from the UI (§5.1).
+**GitHub outage note (resolved):** `GH_TOKEN` went invalid mid-session
+(401s on every `gh api`); after reconnecting GitHub in Arena the
+connection works again. During the outage, reads still worked via
+`fetch_page`/`curl` on `github.com` HTML (blob pages embed `rawLines`
+— recipe in §3); keep that as the fallback. `gh workflow dispatch`
+remains 403 — dispatches stay human-triggered from the UI (§5.1).
 
 **Next action:** trigger `hw-nightly` from the UI **on
-`arena/01a0cbe2-cancestry`** for **dispatch 23** (cycle 3 of the
-re-budget) — origin tip `3d37f86` carries F-33 (verify the run page
-shows that SHA before waiting on results; dispatch 22 raced the push).
-Expected annotation on any failure: `T2-DIAG … console-crash=… |
-proc=… | err=… while awaiting response to '…'` (or `… banner read`)
-— that line now decides the next step: a named-command EOF with
-`proc=already-exited` vs `alive-at-failure`, or a `console-crash=`
-signature; the `t2-ci-logs-<sha>` artifact should also appear (first
-time the split upload is in the workflow). If the enriched diagnostics
-point at firmware/FMU internals, **stop and surface to the Lead SE**
-(memo §3/§4); otherwise the fault stays in the platform-script lane
-for cycles remaining (23–30; hard stop 30).
+`arena/01a0cbe2-cancestry`** for **dispatch 24** (cycle 4 of the
+re-budget) — origin tip carries F-34 (verify the run page shows that
+SHA before waiting on results; dispatch 22 taught us the race).
+Expectation: the RunFor that killed dispatch 23 now completes and the
+co-sim loop starts (FMU doStep + slot polling). Possible next faults
+in platform-script class: hook firing (first real execution of
+`machine['sysbus']` writes in resc hooks), iwdg lazy expiry logic,
+first FMU step issues. If anything points at firmware/FMU internals,
+**stop and surface to the Lead SE** (memo §3/§4); remaining cycles
+24–30, hard stop 30.
 
 This document is internal continuity documentation for the bring-up. It is
 not a safety claim and promotes nothing (HwAGENTS.md rules 13/14).
@@ -221,9 +220,9 @@ Post-dispatch-21 source audit (all from pinned refs; fetched via
 ## 4. Dispatch history (hw-nightly, workflow_dispatch, this branch)
 
 Run IDs verified against `gh run list`; older entries per the session
-record. Cycles are the SE budget unit (20 used: 18 at stop + re-budget
-dispatches 21 and 22; remaining 23–30, hard stop at 30). One
-stop-period **stray** dispatch (run `35854449839` @ `a7b0455`,
+record. Cycles are the SE budget unit (21 used: 18 at stop + re-budget
+dispatches 21, 22, 23; remaining 24–30 = 7 cycles, hard stop at 30).
+One stop-period **stray** dispatch (run `35854449839` @ `a7b0455`,
 2026-09-23 11:25Z) sits outside the re-budget numbering — see the
 footnote below the table; flagged for Lead SE whether it is chargeable.
 
@@ -240,7 +239,8 @@ footnote below the table; flagged for Lead SE whether it is chargeable.
 | 19 | 35807326391 | c185cee (F-29) | **F-29 PROVEN** — `step3: platform loaded` (full `.repl` incl. `t2_trace`); new fault: `machine PyDevFromFile … Parameters did not match the signature` at the first name arg → **F-30** (bare LiteralToken rejected for `string` param); F-31 (quoted seed → `SetSeed(int)`) pre-diagnosed in the same audit → both fixed pre-dispatch-20 |
 | 20 | 35851511484 | 6662659 (F-30/F-31) | **F-30/F-31 PROVEN** — `step3c: 4 pydev registered, cwd=/opt/renode`; `step4: quantum and seed set`; fault at `sysbus LoadELF $elf` (**F-32**: runner stores `$elf` as quoted StringToken with literal `@`; `ReadFilePath` validation fails) → **STOP, criterion 1 (20/20)**; report written; follow-up = issue #60 |
 | 21 | 35893814425 | 2306a36 (F-32) | **FIRST COMPLETE INCLUDE** — step0…step8 green (step5 ELF load + SP readback, step6 hooks, step7 magic `0x54324353`, step8 paused) ⇒ F-32 runtime-verified; then fail-closed `err=Renode monitor closed the connection` (bare EOF, no transcript-error keyword); artifact zip failed 3/3; **F-33 applied** (EOF context + `proc=`/`console-crash=` + separate CI-logs artifact) → was meant for dispatch 22. Cycle 1 of the re-budget. |
-| 22 | 35924809178 | 2306a36 (**stale**) | hw-nightly #27, manually triggered 21:49:45Z — **raced the F-33 push (~21:55) by ~6 min**, so the run executed pre-F-33 code: byte-identical T2-DIAG (bare EOF), same zip failure, no `t2-ci-logs` artifact step. Zero new information; cycle consumed. Cycle 2 of the re-budget (remaining: 23–30). |
+| 22 | 35924809178 | 2306a36 (**stale**) | hw-nightly #27, manually triggered 21:49:45Z — **raced the F-33 push (~21:55) by ~6 min**, so the run executed pre-F-33 code: byte-identical T2-DIAG (bare EOF), same zip failure, no `t2-ci-logs` artifact step. Zero new information; cycle consumed. Cycle 2 of the re-budget. |
+| 23 | 35928186369 | fc3fc93 (F-33) | **ROOT CAUSE DETERMINED** — first RunFor killed by `'PythonPeripheral' object has no attribute 'Machine'` (Fatal error on the CPU bus path; `self.Machine` in the scripted models); `err=` named the in-flight `emulation RunFor`; `proc=alive-at-failure`; full 151-line transcript captured (preflight magic ✓, slot reads ✓). **F-34** applied: 10× `self.Machine`→`monitor.Machine` + named test. Cycle 3 of the re-budget (remaining: 24–30). |
 
 Note on dispatch 18's pydev row: the `✅ construct (F-28)` entries in
 section 2 were **source-verified, not runtime-proven** — the E39 aborted
@@ -378,16 +378,24 @@ readback `0x20018000` (dispatch 21 `step5`)**; **three `cpu
 AddSymbolHook` installs (`step6`)**; **preflight magic `0x54324353`
 written/read back on the real platform (`step7`)**; **the include
 running to completion with the machine paused (`step8`)** — the
-latter four first proven at dispatch 21.
+latter four first proven at dispatch 21. **Bridge-driven monitor
+traffic beyond connect (dispatch 23): banner/`-e` echo pairing, the
+preflight read returning `0x54324353`, all four trace-slot reads
+answered, and `emulation RunFor` actually transmitted — full 151-line
+transcript in the failure output.** Also proven at dispatch 23: the
+F-33 channels in production (named-command `err=`, `console-crash=`,
+`proc=`) and the first instructions of the real ELF executing (the
+crash occurred *inside* `TlibExecute` during a bus read — firmware
+code ran correctly up to that access).
 
-**Unproven (the actual bring-up):** bridge-driven monitor traffic
-beyond connect (dispatch 21's EOF aborted it — F-33 exists to classify
-the abort); live scenario execution (FMU doStep + `RunFor` loop); the
-invariant vs OR-001; RTC_BKP0R/RCC shadow persistence across the
-scripted IWDG reset; RUN-2 byte-identical determinism. Note the
-hooks/magic steps are **platform bring-up proofs**, not firmware
-execution proofs — the ELF still has not executed a single instruction
-as of dispatch 21.
+**Unproven (the actual bring-up):** completion of the first
+`emulation RunFor` (dispatch 23 died *inside* it on F-34's model
+fault — fixed, not yet re-proven); live co-sim loop (FMU doStep +
+slot polling); the invariant vs OR-001; RTC_BKP0R/RCC shadow
+persistence across the scripted IWDG reset; RUN-2 byte-identical
+determinism. Note: hooks, magic, and slot reads are **platform
+bring-up proofs**; as of dispatch 23 the ELF executed only up to its
+first scripted-peripheral access (the F-34 crash site).
 
 Watch items for the first live scenario: (a) the IWDG model's scripted
 reset and whether the `machine` reset preserves `t2_trace` contents
