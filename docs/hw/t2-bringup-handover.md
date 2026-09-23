@@ -1,27 +1,21 @@
 # T2 Virtual Bench Bring-Up — Handover (H-08, issue #55)
 
-**Status: F-30 + F-31 APPLIED — awaiting human-triggered dispatch 20
-(THE FINAL CYCLE of the 20-cycle budget; 19 used as of this revision).
-Session branch `arena/01a0cbe2-cancestry` (continuation of
-`arena/01a0c6d8-cancestry`, whose 21 commits were fast-forwarded in).
-Dispatch 19 (run on `c185cee`) PROVED F-29: `step3 platform loaded` —
-the full `.repl` now constructs including `t2_trace`; the new fault was
-`PyDevFromFile … Parameters did not match the signature` (F-30, bare
-name tokens rejected for `string` params by the monitor's token-type
-table). F-31 (quoted `$t2_seed` → `SetSeed(int)` mismatch) was found in
-the same source audit BEFORE it could burn cycle 20. Evidence
-re-issued canonically; gates green.**
+**Status: STOPPED — Lead SE stop criterion 1 (20/20 dispatch cycles
+exhausted; dispatch 20 = run 35851511484 @ `6662659`, 2026-09-23).
+Dispatch 20 proved F-30 and F-31 at runtime (`step3c: 4 pydev
+registered`, `step4: quantum and seed set`) and stopped at
+`sysbus LoadELF $elf` — F-32, pre-diagnosed (runner line 408 stores
+`$elf` as a quoted StringToken keeping the literal `@`;
+`ReadFilePath.Validate` then fails `File.Exists("@/…")`). The
+documented-outcome report is written: `docs/hw/t2-bringup-report.md`.
+The SE-mandated follow-up (F-32 fix + re-budget request for
+dispatches 21+) is issue #60. Ledger row unchanged (sim-pending/CL0).**
 
-**Next action:** trigger `hw-nightly` (workflow_dispatch, from the UI —
-`gh` dispatch is 403 from the sandbox) **on
-`arena/01a0cbe2-cancestry`** for dispatch 20 — the LAST cycle. F-30 +
-F-31 are already committed — do not re-apply. On failure, read the
-T2-DIAG annotation (section 5.2); if the fault is outside the platform
-script, or this cycle is exhausted, apply SE stop criterion 1/2/3
-(section 1): stop, write the documented-outcome report, ledger
-unchanged, separate follow-up issue. **There is no cycle 21 —
-dispatch 20 must either land the live run or trigger the stop
-report.**
+**Next action: NONE inside this bring-up — do NOT dispatch
+`hw-nightly` for T2 without an explicit Lead SE re-budget referencing
+issue #60. The next engineering step is #60 (apply F-32 + regression
+test, then dispatch under a fresh budget; same stop criteria
+otherwise).**
 
 This document is internal continuity documentation for the bring-up. It is
 not a safety claim and promotes nothing (HwAGENTS.md rules 13/14).
@@ -91,6 +85,11 @@ quanta, the three symbol hooks stamping the trace area, the 51 ms armed /
 (determinism). **If dispatch 19/20 faults outside the platform script,
 apply SE stop criterion 2/3 — stop and document; do not keep patching.**
 
+*Superseded by events: dispatch 19/20 ran — F-29/F-30/F-31 all
+landed as predicted through `step4`, then dispatch 20 stopped at
+`LoadELF` (F-32) with criterion 1 (20/20) triggering the stop; see
+section 4 and `docs/hw/t2-bringup-report.md`.*
+
 ## 3. Source-verified facts about Renode 1.16.1 (do not re-derive)
 
 Authoritative pin: **renode tag v1.16.1 → submodule `src/Infrastructure`
@@ -158,7 +157,8 @@ record. Cycles are the SE budget unit (18 used).
 | 16 | 35778907099 | 598a360 (F-25) | same E25 — true cause: camelCase `performanceInMips` (F-27 diagnosis) |
 | 17 | 35805300102 | 4beacd2 (F-27) | **E25 gone** (CPU constructs); new fault: `iwdg` PythonPeripheral "Could not find source file" (CWD-relative `File.Exists`) |
 | 18 | 35806027349 | 8269dca (F-28) | all 4 PythonPeripherals construct; **E39** on `t2_trace` (size 0x200 not 0x400-aligned) → F-29 diagnosed |
-| 19 | see check-runs on `c185cee` | c185cee (F-29) | **F-29 PROVEN** — `step3: platform loaded` (full `.repl` incl. `t2_trace`); new fault: `machine PyDevFromFile … Parameters did not match the signature` at the first name arg → **F-30** (bare LiteralToken rejected for `string` param); F-31 (quoted seed → `SetSeed(int)`) pre-diagnosed in the same audit → both fixed pre-dispatch-20 |
+| 19 | 35807326391 | c185cee (F-29) | **F-29 PROVEN** — `step3: platform loaded` (full `.repl` incl. `t2_trace`); new fault: `machine PyDevFromFile … Parameters did not match the signature` at the first name arg → **F-30** (bare LiteralToken rejected for `string` param); F-31 (quoted seed → `SetSeed(int)`) pre-diagnosed in the same audit → both fixed pre-dispatch-20 |
+| 20 | 35851511484 | 6662659 (F-30/F-31) | **F-30/F-31 PROVEN** — `step3c: 4 pydev registered, cwd=/opt/renode`; `step4: quantum and seed set`; fault at `sysbus LoadELF $elf` (**F-32**: runner stores `$elf` as quoted StringToken with literal `@`; `ReadFilePath` validation fails) → **STOP, criterion 1 (20/20)**; report written; follow-up = issue #60 |
 
 Note on dispatch 18's pydev row: the `✅ construct (F-28)` entries in
 section 2 were **source-verified, not runtime-proven** — the E39 aborted
@@ -254,22 +254,23 @@ deliberately carries **no** `evidence_sha256` (pending row) — leave it.
 
 ## 7. Proven vs unproven
 
-**Proven:** T2 toolchain provisioning (Dockerfile.t2: Renode 1.16.1
-identity pin `ci/docker/renode-1.16.1.pin`, arm-none-eabi, fmpy 0.3.24);
-off-tree ELF build of the v1.0.0 sources; T2-DIAG diagnostics; the full
-gate battery; **platform description load end-to-end (dispatch 19:
-`step3: platform loaded`, all peripherals incl. the F-29 `t2_trace`)**;
-the `$ORIGIN` expansion mechanism observed in the executed-command echo.
+**Proven (runtime, by stop):** T2 toolchain provisioning (Dockerfile.t2:
+Renode 1.16.1 identity pin `ci/docker/renode-1.16.1.pin`,
+arm-none-eabi, fmpy 0.3.24); off-tree ELF build of the v1.0.0 sources;
+T2-DIAG diagnostics; the full gate battery; **platform description
+load end-to-end (dispatch 19/20 `step3`)**; **four PyDevFromFile
+registrations (dispatch 20 `step3c`, F-30)**; **quantum + seed
+(dispatch 20 `step4`, F-31)**; the `$ORIGIN` expansion mechanism
+observed in executed-command echoes.
 
-**Unproven (the actual bring-up):** the four `PyDevFromFile`
-registrations at runtime (F-30 fix awaits dispatch 20, step3c); ELF
-execution (vector SP 0x20018000 readback); preflight magic
-0x54324353; `SetGlobalQuantum`/`SetSeed` (F-31); FMU load +
-100 µs/1 µs co-simulation stepping; the three symbol hooks
-(`cpu AddSymbolHook` exists in 1.16.1 — OsSymbolHook.cs, verified — but
-has never executed); the invariant vs OR-001; RTC_BKP0R/RCC shadow
+**Unproven (the actual bring-up; stopped at `LoadELF`):** ELF
+execution (vector SP 0x20018000 readback, step5+); preflight magic
+0x54324353; the three `cpu AddSymbolHook` hooks (exist in 1.16.1 —
+OsSymbolHook.cs — but never executed); FMU load + 100 µs/1 µs
+co-simulation stepping; the invariant vs OR-001; RTC_BKP0R/RCC shadow
 persistence across the scripted IWDG reset; RUN-2 byte-identical
-determinism.
+determinism. F-32 (pre-diagnosed, see issue #60) is the next fault
+in line.
 
 Watch items for the first live scenario: (a) the IWDG model's scripted
 reset and whether the `machine` reset preserves `t2_trace` contents
@@ -281,20 +282,22 @@ the report — it documents the CWD behavior for tool-qualification);
 
 ## 8. PR, ledger, promotion
 
-- **PR**: superseded mid-bring-up — the original PR #58
-  (`arena/01a0c6d8-cancestry` → main, opened 2026-09-23 at `8269dca` +
-  this handover doc) was replaced by the continuation PR from
-  `arena/01a0cbe2-cancestry`, which contains all of #58's commits
-  fast-forwarded plus the F-29 fix. Bring-up only; no live run is
-  claimed until dispatch 19/20 evidence lands.
+- **PR**: #58 (`arena/01a0c6d8-cancestry`) was superseded mid-bring-up
+  by **#59** (`arena/01a0cbe2-cancestry` → main, head `6662659` at
+  stop, MERGEABLE, all PR checks green), which fast-forwards all of
+  #58's commits plus F-29…F-31 and the handover/report updates.
+  Bring-up only; no live run is claimed.
 - **Ledger:** `hw/tests/traceability.csv` row `HW-SF-002,virtual_bench`
   stays `sim-pending` / CL0 with empty evidence cells — no promotion,
   grep-checkable.
-- **Report:** `docs/hw/t2-bringup-report.md` is written when the live run
-  lands (invariant + determinism + hashes) **or** as the honest
-  documented-outcome report if an SE stop criterion triggers — including
-  the SE-mandated wording that an honest broken/incomplete integration is
-  a successful engineering outcome, plus the exact follow-up needed.
+- **Report:** `docs/hw/t2-bringup-report.md` **written at stop as the
+  honest documented-outcome report** (criterion 1: 20/20 cycles), with
+  the SE-mandated wording (issue #55 note: an honest broken/incomplete
+  integration is a successful engineering outcome of H-08), the full
+  dispatch history, the proven/unproven split, and the exact
+  follow-up (issue **#60**: F-32 one-liner + re-budget for dispatches
+  21+). If a re-budgeted run later lands live evidence, the report is
+  rewritten success-path per #55 deliverables 3–4.
 - **Promotion** (later, separate safety PR): gated on HS-01 (F1
   determinism acceptance) + HS-02 (F2 ISO 16750-2 parameter verification)
   closure **and** human safety reviewer sign-off →
@@ -315,3 +318,5 @@ the report — it documents the CWD behavior for tool-qualification);
 | `.github/workflows/hw-nightly.yml` | the T2 job (t2-virtual-bench) + failure annotation (T2-DIAG last line) |
 | `ci/docker/Dockerfile.t2`, `ci/docker/renode-1.16.1.pin` | T2 toolchain image + Renode identity pin |
 | `docs/hw/virtual-bench-plan.md`, `docs/hw/tool-qualification.md` | governing docs (model scopes, not_simulated rule, tool gaps) |
+| `docs/hw/t2-bringup-report.md` | **the documented-outcome report written at stop (20/20)**: outcome, criterion, dispatch history, proven/unproven, toolchain pins, SE wording, follow-up |
+| issue **#60** | SE-mandated follow-up: F-32 pre-diagnosis + re-budget request for dispatches 21+ |
