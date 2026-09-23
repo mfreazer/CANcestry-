@@ -192,7 +192,13 @@ jobs:
                   --fmu /work/build/hw/cancestry_t2_holdup.fmu
 
               echo "== bridge/orchestrator test suite on the live toolchain"
-              python3 -m pytest hw/virtual-bench -q
+              # F-36 (issue #60, dispatch 25): the e2e test fail-closes
+              # without CANCESTRY_T2_ELF (H-07: no silent downgrade), and
+              # RUN 1/RUN 2 each received it inline - the pytest line did
+              # not, so the suite's first successful execution went red on
+              # "T2 toolchain not found". Same env, same contract.
+              CANCESTRY_T2_ELF=/work/build/hw/t2_firmware_v1.0.0.elf \
+                python3 -m pytest hw/virtual-bench -q
             ' 2>&1 | tee /tmp/t2-output.log
           DOCKER_STATUS="${PIPESTATUS[0]}"
           if [ "$DOCKER_STATUS" -ne 0 ]; then

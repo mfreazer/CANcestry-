@@ -321,9 +321,20 @@ def test_schema_rejects_passing_artifact_with_pending_reason():
         "toolchain": {"pins": {"renode": "1.15"},
                       "measured": {"renode": "Renode 1.15.0.12345"}},
     })
+    # F-36 (issue #60, dispatch 25): the fixture assumed the on-disk
+    # artifact is PENDING (the only form that carries pending_reason).
+    # After RUN 1 succeeds the on-disk form is PASSING, so the first
+    # in-container suite run found nothing to reject. The rule under
+    # test is "passing + pending_reason = invalid" in EITHER form -
+    # inject the key explicitly instead of depending on repo state.
+    document["pending_reason"] = (
+        "issues/53 fixture injection (HW-T2-EVID-004 must reject me)")
     violations = sorted(_t2_schema().iter_errors(document),
                         key=lambda error: error.message)
     assert violations, "a passing artifact must not carry pending_reason"
+    assert any("pending_reason" in error.message for error in violations), (
+        "the rejection must name pending_reason: %s"
+        % [error.message for error in violations])
 
 
 def test_orchestrator_rejects_ordering_violation_before_evidence():

@@ -237,7 +237,7 @@ will be replaced by the success-path variant (issue #55 deliverables
 3–4) if a re-budgeted run lands live evidence, or superseded by a
 second stop-report if the re-budget exhausts.
 
-## Re-budget log — dispatches 21–24 (cycles 1–4 of 21–30); F-33, F-34 and F-35
+## Re-budget log — dispatches 21–25 (cycles 1–5 of 21–30); F-33 … F-36
 
 **Dispatch 21** — `hw-nightly` #26, run `35893814425`, manual
 dispatch, 2026-09-23 17:10, head `2306a36` (F-32), job exit 2 after
@@ -446,6 +446,71 @@ gates: 5/5 checkers PASS; 327 passed, 1 deselected (handover §5.3
 battery) and 585 passed across all of `tests/unit/tools` + the
 retention file; `hw/tests` 43 passed + 9 pre-existing omc errors;
 ledger row `HW-SF-002,…,sim-pending` exact; evidence `pending`.
+
+**Dispatch 25** — run `35934538207`, head `a314803` (F-35), manual
+dispatch from the GitHub UI, created 2026-09-23 23:37:47 UTC.
+**SUCCESS CRITERION MET (memo §4).** The job's own words:
+
+```
+== RUN 1: full T2 pipeline (live Renode + FMU, writes evidence)
+T2 evidence written: /work/hw/tests/evidence/t2_retention_001.json
+== RUN 2: independent re-run; --check requires byte-identical evidence
+T2 CHECK PASSED: byte-identical evidence reproduced
+```
+
+RUN 1 re-executed the whole scenario with every in-run assertion
+(hooks, `iwdgrstf`, ordering vs OR-001, retention, plant tolerance)
+and wrote the PASSING artifact; RUN 2 independently reproduced it
+**byte-identical**. The ELF sha256 is again `a03ed7d8…0e8d2` (stable
+across dispatches 24/25). Third confirmation: the in-container suite
+then validated the *passing* on-disk form itself —
+`test_committed_t2_evidence_is_schema_valid` and
+`test_committed_t2_evidence_matches_canonical_regeneration` (passing
+branch: canonical render + `_assert_passing_t2_invariants`) both
+passed against RUN 1's bytes. Artifacts: **all three landed for the
+first time**, including `t2-virtual-bench-a314803…` at **1,920,932 B**
+— the F-35 chmod ended the `build/hw/` zip failure streak (runs
+19/20/21/24) and the artifact now carries the ELF, FMU, runlog, trace
+and the passing evidence JSON; `t2-ci-logs-a314803…` 9253 B; renderer
+artifact 5979 B.
+
+The workflow conclusion was still `failure` because the final
+in-container pytest step exited non-zero on 2 of 46 tests — both
+same-class (never-executed-until-now) fixtures, not platform faults:
+
+1. `test_t2_retention_end_to_end` fail-closed with "T2 toolchain not
+   found": the workflow passes `CANCESTRY_T2_ELF` inline to RUN 1 and
+   RUN 2 but **not to the pytest line**, and H-07 forbids the e2e test
+   from silently downgrading — the suite's first successful execution
+   hit the guard as designed.
+2. `test_schema_rejects_passing_artifact_with_pending_reason`
+   assumed the on-disk artifact is PENDING (the only form carrying
+   `pending_reason`); after RUN 1 the on-disk form is PASSING, so
+   forcing `status: "passing"` produced nothing to reject and
+   `assert violations` failed.
+
+**F-36 applied** (condition check per memo §3). Touch set:
+`hw-nightly.yml` (pytest line receives the same inline
+`CANCESTRY_T2_ELF` as RUN 1/2 — same env, same contract) and
+`test_t2_retention.py` (the fixture now **injects** `pending_reason`
+explicitly and asserts the rejection *names* it, making the test
+independent of which form is on disk — it exercises the schema's
+`if status=passing → not required [pending_reason]` rule in both
+states). The e2e test itself is unchanged: with the env present it
+re-runs `--check` as a third determinism probe on every green run.
+Verified untouched: `platform/cortex_m/`, firmware,
+`fmi2_smoke_slave.c` / `Holdup.mo`, `schemas/`, `hw/tests/oracles/`,
+the `.resc`, the `.repl`, models, `fmi_bridge.py`, **and the runner**
+(`run_t2_retention.py`). → **class check PASSED (workflow + test
+fixture → runner class, in-lane) → applied.** Because
+`test_t2_retention.py` is in `PINNED_SOURCES`, canonical evidence was
+re-issued (new JSON `sha256:0e27899a…a7242`, PLOT
+`cc66ef4b…acb9`, SVG `d5f82c86…7635`, status stays `pending`);
+the runner itself did not change.
+
+Gates after F-36: 5/5 checkers PASS; 327 passed, 1 deselected
+(handover §5.3 battery); `hw/tests` 43 passed + 9 pre-existing omc
+errors; ledger row exact; evidence `pending`; workflow YAML valid.
 
 ## Appendix A — Workspace-reset recovery (provenance note for auditors)
 
