@@ -217,6 +217,22 @@ jobs:
           fi
           exit "$DOCKER_STATUS"
 
+      # F-35 (issue #60, dispatch 24): Dockerfile.t2 has no USER
+      # directive, so RUN 1/RUN 2 write root-owned files into build/hw/
+      # (ELF, runlog, trace) and hw/tests/evidence/ (the written JSON)
+      # on the host runner. upload-artifact runs as the runner user and
+      # could not read them - "error while creating the zip file" on
+      # runs 19/20/21 for build/hw/, still failing at dispatch 24 -
+      # while host-owned /tmp logs always uploaded. Re-label the trees
+      # readable so a PASSING run's evidence persists. sudo is required:
+      # the runner user cannot chmod files it does not own.
+      - name: Make container-written artifacts readable (F-35)
+        if: always()
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          sudo chmod -R a+rX build/hw hw/tests/evidence 2>/dev/null || true
+
       # F-33 (issue #60, dispatch 21): the combined zip failed on runs
       # 19/20/21 ("error while creating the zip file"), which killed the
       # only persistent copy of the failure output (console tail +
@@ -244,6 +260,7 @@ jobs:
           name: t2-virtual-bench-${{ github.sha }}
           path: |
             build/hw/
+            hw/tests/evidence/
             /tmp/t2-output.log
             /tmp/t2-build.log
           if-no-files-found: ignore

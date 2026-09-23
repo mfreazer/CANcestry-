@@ -746,6 +746,28 @@ def run_scenario(renode_bin, elf_path, fmu_path, build_dir=BUILD_DIR):
             drain.join(timeout=10)
 
 
+def scenario_passing_body(passed, runlog):
+    """Merge run_scenario()'s (passed, runlog) returns for passing_document.
+
+    passing_document() needs the in-run assertions from `passed` (events,
+    ordering, plant, retention) AND the toolchain/hash keys from `runlog`
+    (bridge/elf/fmu/trace_sha256, measured_tools). F-35 (issue #60):
+    dispatch 24 (run 35932082726) reached passing_document for the first
+    time - after the live co-sim and the OR-001 ordering invariant had
+    PASSED - and raised KeyError 'bridge_sha256' because main() passed
+    only the first return value. The two key sets must stay disjoint;
+    fail loud if a future change makes the merge ambiguous.
+    """
+    overlap = set(passed) & set(runlog)
+    if overlap:
+        raise AssertionError(
+            "run_scenario returns overlap, merge ambiguous: %s"
+            % sorted(overlap))
+    body = dict(runlog)
+    body.update(passed)
+    return body
+
+
 def passing_document(run_body):
     """Assemble the PASSING evidence document (deterministic bytes)."""
     document = expected_pending_manifest()
@@ -838,7 +860,11 @@ def main(argv=None):
                 raise T2SetupError("prebuilt FMU not found: %s" % fmu_path)
         else:
             fmu_path = build_fmu(omc)
-        run_body, _ = run_scenario(renode_bin, elf_path, fmu_path)
+        # F-35 (issue #60): run_scenario returns (passed, runlog);
+        # passing_document needs BOTH dicts merged (scenario_passing_body).
+        # Dispatch 24 (run 35932082726) discarded `runlog` here and hit
+        # KeyError 'bridge_sha256' on the success path.
+        passed, runlog = run_scenario(renode_bin, elf_path, fmu_path)
     except (T2SetupError, BridgeError) as error:
         print("T2 FAILED (fail-closed, no evidence written): %s" % error)
         # F-20: attach the captured Renode console transcript so a
@@ -871,7 +897,7 @@ def main(argv=None):
         print(_diagnostic_summary(error))
         return 2
 
-    document = passing_document(run_body)
+    document = passing_document(scenario_passing_body(passed, runlog))
     output = Path(args.output)
     fresh = render_evidence_bytes(document)
     if args.check:

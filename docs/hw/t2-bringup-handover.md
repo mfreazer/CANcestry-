@@ -1,8 +1,8 @@
 # T2 Virtual Bench Bring-Up — Handover (H-08, issue #55)
 
-**Status: RE-BUDGETED 21–30 — dispatches 21–23 executed (all failed
-closed), F-33 verified in production, F-34 applied, ready for dispatch
-24.** Dispatch 21 (run `35893814425` @ `2306a36`) delivered the
+**Status: RE-BUDGETED 21–30 — dispatches 21–24 executed (all failed
+closed), F-33/F-34/F-35 applied, **live co-sim + OR-001 invariant
+PROVEN (dispatch 24)**, ready for dispatch 25.** Dispatch 21 (run `35893814425` @ `2306a36`) delivered the
 **first complete include** — step0…step8 green, F-32 runtime-verified
 — then hit the bare monitor EOF. Dispatch 22 (run `35924809178`)
 raced the F-33 push and duplicated that failure on stale `2306a36`
@@ -29,7 +29,28 @@ fallback and official `segger-rtt.py`; `IMachine` :97 `RequestReset`
 `test_peripheral_models_reach_machine_via_monitor_scope`; class check
 passed (platform models only — firmware/FMU/schema/oracle/`.resc`/
 runner/bridge untouched); evidence re-issued canonically (status stays
-`pending`); gates green. Stop criteria carry forward verbatim.
+`pending`); gates green. **Dispatch 24 (run `35932082726` @ `a91ff75`,
+2026-09-23 23:08:40Z) = the milestone:** the full live co-simulation
+completed — `run_scenario` returned, which per its control flow
+requires all three hooks fired, `iwdgrstf` observed on post-reset
+readback, `ordering_violation is None` (**`retention_write <
+safe_latch < iwdg_fire` HELD vs OR-001**), retention preserved
+in-run, and plant within ±1 mV — and only then the never-executed
+pass path crashed: `KeyError: 'bridge_sha256'` at
+`passing_document` because `main` did `run_body, _ = run_scenario(...)`
+and discarded the second return (`runlog` holds the hash keys). RUN 1
+wrote no evidence; RUN 2 never ran → the byte-identical half of the
+criterion is still unproven. **F-35** merges both returns via
+`scenario_passing_body` (with a disjointness guard) + two named tests;
+the same commit also `sudo chmod`s the container-root-owned evidence
+trees before artifact uploads (the mechanism behind the persistent
+`build/hw/` zip failures — F-33's `/tmp` split landed its first
+artifact at this run: `t2-ci-logs-a91ff75…`, 8044 B) and adds
+`hw/tests/evidence/` to the artifact paths. Class check passed
+(runner + workflow only — firmware/FMU/schema/oracle/`.resc`/models/
+bridge untouched); evidence re-issued canonically (JSON `cf2d3867…`,
+PLOT `75ab2d69…`, SVG `c460d076…`, status `pending`); gates green.
+Stop criteria carry forward verbatim.
 
 **GitHub outage note (resolved):** `GH_TOKEN` went invalid mid-session
 (401s on every `gh api`); after reconnecting GitHub in Arena the
@@ -39,16 +60,18 @@ connection works again. During the outage, reads still worked via
 remains 403 — dispatches stay human-triggered from the UI (§5.1).
 
 **Next action:** trigger `hw-nightly` from the UI **on
-`arena/01a0cbe2-cancestry`** for **dispatch 24** (cycle 4 of the
-re-budget) — origin tip carries F-34 (verify the run page shows that
+`arena/01a0cbe2-cancestry`** for **dispatch 25** (cycle 5 of the
+re-budget) — origin tip carries F-35 (verify the run page shows that
 SHA before waiting on results; dispatch 22 taught us the race).
-Expectation: the RunFor that killed dispatch 23 now completes and the
-co-sim loop starts (FMU doStep + slot polling). Possible next faults
-in platform-script class: hook firing (first real execution of
-`machine['sysbus']` writes in resc hooks), iwdg lazy expiry logic,
-first FMU step issues. If anything points at firmware/FMU internals,
-**stop and surface to the Lead SE** (memo §3/§4); remaining cycles
-24–30, hard stop 30.
+Expectation: RUN 1 completes the whole pipeline (scenario + evidence
+write), RUN 2 `--check` reports byte-identical evidence, the
+in-container pytest suite is green, and BOTH artifacts land (chmod
+fix) — together the full success criterion. Possible next faults
+still in platform-script/runner class: evidence-write or render
+mismatch; a two-run hash mismatch is a **STOP-and-flag** event per
+memo §4 (no test doubles, no gate weakening). If anything points at
+firmware/FMU internals, **stop and surface to the Lead SE**
+(memo §3/§4); remaining cycles 25–30, hard stop 30.
 
 This document is internal continuity documentation for the bring-up. It is
 not a safety claim and promotes nothing (HwAGENTS.md rules 13/14).
@@ -220,8 +243,8 @@ Post-dispatch-21 source audit (all from pinned refs; fetched via
 ## 4. Dispatch history (hw-nightly, workflow_dispatch, this branch)
 
 Run IDs verified against `gh run list`; older entries per the session
-record. Cycles are the SE budget unit (21 used: 18 at stop + re-budget
-dispatches 21, 22, 23; remaining 24–30 = 7 cycles, hard stop at 30).
+record. Cycles are the SE budget unit (22 used: 18 at stop + re-budget
+dispatches 21–24; remaining 25–30 = 6 cycles, hard stop at 30).
 One stop-period **stray** dispatch (run `35854449839` @ `a7b0455`,
 2026-09-23 11:25Z) sits outside the re-budget numbering — see the
 footnote below the table; flagged for Lead SE whether it is chargeable.
@@ -241,6 +264,7 @@ footnote below the table; flagged for Lead SE whether it is chargeable.
 | 21 | 35893814425 | 2306a36 (F-32) | **FIRST COMPLETE INCLUDE** — step0…step8 green (step5 ELF load + SP readback, step6 hooks, step7 magic `0x54324353`, step8 paused) ⇒ F-32 runtime-verified; then fail-closed `err=Renode monitor closed the connection` (bare EOF, no transcript-error keyword); artifact zip failed 3/3; **F-33 applied** (EOF context + `proc=`/`console-crash=` + separate CI-logs artifact) → was meant for dispatch 22. Cycle 1 of the re-budget. |
 | 22 | 35924809178 | 2306a36 (**stale**) | hw-nightly #27, manually triggered 21:49:45Z — **raced the F-33 push (~21:55) by ~6 min**, so the run executed pre-F-33 code: byte-identical T2-DIAG (bare EOF), same zip failure, no `t2-ci-logs` artifact step. Zero new information; cycle consumed. Cycle 2 of the re-budget. |
 | 23 | 35928186369 | fc3fc93 (F-33) | **ROOT CAUSE DETERMINED** — first RunFor killed by `'PythonPeripheral' object has no attribute 'Machine'` (Fatal error on the CPU bus path; `self.Machine` in the scripted models); `err=` named the in-flight `emulation RunFor`; `proc=alive-at-failure`; full 151-line transcript captured (preflight magic ✓, slot reads ✓). **F-34** applied: 10× `self.Machine`→`monitor.Machine` + named test. Cycle 3 of the re-budget (remaining: 24–30). |
+| 24 | 35932082726 | a91ff75 (F-34) | **LIVE CO-SIM + OR-001 INVARIANT HELD** — `run_scenario` returned (all hooks fired, `iwdgrstf` observed, `ordering_violation` None, retention preserved in-run, plant ±1 mV) ⇒ first complete scenario execution; then never-executed pass path: `KeyError: 'bridge_sha256'` at `passing_document` (`main` discarded the `runlog` return). RUN 1 wrote no evidence; RUN 2 never ran. `t2-ci-logs-a91ff75…` landed (8044 B, F-33 split works); `build/hw` zip still failed (root-owned → F-35 chmod). **F-35 applied**: `scenario_passing_body` merge + 2 named tests + workflow chmod/artifact paths. Cycle 4 of the re-budget (remaining: 25–30). |
 
 Note on dispatch 18's pydev row: the `✅ construct (F-28)` entries in
 section 2 were **source-verified, not runtime-proven** — the E39 aborted
@@ -303,7 +327,7 @@ venv3/bin/python ci/check_hw_traceability.py .
 venv3/bin/python ci/check_hw_evidence.py --root .
 venv3/bin/python -m pytest tests/unit/tools/test_check_hw_*.py \
     tests/unit/tools/test_check_capella_model.py \
-    hw/virtual-bench/test_t2_retention.py -q      # ~321 passed
+    hw/virtual-bench/test_t2_retention.py -q      # ~327 passed
 venv3/bin/python -m pytest hw/tests -q             # omc-dependent tests error
                                                     # (no OpenModelica in sandbox;
                                                     # pre-existing, identical on
@@ -386,16 +410,24 @@ transcript in the failure output.** Also proven at dispatch 23: the
 F-33 channels in production (named-command `err=`, `console-crash=`,
 `proc=`) and the first instructions of the real ELF executing (the
 crash occurred *inside* `TlibExecute` during a bus read — firmware
-code ran correctly up to that access).
+code ran correctly up to that access). **Dispatch 24: the first
+COMPLETE live scenario** — `emulation RunFor` sequences to scenario
+end, all three symbol hooks fired, `iwdgrstf` observed on post-reset
+readback, **the OR-001 ordering invariant held
+(`ordering_violation is None`)**, RTC_BKP0R preservation asserted
+in-run across the scripted IWDG reset, and the plant check within
+±1 mV. The crash was afterwards, in evidence assembly (F-35), not in
+the scenario.
 
-**Unproven (the actual bring-up):** completion of the first
-`emulation RunFor` (dispatch 23 died *inside* it on F-34's model
-fault — fixed, not yet re-proven); live co-sim loop (FMU doStep +
-slot polling); the invariant vs OR-001; RTC_BKP0R/RCC shadow
-persistence across the scripted IWDG reset; RUN-2 byte-identical
-determinism. Note: hooks, magic, and slot reads are **platform
-bring-up proofs**; as of dispatch 23 the ELF executed only up to its
-first scripted-peripheral access (the F-34 crash site).
+**Unproven (the actual bring-up):** persisted passing evidence
+(dispatch 24 crashed before `output.write_text`); RUN-2
+byte-identical determinism (never reached); two-run reproduction of
+the scenario/retention result (single-run only as of dispatch 24);
+T4/CL3 and anything beyond OR-001. The invariant is proven (dispatch
+24) but must re-prove on every subsequent green run. Note: hooks,
+magic, and slot reads remain **platform bring-up proofs**; from
+dispatch 24 the ELF additionally runs the whole scenario to
+completion.
 
 Watch items for the first live scenario: (a) the IWDG model's scripted
 reset and whether the `machine` reset preserves `t2_trace` contents

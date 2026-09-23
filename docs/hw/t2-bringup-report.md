@@ -237,7 +237,7 @@ will be replaced by the success-path variant (issue #55 deliverables
 3–4) if a re-budgeted run lands live evidence, or superseded by a
 second stop-report if the re-budget exhausts.
 
-## Re-budget log — dispatches 21–23 (cycles 1–3 of 21–30); F-33 and F-34
+## Re-budget log — dispatches 21–24 (cycles 1–4 of 21–30); F-33, F-34 and F-35
 
 **Dispatch 21** — `hw-nightly` #26, run `35893814425`, manual
 dispatch, 2026-09-23 17:10, head `2306a36` (F-32), job exit 2 after
@@ -371,6 +371,82 @@ evidence re-issue (runner/bridge/tests are pinned; status stays
 `schemas/hw/hw-t2-evidence-0.1.0.schema.json`, `hw/tests/oracles/`,
 `.resc` execution logic. → **class check PASSED → applied.**
 
+**Dispatch 24** — run `35932082726`, head `a91ff75` (F-34), manual
+dispatch from the GitHub UI, created 2026-09-23 23:08:40 UTC (T2 job
+23:09:22–23:09:44, exit 1). The ELF rebuilt on the pinned toolchain
+(sha256 `a03ed7d891b2edc0be9828d6c9294fe4bacbabfae286b84108c173cbdd50e8d2`;
+the two pre-existing build warnings are unchanged). **MILESTONE: the
+full live co-simulation completed and passed every in-run assertion.**
+`run_scenario` returning normally proves, in order: `bridge.run()`
+executed the whole 150 ms scenario with all three symbol hooks firing,
+the post-reset readback observed `iwdgrstf`,
+`ordering_violation is None` — i.e. **`retention_write < safe_latch <
+iwdg_fire` HELD against OR-001** — and the plant check finished within
+its ±1 mV tolerance. The success criterion's invariant half is now
+runtime-proven (the first time in this bring-up). The runner then
+crashed assembling the *passing* evidence document — code that had
+never executed before:
+
+```
+== RUN 1: full T2 pipeline (live Renode + FMU, writes evidence)
+Traceback (most recent call last):
+  File "hw/virtual-bench/run_t2_retention.py", line 874, in main
+    document = passing_document(run_body)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "hw/virtual-bench/run_t2_retention.py", line 765, in passing_document
+    "bridge": run_body["bridge_sha256"],
+              ~~~~~~~~^^^^^^^^^^^^^^^^^
+KeyError: 'bridge_sha256'
+```
+
+RUN 1 exited non-zero before `output.write_text`, so the `&&` chain
+stopped: no evidence was persisted and RUN 2 (`--check`) never ran —
+the byte-identical two-run half of the criterion remains unproven.
+Artifacts: the F-33 `/tmp` split worked for the first time
+(`t2-ci-logs-a91ff75…`, 8044 B, containing this traceback), while the
+`build/hw/` portion of the combined zip still failed — consistent with
+the root-owned-files mechanism the chmod below fixes.
+
+**F-35 applied** (root cause source-pinned before any edit; condition
+check per memo §3): `main` did `run_body, _ = run_scenario(...)`, i.e.
+it took the first return (the `passed` dict: `events`/`ordering`/
+`plant`/`retention`) and discarded the second (the `runlog`, which
+holds `bridge_sha256`/`elf_sha256`/`fmu_sha256`/`trace_sha256`/
+`measured_tools`); `passing_document` needs keys from both, so the
+first access into a runlog key raised. Fix = new helper
+`scenario_passing_body(passed, runlog)` that merges both dicts (with a
+disjointness guard: overlap between the two key sets is an
+AssertionError, so a future contract change cannot merge silently) +
+main now unpacks and merges both. Touch set: `run_t2_retention.py`
+(helper + main unpack/call) + two named regression tests
+(`test_scenario_passing_body_merges_real_run_shapes` — pins both real
+dict shapes, reproduces the exact dispatch-24 `KeyError`, then asserts
+the merged document is schema-valid, `status == "passing"`, free of
+`pending_reason`, hash-complete, and round-trips through
+`render_evidence_bytes`; `test_scenario_passing_body_rejects_key_overlap`)
++ `hw-nightly.yml` (`sudo chmod -R a+rX build/hw hw/tests/evidence`
+before the artifact uploads — the runner user cannot chmod
+container-root-owned files, and `hw/tests/evidence/` added to the
+`build/hw` artifact paths so a *passing* JSON persists) + canonical
+evidence re-issue (new JSON `sha256:cf2d3867…9c7f4`, PLOT
+`75ab2d69…1496`, SVG `c460d076…3d4d`, status stays `pending`).
+Verified untouched: `platform/cortex_m/`, `hw/virtual-bench/firmware/`,
+`fmi2_smoke_slave.c` / `Holdup.mo`, `schemas/`, `hw/tests/oracles/`,
+the `.resc`, the `.repl`, all three scripted models, and `fmi_bridge.py`.
+→ **class check PASSED (platform script/runner → in-lane) → applied.**
+
+*Gate-integrity note:* the sandbox `venv3` had a corrupted `rpds`
+native module, which made `jsonschema` unimportable and caused every
+schema-dependent test to be silently skipped via `importorskip`. The
+venv was rebuilt from the exact CI pins before this cycle's gates; with
+the suite actually running, the new F-35 test immediately caught a
+fixture hex-character bug and the evidence-manifest re-issue caught a
+silent `plot_id` match miss (patched against the real key). Final
+gates: 5/5 checkers PASS; 327 passed, 1 deselected (handover §5.3
+battery) and 585 passed across all of `tests/unit/tools` + the
+retention file; `hw/tests` 43 passed + 9 pre-existing omc errors;
+ledger row `HW-SF-002,…,sim-pending` exact; evidence `pending`.
+
 ## Appendix A — Workspace-reset recovery (provenance note for auditors)
 
 Three (four counting the post-commit re-clone below) times during this
@@ -386,8 +462,16 @@ commit object outright while the worktree files survived untracked;
 recovery used `git reset --mixed FETCH_HEAD` (= `2306a36`) so the
 index re-acquired the tracked files, verified the worktree diff was
 byte-identical to the lost commit (11 files, 492+/70−), recommitted as
-`0aa0b60`, and pushed. Recovery was mechanical, not editorial, every
-time:
+`0aa0b60`, and pushed. A fifth occurrence, during the F-35 turn after
+dispatch 24, rewound the local branch pointer to the merge base
+`8857bfa` again while leaving the worktree content in place; the seven
+in-flight files (runner, tests, workflow, four evidence artifacts) were
+copied aside, `git reset --hard` restored `a91ff75` (= `FETCH_HEAD` =
+origin), and the copies were restored byte-for-byte — after which a
+hash comparison exposed that one file's patch (the renders manifest)
+had silently matched no entry on the first attempt and was re-run
+against the correct `plot_id` key. Recovery was mechanical, not
+editorial, every time:
 
 1. `origin` is the source of truth: fetched
    `refs/heads/arena/01a0cbe2-cancestry` (first `6662659`, then

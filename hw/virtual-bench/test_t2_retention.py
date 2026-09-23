@@ -478,3 +478,60 @@ def test_peripheral_models_reach_machine_via_monitor_scope():
             encoding="utf-8"))
         assert "monitor.Machine" in code, (
             "%s lost its monitor.Machine bus access (F-34)" % name)
+
+
+def test_scenario_passing_body_merges_real_run_shapes():
+    """F-35 (issue #60, dispatch 24): passing_document needs BOTH dicts.
+
+    run_scenario() returns (passed, runlog). Dispatch 24 (run
+    35932082726) reached passing_document for the first time - the
+    live co-sim and the OR-001 ordering invariant had just PASSED -
+    and died with KeyError 'bridge_sha256' because main() passed only
+    `passed` and discarded `runlog`. Pin both real dict shapes, the
+    original failure mode, the merge, and the schema-valid result.
+    """
+    pytest.importorskip("jsonschema")
+    runlog = {
+        "bridge_sha256": "sha256:" + "b" * 64,
+        "elf_sha256": "sha256:" + "e" * 64,
+        "fmu_sha256": "sha256:" + "f" * 64,
+        "trace_sha256": "sha256:" + "c" * 64,
+        "ordering_violation": None,
+        "measured_tools": {"omc": "omc 1.x", "renode": "Renode 1.16.1"},
+    }
+    passed = {
+        "events": {"retention_write_us": 1967, "safe_latch_us": 2100,
+                   "iwdg_fire_us": 3600},
+        "ordering": {"contract": "retention_write < safe_latch < iwdg_fire",
+                     "holds": True},
+        "plant": {"vbat_start_mv": 3299, "vbat_end_mv": 1650,
+                  "or001_max_abs_delta_mv": 0, "tolerance_mv": 1},
+        "retention": {"code": 1163284737,
+                      "preserved_across_iwdg_reset": True},
+    }
+    # The dispatch-24 state: `passed` alone reproduces the crash exactly.
+    with pytest.raises(KeyError, match="bridge_sha256"):
+        runner.passing_document(dict(passed))
+    body = runner.scenario_passing_body(passed, runlog)
+    document = runner.passing_document(body)
+    assert document["status"] == "passing"
+    assert document["pass"] is True
+    assert "pending_reason" not in document
+    assert document["hashes"] == {
+        "elf": runlog["elf_sha256"], "fmu": runlog["fmu_sha256"],
+        "bridge": runlog["bridge_sha256"], "trace": runlog["trace_sha256"]}
+    assert document["events"] == passed["events"]
+    assert document["retention"] == passed["retention"]
+    assert document["ordering"]["holds"] is True
+    assert document["toolchain"]["measured"]["renode"] == "Renode 1.16.1"
+    violations = sorted(_t2_schema().iter_errors(document),
+                        key=lambda error: error.message)
+    assert not violations, [error.message for error in violations]
+    rendered = runner.render_evidence_bytes(document)
+    assert json.loads(rendered) == document
+
+
+def test_scenario_passing_body_rejects_key_overlap():
+    """F-35: the passed/runlog key sets must stay disjoint (fail loud)."""
+    with pytest.raises(AssertionError, match="overlap"):
+        runner.scenario_passing_body({"events": 1}, {"events": 2})
