@@ -32,8 +32,8 @@ on:
       - "schemas/hw/**"
       - "tests/unit/tools/test_check_hw_*.py"
       - "tests/unit/tools/test_fmeda_calculator.py"
-      - "tools/fmeda-calculator.py"
       - "tests/unit/tools/test_check_capella_model.py"
+      - "tools/fmeda-calculator.py"
       - "tests/unit/tools/fixtures/**"
       - "docs/system/mode-fault-state-machine.md"
       - "ci/**"
@@ -49,8 +49,8 @@ on:
       - "schemas/hw/**"
       - "tests/unit/tools/test_check_hw_*.py"
       - "tests/unit/tools/test_fmeda_calculator.py"
-      - "tools/fmeda-calculator.py"
       - "tests/unit/tools/test_check_capella_model.py"
+      - "tools/fmeda-calculator.py"
       - "tests/unit/tools/fixtures/**"
       - "docs/system/mode-fault-state-machine.md"
       - "ci/**"
@@ -172,8 +172,8 @@ jobs:
 
               echo "== 2. Hardware checkers (unit tests, 95% branch coverage gate)"
               python3 -m coverage run --branch \
-                --include=ci/check_hw_traceability.py,ci/check_capella_model.py,ci/check_hw_contracts.py,ci/check_hw_evidence.py,ci/check_hw_wcca.py,tools/fmeda-calculator.py \
-                -m pytest tests/unit/tools/test_check_hw_traceability.py tests/unit/tools/test_check_capella_model.py tests/unit/tools/test_check_hw_contracts.py tests/unit/tools/test_check_hw_evidence.py tests/unit/tools/test_check_hw_wcca.py tests/unit/tools/test_fmeda_calculator.py -q || {
+                --include=ci/check_hw_traceability.py,ci/check_capella_model.py,ci/check_hw_contracts.py,ci/check_hw_evidence.py,ci/check_hw_wcca.py,tools/fmeda-calculator.py,ci/check_hw_reliability_growth.py \
+                -m pytest tests/unit/tools/test_check_hw_traceability.py tests/unit/tools/test_check_capella_model.py tests/unit/tools/test_check_hw_contracts.py tests/unit/tools/test_check_hw_evidence.py tests/unit/tools/test_check_hw_wcca.py tests/unit/tools/test_fmeda_calculator.py tests/unit/tools/test_check_hw_reliability_growth.py -q || {
                 echo "::error::hw-fast gate 2 failed: checker unit tests"
                 exit 1
               }

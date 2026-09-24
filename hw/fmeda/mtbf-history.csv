@@ -1,0 +1,2 @@
+sequence,fmeda_csv_sha256,total_fit,mtbf_hours,pmhf_fit,mean_time_to_sg_violation_hours,spfm_percent,lfm_percent,issue_ref
+1,sha256:1754c9c6c78000008042c0fd41b046f8f35d7803529a4b29ffc2013d9daa41e7,152.0000,6578947.4,36.5345,27371372.0,76.02,91.99,"#56 H-09 initial FMEDA baseline (T0, two-part BOM)"
