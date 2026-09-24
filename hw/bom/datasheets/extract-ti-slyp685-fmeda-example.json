@@ -1,0 +1,238 @@
+{
+  "kind": "datasheet_extract",
+  "schema_version": "0.1.0",
+  "source": {
+    "manufacturer": "Texas Instruments (TI Tech Days presentation, Tomas Urban, Systems Engineering - Automotive Powertrain Systems)",
+    "document_id": "SLYP685, 'Be confident around automotive functional safety' - worked FMEDA example slides 'Example n=1' .. 'Example n=4' and slide 'Example of FS FIT rates acc. to SN29500'",
+    "retrieval_date": "2026-09-24",
+    "source_pdf_hash": null,
+    "source_url": "https://www.ti.com/lit/ml/slyp685/slyp685.pdf"
+  },
+  "note": "H-09 (issue #56) tool-qualification fixture for tools/fmeda-calculator.py (ISO 26262-8 section 13, TCL2 regression; OR-004). The four iterations of the public TI example are fully specified (FIT, failure-mode distribution, safety-goal violation, safety mechanism, diagnostic coverage) and every FIT-level result is reproduced exactly by the calculator. Publication precision disposition: the slide percentages are printed to one decimal; the calculator reproduces 49.5 %, 90.9 % and 50.0 % exactly; for n=3 the slide prints 'LFM = 1-(10/(121-11)) = 90.1 %' although the printed fraction evaluates to 90.9 % (a transcription slip in the source), and for n=4 the slide prints 98.8 % and 84.5 % where half-up rounding of the printed fractions gives 98.9 % and 84.6 % (the source truncated). The regression asserts the printed fractions and FIT sums exactly and the percentages under the documented disposition; it never adjusts the arithmetic to match a typo. The PMHF values on the slides use the source's own simplification PMHF = sum(RF) + sum(MPF,latent), which the calculator reports as 'pmhf_source_simplified_fit' next to the ISO 26262-5 Annex C / ISO 26262-10 forms. Also transcribed: the SN 29500 class values TI tabulates (secondary tabulation) used by hw/bom/fit-database.json. No PDF is retained; source_url is TI's own hosting of the document.",
+  "entries": [
+    {
+      "name": "sensor_fit",
+      "value": 1.0,
+      "unit": "FIT",
+      "condition": "Temperature sensor, 100 % of failure modes violate the safety goal, no safety mechanism (all iterations)",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=1' table row 'sensor': FIT 1, FMD 100 %, violates SG Y, RF 1"
+    },
+    {
+      "name": "mcu_fit",
+      "value": 100.0,
+      "unit": "FIT",
+      "condition": "MCU, 50 % of failure modes violate the safety goal, 50 % do not",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=1' table rows 'MCU': FIT 100, FMD 50 % Y / 50 % N"
+    },
+    {
+      "name": "fan_fit",
+      "value": 10.0,
+      "unit": "FIT",
+      "condition": "Cooling fan, 50 % of failure modes violate the safety goal (n=1..3); in n=4 two redundant fans each 10 FIT with the SG-relevant half becoming multiple-point (MPF)",
+      "source": "publication",
+      "citation": "SLYP685 slides 'Example n=1' .. 'Example n=4' rows 'Fan' / 'Fan 1' / 'Fan 2'"
+    },
+    {
+      "name": "wd_fit",
+      "value": 10.0,
+      "unit": "FIT",
+      "condition": "Watchdog SM1 (n=2..4): 100 % MPF-relevant, no latent-fault mechanism (DC-MPF-L 0 %), 10 FIT latent",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=2': 'WD: 10 FIT, D.C.=90% (see ISO26262-5 D.8)'; table row 'WD' FIT 10, MPF? Y, DC-MPF-L 0 %, MPF-L 10"
+    },
+    {
+      "name": "warning_light_fit",
+      "value": 1.0,
+      "unit": "FIT",
+      "condition": "Warning light (n=3, n=4): not safety related, excluded from all sums",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=3': 'Warning Light 1 FIT, not safety relevant'; table row 'Warn. Light' safety related N"
+    },
+    {
+      "name": "dc_wd_n2",
+      "value": 0.9,
+      "unit": "1",
+      "condition": "Diagnostic coverage of SM1 (watchdog) against the MCU SG-violating failure modes, n=2 and n=3",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=2': DC-SPF 90 % (ISO 26262-5 D.8), RF 5"
+    },
+    {
+      "name": "dc_wd_n4",
+      "value": 0.99,
+      "unit": "1",
+      "condition": "Diagnostic coverage of SM1 against the MCU SG-violating failure modes, n=4",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=4': DC-SPF 99 %, RF 0.5"
+    },
+    {
+      "name": "dc_latent_mcu_n3",
+      "value": 1.0,
+      "unit": "1",
+      "condition": "Latent-fault coverage of the covered MCU share once the warning light informs the driver (n=3, n=4): DC-MPF-L 100 %, MPF-L 0",
+      "source": "publication",
+      "citation": "SLYP685 slides 'Example n=3' and 'Example n=4', row 'MCU' DC-MPF-L 100 %"
+    },
+    {
+      "name": "n1_total_fit",
+      "value": 111.0,
+      "unit": "FIT",
+      "condition": "n=1 total safety-related FIT (1 + 100 + 10)",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=1': Total 111"
+    },
+    {
+      "name": "n1_spf_rf_fit",
+      "value": 56.0,
+      "unit": "FIT",
+      "condition": "n=1 sum of single-point/residual faults (1 + 50 + 5); PMHF printed as 56 FIT",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=1': 'Single-Point Fault Metric=1-(56/111)=49.5%', 'PMHF=56FIT'"
+    },
+    {
+      "name": "n1_spfm_percent",
+      "value": 49.5,
+      "unit": "%",
+      "condition": "n=1 SPFM as printed (one decimal); LFM 'irrelevant' (no multiple-point faults)",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=1'"
+    },
+    {
+      "name": "n2_total_fit",
+      "value": 121.0,
+      "unit": "FIT",
+      "condition": "n=2 total safety-related FIT (111 + 10 watchdog)",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=2': Total 121"
+    },
+    {
+      "name": "n2_spf_rf_fit",
+      "value": 11.0,
+      "unit": "FIT",
+      "condition": "n=2 residual/single-point sum (1 + 5 + 5)",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=2': RF total 11"
+    },
+    {
+      "name": "n2_mpf_latent_fit",
+      "value": 55.0,
+      "unit": "FIT",
+      "condition": "n=2 latent multiple-point sum (45 covered MCU share without latent coverage + 10 watchdog)",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=2': MPF-L total 55"
+    },
+    {
+      "name": "n2_spfm_percent",
+      "value": 90.9,
+      "unit": "%",
+      "condition": "n=2 SPFM = 1 - 11/121 as printed",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=2': 'Single-Point Fault Metric=1-(11/121)=90.9%'"
+    },
+    {
+      "name": "n2_lfm_percent",
+      "value": 50.0,
+      "unit": "%",
+      "condition": "n=2 LFM = 1 - 55/(121-11) as printed",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=2': 'Latent Fault Metric=1-(55/(121-11))=50%'"
+    },
+    {
+      "name": "n2_pmhf_source_fit",
+      "value": 66.0,
+      "unit": "FIT",
+      "condition": "n=2 PMHF under the source's simplification RF + MPF-L = 11 + 55",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=2': 'PMHF=11+55=66FIT'"
+    },
+    {
+      "name": "n3_mpf_latent_fit",
+      "value": 10.0,
+      "unit": "FIT",
+      "condition": "n=3 latent multiple-point sum (watchdog only; covered MCU share perceived via the warning light)",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=3': MPF-L total 10"
+    },
+    {
+      "name": "n3_lfm_printed_percent",
+      "value": 90.1,
+      "unit": "%",
+      "condition": "n=3 LFM as PRINTED on the slide; the printed fraction 1 - 10/(121-11) evaluates to 90.9 % (source transcription slip, see note)",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=3': 'Latent Fault Metric=1-(10/(121-11))=90.1%'"
+    },
+    {
+      "name": "n3_pmhf_source_fit",
+      "value": 21.0,
+      "unit": "FIT",
+      "condition": "n=3 PMHF under the source's simplification RF + MPF-L = 11 + 10",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=3': 'PMHF=11+10=21FIT'"
+    },
+    {
+      "name": "n4_total_fit",
+      "value": 131.0,
+      "unit": "FIT",
+      "condition": "n=4 total safety-related FIT (1 + 100 + 10 + 10 + 10)",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=4': Total 131"
+    },
+    {
+      "name": "n4_spf_rf_fit",
+      "value": 1.5,
+      "unit": "FIT",
+      "condition": "n=4 residual/single-point sum (1 sensor + 0.5 MCU residual at DC 99 %)",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=4': RF total 1.5"
+    },
+    {
+      "name": "n4_mpf_latent_fit",
+      "value": 20.0,
+      "unit": "FIT",
+      "condition": "n=4 latent multiple-point sum (5 + 5 redundant fans + 10 watchdog)",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=4': MPF-L total 20"
+    },
+    {
+      "name": "n4_spfm_printed_percent",
+      "value": 98.8,
+      "unit": "%",
+      "condition": "n=4 SPFM = 1 - 1.5/131 as PRINTED (truncated; half-up rounding gives 98.9 %)",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=4': 'Single-Point Fault Metric=1-(1.5/131)=98.8%'"
+    },
+    {
+      "name": "n4_lfm_printed_percent",
+      "value": 84.5,
+      "unit": "%",
+      "condition": "n=4 LFM = 1 - 20/(131-1.5) as PRINTED (truncated; half-up rounding gives 84.6 %)",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=4': 'Latent Fault Metric=1-(20/(131-1.5))=84.5%'"
+    },
+    {
+      "name": "n4_pmhf_source_fit",
+      "value": 21.5,
+      "unit": "FIT",
+      "condition": "n=4 PMHF under the source's simplification RF + MPF-L = 1.5 + 20",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example n=4': 'PMHF=1.5+20=21.5FIT'"
+    },
+    {
+      "name": "sn29500_class_capacitor_fit_max",
+      "value": 2.0,
+      "unit": "FIT",
+      "condition": "Upper value of the 'Resistors, Capacitors, Diodes: 1-2 FIT' base-failure-rate class TI tabulates for SN 29500 (secondary tabulation; stress factors not applied)",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example of FS FIT rates acc. to SN29500', row 'Resistors, Capacitors, Diodes 1-2FIT'"
+    },
+    {
+      "name": "sn29500_class_mcu_fit",
+      "value": 150.0,
+      "unit": "FIT",
+      "condition": "'MCUs 150 FIT' base-failure-rate class TI tabulates for SN 29500 (secondary tabulation; base rate, soft errors of SRAM not included)",
+      "source": "publication",
+      "citation": "SLYP685 slide 'Example of FS FIT rates acc. to SN29500', row 'MCUs 150FIT' and the note 'These are Base Failure Rates'"
+    }
+  ]
+}

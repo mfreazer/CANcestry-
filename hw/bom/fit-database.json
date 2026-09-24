@@ -1,0 +1,58 @@
+{
+  "kind": "fit_database",
+  "schema_version": "0.1.0",
+  "baseline": "H-09 (issue #56) curated base failure rates for the H-Phase 1 BOM baseline (hw/bom/bom.json PRT-001, PRT-002). Rates are SN 29500 base-failure-rate classes as tabulated in a public secondary source (TI SLYP685); the primary SN 29500-2/-4 table lookup with the temperature and voltage stress factors, and vendor FMEDA data for the selected MCU, replace these entries at H-02 vendor selection. Every entry is traceable to a schema-validated extract; no rate is a silent number (HwAGENTS.md rule 2). Requirements: HW-NF-004, HW-SF-005.",
+  "standards": [
+    {
+      "standard_id": "SN 29500",
+      "title": "Siemens SN 29500 'Failure rates of components' (SN 29500-2 integrated circuits; SN 29500-4 passive components: capacitors) - base failure rates at reference conditions",
+      "access": "public-secondary",
+      "citation": "Class values as tabulated by Texas Instruments, SLYP685 slide 'Example of FS FIT rates acc. to SN29500' (hw/bom/datasheets/extract-ti-slyp685-fmeda-example.json); the licensed SN 29500 parts themselves are not retained",
+      "source_url": "https://www.ti.com/lit/ml/slyp685/slyp685.pdf"
+    },
+    {
+      "standard_id": "IEC TR 62380",
+      "title": "IEC TR 62380:2004 Reliability data handbook - Universal model for reliability prediction of electronics components, PCBs and equipment (withdrawn 2015; successor IEC 61709)",
+      "access": "licensed",
+      "citation": "Declared for completeness: no entry of this database is curated from IEC TR 62380 yet; it is the fallback source for component classes SN 29500 does not tabulate (recorded so the issue #56 'standards used' statement is exact)"
+    },
+    {
+      "standard_id": "Vendor AEC-Q data",
+      "title": "Manufacturer AEC-Q100/Q200 qualification reports and FIT/FMEDA data for the selected parts",
+      "access": "licensed",
+      "citation": "Declared for completeness: no vendor FIT data exists before H-02 vendor selection; when it does, it supersedes the SN 29500 class value of the affected entry (confidence vendor-data)"
+    }
+  ],
+  "entries": [
+    {
+      "fit_id": "FIT-001",
+      "part_id": "PRT-001",
+      "category": "mcu",
+      "component_class": "Microcontroller, CMOS (SN 29500 class 'MCUs')",
+      "fit_rate_per_1e9_hours": 150.0,
+      "standard": "SN 29500",
+      "table_or_section": "SN 29500-2 integrated circuits, microcontroller class as tabulated in SLYP685 ('MCUs 150 FIT'); primary table row pending",
+      "reference_conditions": "Base failure rate at the standard's reference conditions; temperature/voltage stress factors not applied; SRAM soft-error rate not included (SLYP685 note: base failure rates)",
+      "confidence": "secondary-tabulation",
+      "citation": "hw/bom/datasheets/extract-ti-slyp685-fmeda-example.json entry sn29500_class_mcu_fit",
+      "source_extract": "hw/bom/datasheets/extract-ti-slyp685-fmeda-example.json",
+      "source_entry": "sn29500_class_mcu_fit",
+      "note": "Superseded at H-02 by the STMicroelectronics STM32G4 functional-safety FIT/FMEDA data for the selected part number (vendor-data), which also supplies the failure-mode distribution replacing the FMEDA assumptions."
+    },
+    {
+      "fit_id": "FIT-002",
+      "part_id": "PRT-002",
+      "category": "capacitor",
+      "component_class": "Capacitor (SN 29500 class 'Resistors, Capacitors, Diodes'), upper class value",
+      "fit_rate_per_1e9_hours": 2.0,
+      "standard": "SN 29500",
+      "table_or_section": "SN 29500-4 passive components, capacitors, as tabulated in SLYP685 ('Resistors, Capacitors, Diodes 1-2 FIT'); upper value taken; primary table row pending",
+      "reference_conditions": "Base failure rate at the standard's reference conditions; voltage-stress and temperature factors not applied (the WCCA operating point 0.54 of rated voltage at 85 degC is below the SN 29500 reference stress for a Grade 1 part)",
+      "confidence": "secondary-tabulation",
+      "citation": "hw/bom/datasheets/extract-ti-slyp685-fmeda-example.json entry sn29500_class_capacitor_fit_max",
+      "source_extract": "hw/bom/datasheets/extract-ti-slyp685-fmeda-example.json",
+      "source_entry": "sn29500_class_capacitor_fit_max",
+      "note": "Superseded at H-02 by the SN 29500-4 primary row for the selected dielectric (class-2 ceramic or polymer) with stress factors, or by vendor AEC-Q200 FIT data."
+    }
+  ]
+}

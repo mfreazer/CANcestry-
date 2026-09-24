@@ -1,0 +1,126 @@
+{
+  "kind": "datasheet_extract",
+  "schema_version": "0.1.0",
+  "source": {
+    "manufacturer": "ISO (International Organization for Standardization)",
+    "document_id": "ISO 26262-5:2018 Road vehicles - Functional safety - Part 5: Product development at the hardware level; 8.4.5 Table 4 (SPFM targets), 8.4.6 Table 5 (LFM targets), 9.4.2.2 Table 6 (PMHF targets), Annex C equations C.1..C.8, Annex B fault classification",
+    "retrieval_date": "2026-09-24",
+    "source_pdf_hash": null,
+    "source_url": "https://www.iso.org/standard/68385.html"
+  },
+  "note": "H-09 (issue #56) target-value extract for docs/hw/fmeda.md and tools/fmeda-calculator.py (OR-004). The licensed standard is not retained in the repository (source_pdf_hash null; source_url is the ISO catalogue page). The target values below are the widely published Table 4/5/6 values, corroborated by public secondary sources cited in the tool-qualification record (TI SLYP685 slide 'Hardware metrics'; Chalmers 2023 thesis sections 4.4.2-4.4.4). Citation disposition (issue #56 wording): Annex D of ISO 26262-5:2018 supplies the diagnostic-coverage classes (low 60 % / medium 90 % / high 99 %, Table D.1 and the per-element Tables D.2..D.14); the standard's worked SPFM/LFM example is Annex E (Table E.1) and the PMHF example is Annex F. Table E.1 row data has NOT been transcribed from a licensed copy and is therefore not part of the regression; this is the declared TCL2 validation gap of the fmeda tool. Project note: issue #56 sets a stricter PMHF target of 1e-8 /h for the ASIL-B alignment; Table 6 assigns 1e-8 /h to ASIL D and 1e-7 /h to ASIL B and C - both are reported.",
+  "entries": [
+    {
+      "name": "spfm_target_asil_b",
+      "value": 90.0,
+      "unit": "%",
+      "condition": "Single-point fault metric target, ASIL B (ASIL C 97 %, ASIL D 99 %)",
+      "source": "standard",
+      "citation": "ISO 26262-5:2018 8.4.5 Table 4"
+    },
+    {
+      "name": "spfm_target_asil_c",
+      "value": 97.0,
+      "unit": "%",
+      "condition": "Single-point fault metric target, ASIL C",
+      "source": "standard",
+      "citation": "ISO 26262-5:2018 8.4.5 Table 4"
+    },
+    {
+      "name": "spfm_target_asil_d",
+      "value": 99.0,
+      "unit": "%",
+      "condition": "Single-point fault metric target, ASIL D",
+      "source": "standard",
+      "citation": "ISO 26262-5:2018 8.4.5 Table 4"
+    },
+    {
+      "name": "lfm_target_asil_b",
+      "value": 60.0,
+      "unit": "%",
+      "condition": "Latent-fault metric target, ASIL B (ASIL C 80 %, ASIL D 90 %)",
+      "source": "standard",
+      "citation": "ISO 26262-5:2018 8.4.6 Table 5"
+    },
+    {
+      "name": "lfm_target_asil_c",
+      "value": 80.0,
+      "unit": "%",
+      "condition": "Latent-fault metric target, ASIL C",
+      "source": "standard",
+      "citation": "ISO 26262-5:2018 8.4.6 Table 5"
+    },
+    {
+      "name": "lfm_target_asil_d",
+      "value": 90.0,
+      "unit": "%",
+      "condition": "Latent-fault metric target, ASIL D",
+      "source": "standard",
+      "citation": "ISO 26262-5:2018 8.4.6 Table 5"
+    },
+    {
+      "name": "pmhf_target_asil_b_per_hour",
+      "value": 1e-07,
+      "unit": "1/h",
+      "condition": "PMHF target value, ASIL B (< 1e-7 /h = 100 FIT); ASIL C identical",
+      "source": "standard",
+      "citation": "ISO 26262-5:2018 9.4.2.2 Table 6"
+    },
+    {
+      "name": "pmhf_target_asil_c_per_hour",
+      "value": 1e-07,
+      "unit": "1/h",
+      "condition": "PMHF target value, ASIL C (< 1e-7 /h = 100 FIT); identical to ASIL B",
+      "source": "standard",
+      "citation": "ISO 26262-5:2018 9.4.2.2 Table 6"
+    },
+    {
+      "name": "pmhf_target_asil_d_per_hour",
+      "value": 1e-08,
+      "unit": "1/h",
+      "condition": "PMHF target value, ASIL D (< 1e-8 /h = 10 FIT); adopted by issue #56 as the stricter project target for the ASIL-B alignment",
+      "source": "standard",
+      "citation": "ISO 26262-5:2018 9.4.2.2 Table 6; issue #56 project target"
+    },
+    {
+      "name": "pmhf_project_target_per_hour",
+      "value": 1e-08,
+      "unit": "1/h",
+      "condition": "Project PMHF target declared by issue #56 for the ASIL-B alignment (stricter than Table 6 ASIL B)",
+      "source": "hwers",
+      "citation": "issue #56 H-09 body, commit 2 ('PMHF < 1e-8 for ASIL-B'); HwRS HW-SF-005 (ASIL-B alignment)"
+    },
+    {
+      "name": "dc_class_low",
+      "value": 60.0,
+      "unit": "%",
+      "condition": "Diagnostic coverage class 'low'",
+      "source": "standard",
+      "citation": "ISO 26262-5:2018 Annex D, Table D.1 (DC classes low/medium/high)"
+    },
+    {
+      "name": "dc_class_medium",
+      "value": 90.0,
+      "unit": "%",
+      "condition": "Diagnostic coverage class 'medium'",
+      "source": "standard",
+      "citation": "ISO 26262-5:2018 Annex D, Table D.1"
+    },
+    {
+      "name": "dc_class_high",
+      "value": 99.0,
+      "unit": "%",
+      "condition": "Diagnostic coverage class 'high'",
+      "source": "standard",
+      "citation": "ISO 26262-5:2018 Annex D, Table D.1"
+    },
+    {
+      "name": "lifetime_hours_default",
+      "value": 100000.0,
+      "unit": "h",
+      "condition": "Default vehicle operating lifetime T_lifetime used by tools/fmeda-calculator.py for the dual-point PMHF term (explicit --lifetime-hours parameter; the ISO 26262-10 simplified PMHF form multiplies the detected and latent multiple-point rates by the lifetime)",
+      "source": "hwers",
+      "citation": "tools/fmeda-calculator.py default, consistent with the Chalmers 2023 fixture (extract-chalmers-2023-fmeda-example.json lifetime_hours)"
+    }
+  ]
+}

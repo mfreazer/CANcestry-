@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://cancestry.dev/schemas/hw/hw-bom-0.1.0.schema.json",
   "title": "CANcestry hardware BOM / datasheet parameter extract (v0.1.0)",
-  "description": "Hardware tree schema (issue #33, H-01; HwAGENTS.md rule 2, HW-PLAN §7/§9). One of two document kinds, both schema-validated: (1) kind=bom: the BOM extract under hw/bom/ - one entry per part candidate with the mandatory fields part number, manufacturer, AEC-Q status, lifecycle, FIT source citation, datasheet_ref and cited parameters; (2) kind=datasheet_extract: a parameter extract under hw/bom/datasheets/ citing manufacturer, document ID and retrieval date. Every parameter carries a source discriminator: hwers (value fixed by the HwRS derivation), datasheet (value from the cited document) or budget (engineering budget pending BOM selection - never a silent value). Numbers without an extract are defects (HwAGENTS.md rule 2). H-09 (issue #56): WCCA-derived parameters use source=analysis and citation_type=wcca_analysis.",
+  "description": "Hardware tree schema (issue #33, H-01; HwAGENTS.md rule 2, HW-PLAN §7/§9). One of two document kinds, both schema-validated: (1) kind=bom: the BOM extract under hw/bom/ - one entry per part candidate with the mandatory fields part number, manufacturer, AEC-Q status, lifecycle, FIT source citation, datasheet_ref and cited parameters; (2) kind=datasheet_extract: a parameter extract under hw/bom/datasheets/ citing manufacturer, document ID and retrieval date. Every parameter carries a source discriminator: hwers (value fixed by the HwRS derivation), datasheet (value from the cited document) or budget (engineering budget pending BOM selection - never a silent value). Numbers without an extract are defects (HwAGENTS.md rule 2). H-09 (issue #56): parameters may be grounded in the WCCA (source=analysis, citation_type=wcca_analysis, citing a line-anchored WCCA-R-nnn entry of docs/hw/wcca-derating.md), and fit_source gains status=curated (curated FIT rate from hw/bom/fit-database.json with the standard, rate and FIT-nnn entry recorded).",
   "oneOf": [
     {
       "$ref": "#/$defs/bom"
@@ -54,19 +54,52 @@
         "status": {
           "enum": [
             "tbd",
-            "cited"
+            "cited",
+            "curated"
           ]
         },
         "citation": {
           "type": "string",
           "minLength": 1,
-          "description": "For status=cited: the FIT database entry and its source. For status=tbd: the explicit reason and where the data will be curated (hw/bom/fit-database.csv, H-02)."
+          "description": "For status=cited: the FIT database entry and its source. For status=curated (H-09): the FIT-nnn entry of hw/bom/fit-database.json plus the standard/table it was curated from. For status=tbd: the explicit reason and where the data will be curated (hw/bom/fit-database.json)."
         },
         "rate_per_1e9_hours": {
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "description": "FIT rate (failures per 1e9 device-hours) as curated in hw/bom/fit-database.json; mandatory for status=curated."
+        },
+        "standard": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Standard or data source the FIT rate was curated from (e.g. 'SN 29500', 'IEC TR 62380', vendor AEC-Q data); must match a standards[].standard_id of hw/bom/fit-database.json."
+        },
+        "database_entry": {
+          "type": "string",
+          "pattern": "^FIT-\\d{3}$",
+          "description": "fit_id of the matching entry in hw/bom/fit-database.json (ci/check_hw_contracts.py cross-checks rate, standard and part_id)."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "curated"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "required": [
+              "standard",
+              "rate_per_1e9_hours",
+              "database_entry"
+            ]
+          }
+        }
+      ]
     },
     "parameter": {
       "type": "object",
@@ -102,7 +135,8 @@
             "datasheet",
             "budget",
             "standard",
-            "analysis"
+            "analysis",
+            "publication"
           ]
         },
         "citation_type": {
@@ -111,12 +145,12 @@
             "budget",
             "wcca_analysis"
           ],
-          "description": "Whether a provisional parameter is grounded in a vendor datasheet or an engineering budget. Requirement-bound HwRS values use source=hwers and may omit this field."
+          "description": "Whether a provisional parameter is grounded in a vendor datasheet, an engineering budget, or the WCCA (wcca_analysis: value bounded by a line-anchored WCCA-R-nnn entry of docs/hw/wcca-derating.md, H-09). Requirement-bound HwRS values use source=hwers and may omit this field."
         },
         "citation": {
           "type": "string",
           "minLength": 1,
-          "description": "HwRS requirement + HwRS version for source=hwers; document + table for source=datasheet; rationale + follow-up for source=budget."
+          "description": "HwRS requirement + HwRS version for source=hwers; document + table for source=datasheet; rationale + follow-up for source=budget; 'docs/hw/wcca-derating.md WCCA-R-nnn' for source=analysis."
         }
       }
     },
