@@ -20,6 +20,19 @@ claim, not a safety claim, and it promotes nothing (HwAGENTS.md rules
   main, head `6662659`, MERGEABLE, all PR checks green at stop)
 - Continuity record: `docs/hw/t2-bringup-handover.md`
 
+> **CURRENT STATUS (supersedes the stop banner above; the banner is
+> retained as provenance of criterion 1).** Re-budget 21–30 executed
+> as dispatches 21–27: the **success criterion (memo §4) was MET at
+> dispatch 25 and re-proven whole, fully green, at dispatch 27**
+> (run `35937190878` @ `51bd4c3`, first `success` conclusion — live
+> co-sim, OR-001 invariant held, RUN-2 byte-identical evidence,
+> suite 46/46, all artifacts persisted). Fixes F-32…F-37 applied;
+> 25 cycles used, 28–30 remain (Lead SE decision), hard stop 30.
+> See also: `t2-bringup-handover.md` (state/next), and the two
+> reflection docs added at green: **`t2-bringup-lessons-learned.md`**
+> (debugging skill/methodology for fail-closed CI bring-ups) and
+> **`t2-bringup-postmortem.md`** (retrospective).
+
 ---
 
 ## 1. Outcome (one paragraph)

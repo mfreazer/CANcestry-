@@ -106,6 +106,11 @@ session).
 This document is internal continuity documentation for the bring-up. It is
 not a safety claim and promotes nothing (HwAGENTS.md rules 13/14).
 
+**See also:** `t2-bringup-report.md` (chronological facts),
+`t2-bringup-lessons-learned.md` (the debugging skill — loop, fault
+taxonomy, forensics order, pre-push checklist), and
+`t2-bringup-postmortem.md` (retrospective at green).
+
 ---
 
 ## 1. Mission, constraints, and the stop criteria
