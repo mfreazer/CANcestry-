@@ -1,0 +1,59 @@
+{
+  "kind": "datasheet_extract",
+  "schema_version": "0.1.0",
+  "source": {
+    "manufacturer": "STMicroelectronics",
+    "document_id": "DS12787, STM32G474xx datasheet (absolute maximum ratings: voltage characteristics; general operating conditions: temperature range by ordering suffix)",
+    "retrieval_date": "2026-09-24",
+    "source_pdf_hash": null,
+    "source_url": "https://www.st.com/resource/en/datasheet/stm32g474rc.pdf"
+  },
+  "note": "H-09 (issue #56) WCCA input extract for PRT-001 (HW-NF-002, HW-NF-003). Values are the STM32G4 family ratings as recorded by the System Engineer for the T0 WCCA; the exact DS12787 table and page numbers are re-verified during H-02 BOM curation, exactly as extract-mcu-vbat.json (OR-006/OR-007/OR-008 posture). No source PDF is retained: source_url is a fallback, not a verified PDF digest (H-04 provenance contract). The ordering suffix (6/7/3) is not selected yet; the WCCA (WCCA-R-003) requires suffix 7 or better at 85 degC ambient.",
+  "entries": [
+    {
+      "name": "VDD_abs_max",
+      "value": 4.0,
+      "unit": "V",
+      "condition": "Absolute maximum rating VDD - VSS (external main supply); stress rating, not an operating condition",
+      "source": "datasheet",
+      "citation_type": "datasheet",
+      "citation": "DS12787, Absolute maximum ratings, 'Voltage characteristics' table, VDD - VSS max 4.0 V (table/page re-verification pending, H-02)"
+    },
+    {
+      "name": "VBAT_abs_max",
+      "value": 4.0,
+      "unit": "V",
+      "condition": "Absolute maximum rating VBAT - VSS (backup-domain supply pin); stress rating",
+      "source": "datasheet",
+      "citation_type": "datasheet",
+      "citation": "DS12787, Absolute maximum ratings, 'Voltage characteristics' table, VBAT - VSS max 4.0 V (table/page re-verification pending, H-02)"
+    },
+    {
+      "name": "VDD_op_max",
+      "value": 3.6,
+      "unit": "V",
+      "condition": "Recommended operating maximum of VDD (general operating conditions, VDD 1.71 V to 3.6 V)",
+      "source": "datasheet",
+      "citation_type": "datasheet",
+      "citation": "DS12787, 'General operating conditions' table, VDD standard operating voltage max 3.6 V (table/page re-verification pending, H-02)"
+    },
+    {
+      "name": "TJ_max_suffix6",
+      "value": 105.0,
+      "unit": "degC",
+      "condition": "Maximum junction temperature, ordering suffix 6 (ambient -40 to 85 degC)",
+      "source": "datasheet",
+      "citation_type": "datasheet",
+      "citation": "DS12787, 'General operating conditions' / ordering information temperature range 6: -40 to 85 degC ambient, 105 degC junction (table/page re-verification pending, H-02)"
+    },
+    {
+      "name": "TJ_max_suffix7",
+      "value": 125.0,
+      "unit": "degC",
+      "condition": "Maximum junction temperature, ordering suffix 7 (ambient -40 to 105 degC); grade required by WCCA-R-003",
+      "source": "datasheet",
+      "citation_type": "datasheet",
+      "citation": "DS12787, 'General operating conditions' / ordering information temperature range 7: -40 to 105 degC ambient, 125 degC junction (table/page re-verification pending, H-02)"
+    }
+  ]
+}

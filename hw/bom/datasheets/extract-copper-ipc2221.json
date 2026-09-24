@@ -1,0 +1,63 @@
+{
+  "kind": "datasheet_extract",
+  "schema_version": "0.1.0",
+  "source": {
+    "manufacturer": "IEC / IPC (International Annealed Copper Standard, IEC 60028; IPC-2221 Generic Standard on Printed Board Design)",
+    "document_id": "IEC 60028 (IACS reference resistivity and temperature coefficient of annealed copper); IPC-2221, external-conductor current-carrying-capacity formula I = k * dT^0.44 * A^0.725 (k = 0.048 external, A in mil^2)",
+    "retrieval_date": "2026-09-24",
+    "source_pdf_hash": null,
+    "source_url": "https://standardclarity.com/standards/ipc-2221/"
+  },
+  "note": "H-09 (issue #56) physical-constant extract for the charge-path conductor WCCA (WCCA-R-001, WCCA-006; HW-NF-003 conductor rule, HW-FR-009). The IACS values (1/58 ohm mm^2/m = 1.7241e-8 ohm m at 20 degC, alpha20 = 0.00393 /K) and the IPC-2221 empirical formula constants are public reference data reproduced by many secondary sources; neither licensed standard is retained in the repository, so source_pdf_hash is null and source_url is a public fallback that reproduces the IPC-2221 formula (H-04 provenance contract). The formula is an empirical curve fit (MIL-STD-275 data); it is used here as the rated-maximum (ampacity) basis only.",
+  "entries": [
+    {
+      "name": "rho_Cu_20C",
+      "value": 1.7241e-08,
+      "unit": "ohm m",
+      "condition": "Volume resistivity of annealed copper at 20 degC, 100 % IACS (1/58 ohm mm^2/m)",
+      "source": "standard",
+      "citation": "IEC 60028 / International Annealed Copper Standard: 0.017241 ohm mm^2/m at 20 degC"
+    },
+    {
+      "name": "alpha_Cu_20C",
+      "value": 0.00393,
+      "unit": "1/K",
+      "condition": "Temperature coefficient of resistance of annealed copper referred to 20 degC",
+      "source": "standard",
+      "citation": "IEC 60028 / International Annealed Copper Standard: alpha20 = 0.00393 /K"
+    },
+    {
+      "name": "ipc2221_k_external",
+      "value": 0.048,
+      "unit": "1",
+      "condition": "IPC-2221 layer constant for external conductors (0.024 internal)",
+      "source": "standard",
+      "citation": "IPC-2221, conductor current-carrying capacity, external-layer constant k = 0.048 (public reproduction at source_url)"
+    },
+    {
+      "name": "ipc2221_exp_dT",
+      "value": 0.44,
+      "unit": "1",
+      "condition": "IPC-2221 temperature-rise exponent b",
+      "source": "standard",
+      "citation": "IPC-2221, I = k * dT^0.44 * A^0.725"
+    },
+    {
+      "name": "ipc2221_exp_A",
+      "value": 0.725,
+      "unit": "1",
+      "condition": "IPC-2221 cross-section exponent c (A in mil^2)",
+      "source": "standard",
+      "citation": "IPC-2221, I = k * dT^0.44 * A^0.725"
+    },
+    {
+      "name": "I_trace_ampacity_10K",
+      "value": 0.999,
+      "unit": "A",
+      "condition": "Computed IPC-2221 external ampacity of the WCCA-A-005 minimum trace (0.3 mm x 35 um = 16.275 mil^2) at 10 K rise: 0.048 * 10^0.44 * 16.275^0.725 = 0.999 A; rated-maximum basis of WCCA-006",
+      "source": "analysis",
+      "citation_type": "wcca_analysis",
+      "citation": "docs/hw/wcca-derating.md WCCA-R-004 (computed from the IPC-2221 constants above and the WCCA-A-005 trace allowance)"
+    }
+  ]
+}

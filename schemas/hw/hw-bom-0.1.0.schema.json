@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://cancestry.dev/schemas/hw/hw-bom-0.1.0.schema.json",
   "title": "CANcestry hardware BOM / datasheet parameter extract (v0.1.0)",
-  "description": "Hardware tree schema (issue #33, H-01; HwAGENTS.md rule 2, HW-PLAN §7/§9). One of two document kinds, both schema-validated: (1) kind=bom: the BOM extract under hw/bom/ - one entry per part candidate with the mandatory fields part number, manufacturer, AEC-Q status, lifecycle, FIT source citation, datasheet_ref and cited parameters; (2) kind=datasheet_extract: a parameter extract under hw/bom/datasheets/ citing manufacturer, document ID and retrieval date. Every parameter carries a source discriminator: hwers (value fixed by the HwRS derivation), datasheet (value from the cited document) or budget (engineering budget pending BOM selection - never a silent value). Numbers without an extract are defects (HwAGENTS.md rule 2).",
+  "description": "Hardware tree schema (issue #33, H-01; HwAGENTS.md rule 2, HW-PLAN §7/§9). One of two document kinds, both schema-validated: (1) kind=bom: the BOM extract under hw/bom/ - one entry per part candidate with the mandatory fields part number, manufacturer, AEC-Q status, lifecycle, FIT source citation, datasheet_ref and cited parameters; (2) kind=datasheet_extract: a parameter extract under hw/bom/datasheets/ citing manufacturer, document ID and retrieval date. Every parameter carries a source discriminator: hwers (value fixed by the HwRS derivation), datasheet (value from the cited document) or budget (engineering budget pending BOM selection - never a silent value). Numbers without an extract are defects (HwAGENTS.md rule 2). H-09 (issue #56): WCCA-derived parameters use source=analysis and citation_type=wcca_analysis.",
   "oneOf": [
     {
       "$ref": "#/$defs/bom"
@@ -101,13 +101,15 @@
             "hwers",
             "datasheet",
             "budget",
-            "standard"
+            "standard",
+            "analysis"
           ]
         },
         "citation_type": {
           "enum": [
             "datasheet",
-            "budget"
+            "budget",
+            "wcca_analysis"
           ],
           "description": "Whether a provisional parameter is grounded in a vendor datasheet or an engineering budget. Requirement-bound HwRS values use source=hwers and may omit this field."
         },

@@ -6,13 +6,13 @@
 cancestry-provenance
 plot_id=pulse_5a_001
 plot_version=0.1.0
-plot_data_hash=sha256:cda4b0c24cd9a437d32ae33578571eb2ff91b33c9a00063c46cad96433403a39
+plot_data_hash=sha256:10e899d47bde69f57936c005347ffc739c2fdbcb7bb18d845721a433a6a61125
 status=pending
 method=virtual_bench
 credibility_level=CL0
 provisional=true
 source_evidence_path=hw/tests/evidence/pulse_5a_001.json
-source_evidence_hash=sha256:6ea4ab0af096152919ded67bb3158ec3779a0cab3c27b698f588de93988cb8a1
+source_evidence_hash=sha256:6125ae4b20035f55e2c24023468488aafb1b2b84fbb0fd00bffd1f41da83e4fc
 oracle_id=OR-002
 renderer_tool=cancestry-render-modelica
 renderer_tool_version=0.1.0
@@ -63,9 +63,9 @@ generated_at=2026-09-21T00:00:00Z
 </g>
 <text x="24" y="521" font-family="DejaVu Sans Mono, monospace" font-size="11">EVIDENCE  pulse_5a_001@0.1.0</text>
 <text x="24" y="536" font-family="DejaVu Sans Mono, monospace" font-size="11">STATUS  pending(virtual_bench,CL0,provisional)</text>
-<text x="24" y="551" font-family="DejaVu Sans Mono, monospace" font-size="11">PLOT-DATA  sha256:cda4b0c24cd9a437d32ae33578571eb2ff91b33c9a00063c46cad96433403a39</text>
+<text x="24" y="551" font-family="DejaVu Sans Mono, monospace" font-size="11">PLOT-DATA  sha256:10e899d47bde69f57936c005347ffc739c2fdbcb7bb18d845721a433a6a61125</text>
 <text x="24" y="566" font-family="DejaVu Sans Mono, monospace" font-size="11">ORACLE  OR-002</text>
 <text x="24" y="581" font-family="DejaVu Sans Mono, monospace" font-size="11">RENDERER  cancestry-render-modelica 0.1.0</text>
-<text x="24" y="596" font-family="DejaVu Sans Mono, monospace" font-size="11">SOURCE  hw/tests/evidence/pulse_5a_001.json sha256:6ea4ab0af096152919ded67bb3158ec3779a0cab3c27b698f588de93988cb8a1</text>
+<text x="24" y="596" font-family="DejaVu Sans Mono, monospace" font-size="11">SOURCE  hw/tests/evidence/pulse_5a_001.json sha256:6125ae4b20035f55e2c24023468488aafb1b2b84fbb0fd00bffd1f41da83e4fc</text>
 <text x="24" y="611" font-family="DejaVu Sans Mono, monospace" font-size="11">GENERATED  2026-09-21T00:00:00Z</text>
 </svg>

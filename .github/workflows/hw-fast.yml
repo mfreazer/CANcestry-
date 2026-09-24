@@ -5,6 +5,7 @@
 # from ci/docker/ (OpenModelica + FMPy + Python):
 #
 #   1. schema validation        (software + hardware schema trees)
+#   1.6 WCCA + derating gate    (H-09: ci/check_hw_wcca.py)
 #   2. HwRS parser + ledger     (unit tests, 100% coverage gate)
 #   3. Modelica compile -> FMU  (omc, headless)
 #   4. FMU oracle test          (FMPy vs OR-001, schema-declared tolerance)
@@ -153,10 +154,16 @@ jobs:
               # JSON is authoritative; emit the legacy CSV before the ledger gate.
               python3 ci/check_hw_contracts.py . --export
 
+              echo "== 1.6. WCCA / derating gate (HW-NF-002/HW-NF-003, H-09)"
+              python3 ci/check_hw_wcca.py --root . || {
+                echo "::error::hw-fast gate 1.6 failed: WCCA derating ratio above threshold, unregistered waiver or generated-table drift"
+                exit 1
+              }
+
               echo "== 2. Hardware checkers (unit tests, 95% branch coverage gate)"
               python3 -m coverage run --branch \
-                --include=ci/check_hw_traceability.py,ci/check_capella_model.py,ci/check_hw_contracts.py,ci/check_hw_evidence.py \
-                -m pytest tests/unit/tools/test_check_hw_traceability.py tests/unit/tools/test_check_capella_model.py tests/unit/tools/test_check_hw_contracts.py tests/unit/tools/test_check_hw_evidence.py -q || {
+                --include=ci/check_hw_traceability.py,ci/check_capella_model.py,ci/check_hw_contracts.py,ci/check_hw_evidence.py,ci/check_hw_wcca.py \
+                -m pytest tests/unit/tools/test_check_hw_traceability.py tests/unit/tools/test_check_capella_model.py tests/unit/tools/test_check_hw_contracts.py tests/unit/tools/test_check_hw_evidence.py tests/unit/tools/test_check_hw_wcca.py -q || {
                 echo "::error::hw-fast gate 2 failed: checker unit tests"
                 exit 1
               }
