@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Tool Qualification Plan and Evidence |
-| **Version** | 0.2.8 |
-| **Status** | Draft — H-09, pending QA and Human Reviewer approval |
+| **Version** | 0.2.9 |
+| **Status** | Draft — H-09/H-10, pending QA and Human Reviewer approval |
 | **Owner** | System Engineer |
 | **Approver** | QA Lead |
 | **Last Review** | 2026-09-24 |
@@ -45,6 +45,7 @@ gap fails closed. `-` represents an empty tool gap for TCL1 only.
 | fmi_bridge | Deterministic FMI 3.0 co-simulation master (H-07, issue #53): integer-microsecond fixed-step scheduling (100 µs master / 1 µs FMU internal), no wall clock and no randomness (source-lint-enforced), marshals plant/MCU values, captures events from the platform's hook-stamped trace slots and asserts the strict QA-EV-01 ordering against the OR-001-anchored plant trajectory. Every exchanged value is recorded in the hashed trace and the event times come from Renode-side registers, not from bridge computation: a bridge defect can at worst fail to detect a mismatch or halt the run; it cannot introduce or alter a numerical result into the item. Bounded contract tests HW-T2-BRIDGE-001..015 support the detection argument for this exact configuration. | TI1 | TD1 | TCL1 | - |
 | fmeda | `tools/fmeda-calculator.py` (H-09, issue #56): ISO 26262-5:2018 Annex C metric calculator (SPFM, LFM, PMHF, MTBF) over `hw/fmeda/fmeda-analysis.csv` and `hw/bom/fit-database.json`. A defect can silently misstate a hardware architectural metric in `docs/hw/fmeda.md` and the reliability figures of `docs/hw/rams-summary.md`, so it can introduce an error into a safety-related work product (TI2). Detection (§4.4): exact rational arithmetic with fixed half-up rendering, an independent Annex C oracle, the public TI SLYP685 n = 1..4 teaching example and the Chalmers 2023 aggregate example reproduced to publication precision, byte-identical output across runs, and the `--check` drift gate on the CSV's derived columns and the generated document blocks (TD2, not TD1: the ISO 26262-5:2018 Annex E worked example is not publicly available and is not reproduced). | TI2 | TD2 | TCL2 | ISO 26262-5:2018 Annex E Table E.1 worked example not reproduced (values not publicly available); qualification rests on the Annex C equations, the exact-arithmetic oracle and two public fixtures (TI SLYP685, Chalmers 2023); the T0 inputs (assumed failure-mode distributions, secondary-tabulated SN 29500 rates) are outside the tool's qualification scope and no evidence artifact may claim ASIL-B metrics from them. |
 | renode | Renode executes the real v1.0.0 firmware ELF on the T2 virtual bench (H-07, issue #53). A platform-model defect (scripted IWDG/RTC_BKP/GPIO/RCC peripheral models, DWT accuracy) can silently alter firmware-visible register or timing semantics, introducing errors into T2 evidence — the ELF cannot be re-derived independently, so detection rests on golden-trace/vendor-reference correlation which does not exist yet. | TI2 | TD2 | TCL2 | Renode peripheral models (IWDG, GPIO, RTC_BKP, DWT) are scripted emulations, not vendor-validated silicon models: platform-model bugs can alter firmware-visible timing or register semantics, and this gap is inherited by every T2 evidence artifact; golden-trace correlation against vendor reference behavior and T4 bench correlation are required before any promotion. |
+| can_fault_injector | CAN bus fault injector peripheral (H-10, issue #62): `hw/virtual-bench/renode/can_fault_injector.py`, a scripted `Python.PythonPeripheral` that projects the Bus-Off / CRC fault CONDITION of a shared CAN medium into the FDCAN register scratch and evaluates the ISO 11898-1 128 × 11 recovery sequence as a pure function of emulation virtual time. It cannot inject a passing result into the firmware under test: a defect can at worst mis-project the condition, which either fails to produce the scenario events (the runners abort fail-closed before evidence) or is caught by the per-step readback, the injector error register, the injection counters and the HW-T2-BUSOFF-001 contract-lockstep tests — it never fabricates a detection/recovery that the firmware did not perform, so the tool only fails to detect, and misfires are detected (§4.5). | TI1 | TD1 | TCL1 | - |
 <!-- END TOOL CLASSIFICATION -->
 
 ### 3.1 FMPy reclassification precondition (F1, normative)
@@ -131,6 +132,38 @@ dispositions apply before any T2 evidence is consumed:
 No executed T2 run exists yet (issue #53 delivers the foundation; the
 pending manifest `hw/tests/evidence/t2_retention_001.json` is CL0); this
 paragraph is the §3.1-required disposition record, not a promotion.
+
+**H-10 disposition (issue #62, v0.2.9): T2 CAN fault scenarios (Bus-Off +
+CRC).** The H-10 scenarios add a new execution configuration to the T2
+bench, so this precondition was applied before their evidence is consumed:
+
+1. **The fault scenarios do not use FMPy or an FMU.** The CAN bus medium is
+   the `can_fault_injector` scripted peripheral; no plant model is built or
+   stepped. The §3.1 FMPy reclassification precondition is therefore **not
+   triggered** for these scenarios: nothing relies on FMPy numerical
+   integration, state/event handling, interpolation or coupling, and the
+   OpenModelica compiler contributes nothing to the artifacts (its gap is
+   not inherited by `t2_busoff_001.json` / `t2_crc_001.json`). The
+   retention scenario and its FMPy/OpenModelica dispositions are unchanged.
+2. **`renode` stays TI2/TD2/TCL2**, and its gap is inherited verbatim by
+   every H-10 fault-scenario artifact (pending and executed forms), exactly
+   as for the retention evidence — the fault scenarios depend on the same
+   CPU model, the same virtual-time base and an added scripted peripheral.
+3. **`can_fault_injector` is classified TI1/TD1/TCL1** for the bounded role
+   above (shared-medium fault-condition projection + deterministic lazy
+   evaluation; one-writer-per-slot trace contract; no frame delivery and no
+   protocol engine). Any extension of that role — frame synthesis, a
+   protocol engine, master-side computation entering a claim — voids the
+   TI1 argument and re-triggers this precondition.
+4. **Consumption stays pending-only / CL0.** No executed T2 fault-scenario
+   run exists yet; `t2_busoff_001.json` and `t2_crc_001.json` are committed
+   as pending manifests (pass=false). No registered oracle covers Bus-Off
+   timing or CRC handling (issue #62), so `oracle_id` is the literal
+   `none`, the traceability rows `(HW-FR-003, virtual_bench)` stay
+   `sim-pending` / CL0 and this paragraph grants no promotion.
+
+This paragraph is the §3.1-required disposition record for the new T2
+scenarios; it is a precondition on consumption, not tool qualification.
 
 ## 4. Qualification regression records
 
@@ -328,6 +361,54 @@ FMU/configuration/version, or a future use. Those uses remain subject to the
   T0 assumptions; FIT rates are secondary-tabulated SN 29500 classes), the
   FTA cut-set analysis demanded by HW-SF-005, and any T2/T4 evidence.
 
+### 4.5 Renode + CAN fault injector against no oracle: CAN fault scenarios, qualification pending
+
+- Requirement: HW-FR-003 (ISO 11898-2 CAN interface conformance), exercised
+  through the gateway node's Bus-Off recovery and CRC error handling. Oracle:
+  **none** (issue #62; HwAGENTS.md rule 3 is satisfied by the honest
+  sim-pending / CL0 disposition, never by an invented oracle id).
+- Configuration (H-10, issue #62): Renode executes the real v1.0.0 firmware
+  ELF (off-tree driver `hw/virtual-bench/firmware/can_fault.c`, built with
+  `CANCESTRY_T2_DRIVER=can_fault`) on the UNCHANGED H-07 platform plus the
+  `can_fault_injector` scripted peripheral at 0x40000000 (shared-medium
+  fault-condition projection; ISO 11898-1 128 × 11 recovery sequence as a
+  function of emulation virtual time); `cancestry-hw-fault.resc` installs
+  the fault-event symbol hooks and the CCCR/IR write hooks;
+  `t2_fault_common.py` orchestrates with the 100 µs master step of the H-07
+  bridge contract and asserts the invariants in-run; the scenarios write
+  `t2_busoff_001.json` / `t2_crc_001.json` (schema
+  `hw-t2-fault-evidence-0.1.0.schema.json`).
+- Documented deviations from the issue's wording, all recorded in the
+  evidence schema description: (a) the evidence hash chain is ELF + bridge
+  + injector + trace (no FMU — the medium is the injector, so no FMU hash
+  exists); (b) the "CAN error interrupt handler" hook is realized as hooks
+  on the firmware's error-detection functions (`t2_can_busoff_detect`,
+  `t2_can_busoff_recover`, `t2_can_crc_detect`) because the v1.0.0 ELF ships
+  no CAN error ISR (platform HAL is poll-driven, no device IRQs);
+  (c) the CRC error is raised through the v1.0.0 normative code
+  `CANCESTRY_HAL_FAULT_MALFORMED_FRAME` — the nearest fault code for a
+  corrupted wire frame — and is recorded as such.
+- Status: **no executed T2 fault-scenario run exists.** Both committed
+  artifacts are pending manifests (pass=false, CL0); the ledger rows
+  `(HW-FR-003, virtual_bench)` are `sim-pending`. The scenario machinery is
+  host-tested offline (HW-T2-BUSOFF-001..008, HW-T2-CRC-001..006), which is
+  not T2 evidence.
+- Acceptance for a future executed run: the hw-nightly T2 job runs each
+  scenario twice (`--check`) against the committed artifact, the Bus-Off
+  run captures detection/recovery with `recovery_us - detection_us < 704 µs`
+  (128 × 11 bit times at 2 Mbit/s) and the medium releasing exactly 704 µs
+  after the recovery request, and the CRC run shows the firmware counter
+  incremented with `run_complete = 1` — plus §3.1's disposition review. Even
+  a green pair stays **sim-pending / CL0**: promotion is gated on a
+  registered oracle and, per issue #62, on HS-01/HS-02 plus a human safety
+  reviewer, which H-10 does not touch.
+- Not covered: brownout/BOR physics (deferred to H-11, HS-01/HS-02,
+  HwAGENTS.md rule 6), the FDCAN protocol engine / arbitration / physical
+  layer (`not_simulated`), frame delivery and the no-corrupted-frame
+  property of HIL-CRC-001 (software boundary conformance suite), DWT
+  accuracy (deliberately unexercised), multi-channel / CRC-storm / thermal
+  scenarios (issue #62: no scope creep), and all T4 physical correlation.
+
 ## 5. Validation-gap inheritance (normative)
 
 The hardware ledger `hw/tests/traceability.csv` adds
@@ -364,6 +445,7 @@ OR-002 has no qualified passing claim. Oracle/model gaps remain in
 
 | Version | Date | Change |
 |---|---|---|
+| 0.2.9 | 2026-09-24 | H-10 #62: `can_fault_injector` classified TCL1 (TI1/TD1) for the bounded shared-medium fault-projection role; §3.1 disposition for the new T2 CAN fault scenarios (no FMPy/FMU — precondition not triggered; renode gap inherited verbatim; pending-only consumption at CL0); §4.5 qualification-pending record incl. the documented deviations (ELF+bridge+injector+trace hash chain, detection/recovery function hooks, MALFORMED_FRAME mapping). Hash cascade re-issued for every evidence artifact pinning this document. No qualification promotion; Bus-Off/CRC rows stay sim-pending / CL0. |
 | 0.2.8 | 2026-09-24 | H-09 #56: fmeda classified TCL2 (TI2/TD2) for `tools/fmeda-calculator.py` with the declared Annex E Table E.1 gap; §4.4 qualification record (exact-arithmetic Annex C oracle, TI SLYP685 n = 1..4 and Chalmers 2023 public fixtures reproduced to publication precision, byte-identical output, `--check` drift gate). Hash cascade re-issued for every evidence artifact pinning this document. No qualification promotion of any other tool; no ASIL-B metric claim. |
 | 0.2.7 | 2026-09-22 | H-07 #53: renode classified TCL2 (TI2/TD2) with the scripted-peripheral validation gap inherited by every T2 artifact; fmi_bridge added as TCL1 (TI1/TD1) for the bounded deterministic-master role; §3.1 disposition for the T2 configuration (FMI 3.0 Holdup build, coupled co-simulation) recorded — pending-only consumption in this PR; §4.3 T2 foundation record added. No executed T2 run exists; no qualification promotion. |
 | 0.2.6 | 2026-09-21 | H-06 #49: record the pulse 5a (ISO 16750-2:2012 Test A, §4.6.4.2.2 Figure 8 / Table 5) configuration in §4.2 as OR-002 regression-only evidence with the Table 5-vs-Table 6 citation disposition; add the §3.1 disposition review for the recompiled selector-8 FMU (unchanged bounded FMPy TCL1 scope, OpenModelica stays TCL2, gap inherited verbatim by the new pulse_5a_001 case manifest and its pending placeholder view). Controlled §3 table untouched. No qualification promotion; shape qualification deferred to #41. |

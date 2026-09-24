@@ -69,11 +69,19 @@
       "$comment": "Required so the footer STATUS suffix (…,provisional) can never be silently omitted. Absence is not allowed; write false explicitly."
     },
     "oracle_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^OR-\\d{3}$"
+        },
+        {
+          "const": "none"
+        }
+      ],
       "type": "string",
       "minLength": 1,
       "maxLength": 128,
-      "pattern": "^OR-\\d{3}$",
-      "$comment": "Oracle from the normative hw/tests/oracles/registry.json (HW-PLAN section 10.2). A plot cannot create an oracle."
+      "$comment": "Oracle from the normative hw/tests/oracles/registry.json (HW-PLAN section 10.2). A plot cannot create an oracle. H-10 (issue #62): a scenario with no registered oracle records the literal 'none'; the checker's status-consistency rule binds it to the source evidence, so 'none' can only appear where the evidence itself carries no oracle."
     },
     "generated_at": {
       "type": "string",

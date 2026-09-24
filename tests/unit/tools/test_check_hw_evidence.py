@@ -637,35 +637,40 @@ def test_cli_defaults_to_the_current_directory(tmp_path, monkeypatch, capsys):
 
 
 def test_repository_manifest_registers_only_pending_placeholder_views():
-    """H-06 (#49)/H-07 (#53): every committed view is a pending placeholder.
+    """H-06 (#49)/H-07 (#53)/H-10 (#62): every committed view is a pending placeholder.
 
     Supersedes the #36 commit-3 snapshot ("the committed manifest is empty and
-    green") and the H-06 single-view snapshot: H-07 registers the pending
-    t2_retention_001 placeholder next to the pending pulse_5a_001 one. No
-    passing plot may appear, every entry must be structurally complete, and
-    the manifest hashes must match the committed bytes.
+    green"), the H-06 single-view snapshot and the H-07 two-view snapshot:
+    H-10 registers the pending t2_busoff_001 / t2_crc_001 placeholders next to
+    the pending pulse_5a_001 and t2_retention_001 ones. No passing plot may
+    appear, every entry must be structurally complete, and the manifest
+    hashes must match the committed bytes.
     """
     manifest = json.loads((REPO_ROOT / MANIFEST_REL).read_text(encoding="utf-8"))
     assert manifest["schema_version"] == "0.1.0"
-    assert [entry["plot_id"] for entry in manifest["entries"]] == [
-        "pulse_5a_001", "t2_retention_001"]
+    expected_plots = ["pulse_5a_001", "t2_busoff_001", "t2_crc_001",
+                      "t2_retention_001"]
+    assert [entry["plot_id"] for entry in manifest["entries"]] == expected_plots
     for entry in manifest["entries"]:
         assert sorted(entry) == sorted(check_hw_evidence.ENTRY_KEYS)
-    pulse_rel = "hw/tests/evidence/pulse_5a_001.plot.json"
-    pulse_svg_rel = "hw/tests/evidence/renders/pulse_5a_001.svg"
-    t2_rel = "hw/tests/evidence/t2_retention_001.plot.json"
-    t2_svg_rel = "hw/tests/evidence/renders/t2_retention_001.svg"
-    pulse = json.loads((REPO_ROOT / pulse_rel).read_text(encoding="utf-8"))
-    assert pulse["status"] == "pending", "HW-FR-004 is pending; no passing plot"
-    assert pulse["provisional"] is True and pulse["credibility_level"] == "CL0"
-    t2 = json.loads((REPO_ROOT / t2_rel).read_text(encoding="utf-8"))
-    assert t2["status"] == "pending", "HW-SF-002 T2 is pending; no passing plot"
-    assert t2["provisional"] is True and t2["credibility_level"] == "CL0"
+    requirements = {
+        "pulse_5a_001": "HW-FR-004",
+        "t2_busoff_001": "HW-FR-003",
+        "t2_crc_001": "HW-FR-003",
+        "t2_retention_001": "HW-SF-002",
+    }
     by_id = {entry["plot_id"]: entry for entry in manifest["entries"]}
-    assert by_id["pulse_5a_001"]["plot_data_sha256"] == sha256_path(REPO_ROOT / pulse_rel)
-    assert by_id["pulse_5a_001"]["expected_svg_sha256"] == sha256_path(REPO_ROOT / pulse_svg_rel)
-    assert by_id["t2_retention_001"]["plot_data_sha256"] == sha256_path(REPO_ROOT / t2_rel)
-    assert by_id["t2_retention_001"]["expected_svg_sha256"] == sha256_path(REPO_ROOT / t2_svg_rel)
+    for plot_id in expected_plots:
+        rel = "hw/tests/evidence/%s.plot.json" % plot_id
+        svg_rel = "hw/tests/evidence/renders/%s.svg" % plot_id
+        plot = json.loads((REPO_ROOT / rel).read_text(encoding="utf-8"))
+        assert plot["status"] == "pending", (
+            "%s is pending (%s); no passing plot" % (plot_id,
+                                                     requirements[plot_id]))
+        assert plot["provisional"] is True
+        assert plot["credibility_level"] == "CL0"
+        assert by_id[plot_id]["plot_data_sha256"] == sha256_path(REPO_ROOT / rel)
+        assert by_id[plot_id]["expected_svg_sha256"] == sha256_path(REPO_ROOT / svg_rel)
 
 
 def test_committed_clean_fixture_is_self_consistent():

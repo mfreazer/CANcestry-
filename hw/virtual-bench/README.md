@@ -27,6 +27,34 @@ virtual-bench-plan §1). It never reimplements firmware logic.
 | `fmi_bridge.py` | Deterministic FMI 3.0 co-simulation master: fixed 100 µs master step, 1 µs FMU internal step, discrete event capture at actual occurrence times (virtual-bench-plan §6, QA ruling VB-Q1). |
 | `run_t2_retention.py` | T2 orchestration: build the Holdup FMU, launch Renode with the v1.0.0 ELF, run the bridge for 150 ms, capture the retention write / safe-latch / IWDG fire timestamps, assert the ordering, write the evidence artifact. |
 | `fmi_bridge_test.py`, `test_t2_retention.py` | Unit tests for the bridge and the orchestration/evidence logic; the full-stack integration test requires the T2 toolchain. |
+| `renode/can_fault_injector.py` | CAN bus fault injector (H-10, issue #62): shared-medium Bus-Off / CRC fault-condition projection with the ISO 11898-1 128 × 11 recovery sequence, TCL1. Monitor command interface (`sysbus can_fault_injector ControlWrite 0x42/0x43`) plus read-only register window at 0x40000000. |
+| `renode/cancestry-hw-fault.resc` | H-10 bring-up for the same (unmodified) platform: injector registration, fault symbol hooks, CCCR/IR write hooks. |
+| `firmware/can_fault.c` | Off-tree CAN fault driver through the REAL v1.0.0 fault path (`cancestry_hal_raise_fault`); built with `CANCESTRY_T2_DRIVER=can_fault`. |
+| `t2_fault_common.py` | Shared fail-closed machinery of the two H-10 scenarios: preflight, 100 µs `RunFor` quanta, 10 ms boundary injection, exactly-once slot capture, in-run invariants, `--check` determinism gate. |
+| `scenarios/t2_busoff_001.py`, `scenarios/t2_crc_001.py` | The two H-10 scenarios (Bus-Off recovery with the 128 × 11-bit-time assert; CRC error handling with the counter/no-crash asserts). |
+| `test_t2_busoff.py`, `test_t2_crc.py` | Their pytest wrappers: offline contract/invariant/manifest tests plus the toolchain-gated end-to-end `--check` run. |
+
+## T2 CAN fault scenarios (H-10, issue #62)
+
+The bench also carries the two non-brownout Phase-12 fault scenarios
+Bus-Off recovery (`HW-T2-BUSOFF-001`) and CRC error handling
+(`HW-T2-CRC-001`), against the gateway node's REAL v1.0.0 fault path. The
+shared-medium condition is projected by the `can_fault_injector` TCL1
+peripheral; the ISO 11898-1 recovery sequence (128 × 11 recessive bits,
+704 µs at the HW-FR-003 nominal 2 Mbit/s) is evaluated as a pure function
+of emulation virtual time. No FMU is involved; the hash chain is ELF +
+bridge + injector + trace. **Brownout stays out of scope** (H-11, gated on
+HS-01/HS-02; it would touch the `not_simulated` BOR physics, HwAGENTS.md
+rule 6).
+
+Honest status: like the retention foundation, no T2 run has been executed
+for these scenarios. The committed `hw/tests/evidence/t2_busoff_001.json`
+and `t2_crc_001.json` are PENDING manifests (pass=false, CL0,
+`oracle_id: "none"`), the ledger rows `(HW-FR-003, virtual_bench)` are
+`sim-pending` / CL0, and the hw-nightly `t2-virtual-bench` job runs each
+scenario with its `--check` twin. Nothing promotes: per issue #62 every
+promotion path stays gated on a registered oracle plus HS-01/HS-02 and a
+human safety reviewer.
 
 ## Execution environment
 
