@@ -36,7 +36,7 @@ virtual-bench-plan §1). It never reimplements firmware logic.
 | `renode/bor_reset_injector.py` | BOR reset injector (H-11, issue #64): ACTIVE-LOW NRST modeling with the issue's 100 µs pulse, main-SRAM marker discard, `RCC_CSR.BORRSTF` and the BOR machine reset, TCL1. Monitor command interface (`sysbus bor_reset_injector ControlWrite 0x42`) plus a read-only register window at the issue-pinned 0x40001000. All state lives in the trace area, so the pending release survives the machine reset. |
 | `renode/cancestry-hw-bor.resc` | H-11 bring-up for the same (unmodified) platform: injector registration, H-11 slot initialization, the first-event-guarded retention-write hook and the two post-reset hooks. |
 | `firmware/bor_brownout.c` | Off-tree brownout driver through the REAL v1.0.0 retention write/read and safe-state APIs; built with `CANCESTRY_T2_DRIVER=bor_brownout`. |
-| `t2_bor_common.py` | Shared fail-closed machinery of the H-11 scenario: preflight, 100 µs `RunFor` quanta with 1 µs FMU sub-steps, plant-driven injection, in-run ordering/retention/SRAM/reset-cause invariants, `--check` determinism gate. |
+| `t2_bor_common.py` | Shared fail-closed machinery of the H-11 scenario: preflight, 100 µs `RunFor` quanta with 1 µs plant sub-steps (`MePlantSlave`: the guarded zero-state FMI 2.0 ModelExchange evaluator — explicit `setTime` per sub-step, bounded event iteration), plant-driven injection, in-run ordering/retention/SRAM/reset-cause invariants, `--check` determinism gate. |
 | `scenarios/t2_brownout_001.py` | The H-11 scenario: the modelled BOR assertion drives the injection at t = 10 ms; asserts `retention write < BOR detection < recovery`. |
 | `test_t2_brownout.py` | Its pytest wrapper: offline contract/invariant/manifest tests plus the toolchain-gated end-to-end `--check` run. |
 
@@ -70,8 +70,14 @@ The bench also carries the Phase-12 brownout fault: the H-11 plant
 100 µs, BOR level 3 threshold at 2.8 V falling with a hysteresis release gate,
 the OR-001 retention-domain closed form across the collapse, main-SRAM loss and
 the reset-deassertion → resumption recovery time) is compiled headless by the
-pinned OpenModelica and stepped by the H-07 bridge contract. The PLANT drives
-the fault: at the modelled BOR assertion the orchestrator commands the
+pinned OpenModelica and advanced by the H-07 bridge contract (100 µs master /
+1 µs plant sub-steps). The plant is a **zero-state algebraic source**, so it is
+executed through the guarded FMI 2.0 **ModelExchange** evaluator
+(`t2_bor_common.MePlantSlave`) — the same execution path the OR-002 pulse
+fixture uses — and not through CoSimulation `doStep`, which the pinned
+OpenModelica 1.24 runtime cannot drive for a zero-state model
+(`docs/hw/tool-qualification.md` §3.1, "FMI execution-path finding"). The PLANT
+drives the fault: at the modelled BOR assertion the orchestrator commands the
 `bor_reset_injector` TCL1 peripheral, which pulls the active-low NRST line for
 100 µs, discards the T2 main-SRAM marker, sets `RCC_CSR.BORRSTF` and takes the
 BOR machine reset. The REAL v1.0.0 firmware then classifies the reset cause,

@@ -13,11 +13,14 @@ Two layers, mirroring ``hw/tests/test_holdup_physics.py`` and
   oracle OR-001 - the registered closed form (``v = V0 - I*ESR - I*t/C``) that
   serves HW-SF-002 / HW-SF-004.
 * Toolchain-gated (``omc`` + FMPy): ``omc`` builds the
-  ``CancestryLib.Power.BOR`` FMI 2.0 CoSimulation FMU and FMPy steps it; the
-  same four behaviours are asserted from the FMU outputs. Like
-  ``test_power_sim.py`` this layer FAILS LOUDLY when the toolchain is absent
-  and only skips when ``CANCESTRY_HW_ALLOW_SKIP=1`` is explicitly set for
-  local development.
+  ``CancestryLib.Power.BOR`` FMI 2.0 ModelExchange FMU and FMPy executes it
+  through the guarded ZERO-STATE ModelExchange evaluator - the same execution
+  path this repository qualifies for stateless sources
+  (``hw/tests/test_pulse_sim.py`` / OR-002, ``docs/hw/h04-enforcement.md``:
+  "OpenModelica 1.24 CS cannot step the zero-state source"). The same four
+  behaviours are asserted from the FMU outputs. Like ``test_power_sim.py``
+  this layer FAILS LOUDLY when the toolchain is absent and only skips when
+  ``CANCESTRY_HW_ALLOW_SKIP=1`` is explicitly set for local development.
 
 Honest posture (issue #64): the BOR threshold behaviour, the hysteresis release
 gate and the reset timing have NO registered oracle. Nothing in this file
@@ -40,6 +43,8 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -483,6 +488,17 @@ def bor_build_script_text():
     CancestryLib ... Class CancestryLib.Power.BOR not found in scope" because
     the chain pointed one directory too high; the offline guard makes that
     failure mode local instead of a red CI dispatch.
+
+    ``fmuType="me"`` (not ``"cs"``): BOR.mo is a ZERO-STATE algebraic source
+    (HW-PHYS-BOR-008 forbids ``der(``), and the pinned OpenModelica 1.24
+    CoSimulation runtime cannot step a zero-state source - the finding
+    recorded for the OR-002 pulse fixture in docs/hw/h04-enforcement.md and
+    reproduced for this model by hw-fast dispatches 36035296703 (fmi2Error
+    from ``fmi2Terminate``), 36036288651 and 36036948275 (fmi2Error from
+    ``fmi2DoStep`` at the modelled collapse boundary t = 10 ms). The
+    ModelExchange archive is executed by the guarded zero-state evaluator
+    below, exactly like the pulse fixture; version stays "2.0" (bring-up
+    finding F-2: the pinned OpenModelica cannot export FMI 3.0).
     """
     return (
         "loadModel(Modelica);\n"
@@ -493,7 +509,7 @@ def bor_build_script_text():
         "getErrorString();\n"
         'loadFile("%s");\n' % MODEL_PATH +
         "getErrorString();\n"
-        'buildModelFMU(%s, version="2.0", fmuType="cs", '
+        'buildModelFMU(%s, version="2.0", fmuType="me", '
         'fileNamePrefix="cancestry_bor_brownout_001");\n' % MODEL_NAME +
         "getErrorString();\n")
 
@@ -510,6 +526,12 @@ def test_build_script_loads_existing_files():
             % path)
     assert "buildModelFMU(CancestryLib.Power.BOR" in script
     assert 'fileNamePrefix="cancestry_bor_brownout_001"' in script
+    # The execution path is part of the pinned build configuration: the
+    # zero-state evaluator below requires a ModelExchange archive, and the
+    # CoSimulation runtime of the pinned OpenModelica cannot step a
+    # zero-state source (see bor_build_script_text).
+    assert 'version="2.0"' in script and 'fmuType="me"' in script
+    assert 'fmuType="cs"' not in script
 
 
 def _build_bor_fmu():
@@ -536,85 +558,171 @@ def _build_bor_fmu():
     return fmu, measured
 
 
-def _terminate_fmu(slave):
-    """Terminate the FMU; return the recorded failure or None.
+BOR_FMU_OUTPUTS = (
+    "v", "v_vbat", "nrst", "reset_asserted", "bor_below_threshold",
+    "bor_release_condition", "retention_preserved", "sram_preserved",
+    "firmware_running", "t_bor_assert", "t_bor_release", "t_recovery",
+)
+# The outputs sampled and compared against the reference implementation at
+# every recorded microsecond of the sim-case grid.
+BOR_SAMPLED_OUTPUTS = ("v", "nrst", "v_vbat", "retention_preserved",
+                       "sram_preserved", "firmware_running")
+# The bound the OR-002 pulse evaluator uses (hw/tests/test_pulse_sim.py):
+# an event iteration that does not settle is a FAILURE, never a value.
+MAX_EVENT_ITERATIONS = 100
 
-    FMI lifecycle observation (hw-fast dispatches 36035296702 / 36036288651,
-    recorded in docs/hw/tool-qualification.md section 3.1): the OpenModelica
-    runtime implements ``fmi2Terminate`` as legal only in
-    ``modelEventMode``/``modelContinuousTimeMode``
-    (SimulationRuntime/fmi/export/openmodelica/fmu2_model_interface.c.inc:
-    ``fmi2Terminate`` -> ``invalidState(..., modelEventMode|
-    modelContinuousTimeMode, ~0)``) and returns fmi2Error otherwise (its
-    internal state machine, not the simulated values, decides that). The
-    terminate outcome is therefore RECORDED and returned, never silently
-    dropped and never allowed to invalidate a trajectory that has already
-    been verified value by value.
 
-    The FMU's own failure-level log is not usable as a second signal here:
-    the pinned runtime only emits it with debug logging on, and enabling
-    ``loggingOn`` changed the runtime's status reporting for the collapse
-    boundary step in the same dispatch (doStep reported fmi2Error where the
-    identical call had returned OK with logging off, while the FMU's values
-    stayed correct at every sampled instant). The value guarantee is
-    therefore the sample-by-sample comparison against the reference
-    implementation below, which covers every recorded microsecond.
+def finish_event_iteration(slave):
+    """Bound the FMI event iteration; a stalled/terminated FMU is never a pass.
+
+    Same discipline as ``test_pulse_sim.finish_event_iteration``: the BOR
+    source's relations are exact at the modelled boundaries (t_brownout,
+    t_brownout + t_collapse, + t_boot), so a chattering relation must surface
+    as a bounded-iteration failure instead of an arbitrary sampled value.
     """
+    for _ in range(MAX_EVENT_ITERATIONS):
+        needed, terminate, *_ = slave.newDiscreteStates()
+        assert not terminate, "the BOR FMU requested premature termination"
+        if not needed:
+            return
+    raise AssertionError(
+        "the BOR FMU event iteration did not converge within %d iterations "
+        "(chattering at a relation boundary is a fail-closed condition, not "
+        "a value)" % MAX_EVENT_ITERATIONS)
+
+
+def execute_bor(fmu, times_us, parameters=None):
+    """Execute the stateless BOR FMU via FMI 2.0 ModelExchange/FMPy.
+
+    Returns ``(samples, terminate_error)``: ``samples`` maps each requested
+    integer microsecond to the dict of read outputs, and ``terminate_error``
+    records the (non-value-carrying) ``fmi2Terminate`` outcome.
+
+    Why ModelExchange and not CoSimulation ``doStep``
+    -------------------------------------------------
+    BOR.mo is a ZERO-STATE algebraic source (HW-PHYS-BOR-008 forbids
+    ``der(``; the model is a fixture in the PulseISO7637_2 class). The pinned
+    OpenModelica 1.24 CoSimulation runtime cannot step such a source - the
+    finding this repository already recorded for the OR-002 pulse fixture
+    (docs/hw/h04-enforcement.md: "OpenModelica 1.24 CS cannot step the
+    zero-state source, so the evaluator explicitly requires zero continuous
+    and discrete state variables and fails closed if that changes") and
+    reproduced for this model by three hw-fast dispatches:
+
+    * 36035296703 - the whole 1 us ``doStep`` loop returned values that
+      matched the reference at every microsecond, then ``fmi2Terminate``
+      returned fmi2Error (the runtime accepts terminate only in
+      ``modelEventMode``/``modelContinuousTimeMode``:
+      OMCompiler/SimulationRuntime/fmi/export/openmodelica/
+      fmu2_model_interface.c, ``fmi2Terminate`` -> ``invalidState(...,
+      modelEventMode|modelContinuousTimeMode, ~0)``);
+    * 36036288651 - ``fmi2DoStep(0.01, 1e-6)`` returned fmi2Error at the
+      modelled collapse boundary (that dispatch had debug logging on);
+    * 36036948275 - the identical ``fmi2DoStep(0.01, 1e-6)`` returned
+      fmi2Error with logging off, i.e. the CS status reporting at the
+      boundary is not reproducible run to run.
+
+    A status code that changes between identical dispatches cannot carry
+    evidence (HwAGENTS.md rule 5), so this check does not consume one: the
+    master sets the plant time explicitly and re-evaluates the event
+    relations at each sample, exactly as the qualified pulse evaluator does.
+    ModelExchange executes the SAME compiled equations - it is not a Python
+    waveform substitute - and every recorded microsecond is still compared
+    value by value against ``BorReference`` below.
+    """
+    import fmpy
+    from fmpy.fmi2 import FMU2Model
+
+    description = fmpy.read_model_description(str(fmu))
+    # Fail closed on the interface BEFORE any extraction or native
+    # instantiation (the N2 metadata discipline of test_pulse_sim.py).
+    assert str(description.fmiVersion).startswith("2.0"), (
+        "the pinned OpenModelica must export FMI 2.0 (bring-up finding F-2)")
+    assert description.modelExchange is not None, (
+        "the BOR FMU must support ModelExchange: the pinned OpenModelica CS "
+        "runtime cannot step this zero-state source")
+    assert description.numberOfContinuousStates == 0, (
+        "the BOR evaluator requires a stateless FMU (HW-PHYS-BOR-008); a "
+        "state would need a declared solver contract")
+    assert not any(variable.variability == "discrete"
+                   for variable in description.modelVariables), (
+        "the BOR evaluator does not support discrete state variables")
+    variables = {variable.name: variable.valueReference
+                 for variable in description.modelVariables}
+    for name in BOR_FMU_OUTPUTS:
+        assert name in variables, "the BOR FMU does not export %s" % name
+    params = dict(load_sim_case()["parameters"] if parameters is None
+                  else parameters)
+    assert set(params) <= set(variables), (
+        "the FMU omitted declared sim-case parameters: %s"
+        % sorted(set(params) - set(variables)))
+
+    directory = fmpy.extract(str(fmu))
+    slave = FMU2Model(guid=description.guid, unzipDirectory=directory,
+                      modelIdentifier=description.modelExchange.modelIdentifier,
+                      instanceName="bor_brownout_001")
+    samples = {}
+    terminate_error = None
+    instantiated = False
     try:
-        slave.terminate()
-        return None
-    except Exception as error:  # noqa: BLE001 - recorded, then reported below
-        return error
+        slave.instantiate()
+        instantiated = True
+        slave.setupExperiment(startTime=0.0,
+                              stopTime=float(times_us[-1]) / 1e6)
+        # Bind the executed FMU to the schema-validated sim-case parameter
+        # set (the pulse evaluator's discipline): the defaults are asserted
+        # equal to it offline, and setting them makes the executed
+        # configuration explicit instead of implied.
+        slave.setReal([variables[name] for name in sorted(params)],
+                      [float(params[name]) for name in sorted(params)])
+        slave.enterInitializationMode()
+        slave.exitInitializationMode()
+        finish_event_iteration(slave)
+        slave.enterContinuousTimeMode()
+        for time_us in times_us:
+            slave.setTime(float(time_us) / 1e6)
+            slave.enterEventMode()
+            finish_event_iteration(slave)
+            slave.enterContinuousTimeMode()
+            values = slave.getReal([variables[name]
+                                    for name in BOR_SAMPLED_OUTPUTS])
+            samples[time_us] = dict(zip(
+                BOR_SAMPLED_OUTPUTS, (float(value) for value in values)))
+            _, terminate = slave.completedIntegratorStep()
+            assert not terminate, (
+                "the BOR FMU requested premature termination at %d us"
+                % time_us)
+        # Terminate LAST and record its outcome (never hide it). In the
+        # ModelExchange path the FMU is in continuous-time mode here, which
+        # is one of the two states the pinned runtime accepts terminate in;
+        # the outcome is still non-value-carrying, because every claim below
+        # comes from the sampled values.
+        try:
+            slave.terminate()
+        except Exception as error:  # noqa: BLE001 - recorded, reported below
+            terminate_error = error
+        return samples, terminate_error
+    finally:
+        if instantiated:
+            slave.freeInstance()
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 def test_toolchain_builds_the_bor_fmu_and_reproduces_the_behaviours():
-    """HW-SIM-BOR-001: omc -> FMI 2.0 CS FMU -> the same four behaviours."""
+    """HW-SIM-BOR-001: omc -> FMI 2.0 ME FMU -> the same four behaviours."""
     _require_toolchain()
-    import fmpy
-    from fmpy.model_description import read_model_description
 
     ref = BorReference()
     p = ref.p
     fmu, measured = _build_bor_fmu()
-    unzipdir = fmpy.extract(str(fmu))
-    description = read_model_description(unzipdir)
-    assert str(description.fmiVersion).startswith("2.0"), (
-        "the pinned OpenModelica must export FMI 2.0 (bring-up finding F-2)")
-    assert description.coSimulation is not None
-    refs = {variable.name: variable.valueReference
-            for variable in description.modelVariables}
-    for name in ("v", "v_vbat", "nrst", "reset_asserted",
-                 "bor_below_threshold", "bor_release_condition",
-                 "retention_preserved", "sram_preserved", "firmware_running",
-                 "t_bor_assert", "t_bor_release", "t_recovery"):
-        assert name in refs, "the BOR FMU does not export %s" % name
-
-    slave = fmpy.instantiate_fmu(unzipdir, description,
-                                 fmi_type="CoSimulation")
-    slave.setupExperiment(startTime=0.0)
-    slave.enterInitializationMode()
-    slave.exitInitializationMode()
-    step_us = int(load_sim_case()["solver"]["step_s"] * 1e6)
-    stop_us = int(load_sim_case()["solver"]["stop_s"] * 1e6)
-    observed = {}
-    time_us = 0
-    while time_us < stop_us:
-        slave.doStep(time_us / 1e6, step_us / 1e6)
-        time_us += step_us
-        values = slave.getReal([refs[name] for name in
-                                ("v", "nrst", "v_vbat",
-                                 "retention_preserved", "sram_preserved",
-                                 "firmware_running")])
-        observed[time_us] = dict(zip(
-            ("v", "nrst", "v_vbat", "retention_preserved",
-             "sram_preserved", "firmware_running"),
-            (float(value) for value in values)))
-
-    # Terminate last, and record (never hide) its outcome. The trajectory has
-    # already been read: on the pinned OpenModelica runtime the terminate
-    # status is decided by the FMU's internal state machine, not by the
-    # simulated values (see _terminate_fmu).
-    terminate_error = _terminate_fmu(slave)
+    case = load_sim_case()
+    step_us = int(case["solver"]["step_s"] * 1e6)
+    stop_us = int(case["solver"]["stop_s"] * 1e6)
+    # The full sim-case grid, inclusive of t = 0: every recorded microsecond
+    # of the 20 ms window is compared against the reference implementation.
+    times_us = list(range(0, stop_us + step_us, step_us))
+    observed, terminate_error = execute_bor(fmu, times_us)
+    assert sorted(observed) == times_us
 
     t_assert_us = int(p["t_brownout"] * 1e6)
     t_release_us = int((p["t_brownout"] + p["t_collapse"]) * 1e6)
@@ -638,13 +746,259 @@ def test_toolchain_builds_the_bor_fmu_and_reproduces_the_behaviours():
     assert asserting["sram_preserved"] == 0.0
     assert resumed["firmware_running"] == 1.0
     assert released["firmware_running"] == 0.0
-    # The FMU trajectory tracks the reference implementation.
-    for time_us, sample in sorted(observed.items()):
+    # The FMU trajectory tracks the reference implementation exactly, at
+    # every sampled microsecond (tolerances from the schema-validated case).
+    tolerance = case["tolerances"]["vbat_max_abs_delta_v"]
+    for time_us in times_us:
+        sample = observed[time_us]
         time = time_us / 1e6
         assert abs(sample["v"] - ref.rail(time)) <= 1e-9
-        assert abs(sample["v_vbat"] - ref.vbat(time)) <= 1e-9
+        assert abs(sample["v_vbat"] - ref.vbat(time)) <= tolerance
         assert sample["nrst"] == ref.reset_state(time)[1]
         assert sample["sram_preserved"] == ref.sram_preserved(time)
+        assert sample["retention_preserved"] == ref.retention_preserved(time)
+        assert sample["firmware_running"] == ref.firmware_running(time)
     assert measured["omc"]
-    print("HW-SIM-BOR-001: terminate outcome: %s"
-          % ("ok" if terminate_error is None else terminate_error))
+    print("HW-SIM-BOR-001: %d ModelExchange samples over %d us; terminate "
+          "outcome: %s" % (len(observed), stop_us,
+                           "ok" if terminate_error is None
+                           else terminate_error))
+
+
+# --------------------------------------------------------------------------
+# Offline contract of the zero-state ModelExchange evaluator (no omc, no FMU)
+# --------------------------------------------------------------------------
+#
+# These are metadata/sequencing fixtures in the N2 discipline of
+# hw/tests/test_pulse_sim.py: they pin the evaluator's fail-closed guards and
+# its FMI 2.0 call sequence. They are NOT FMU simulations and claim no
+# physics - the physics is asserted by HW-PHYS-BOR-001..008 (reference
+# implementation) and, on the pinned toolchain, by HW-SIM-BOR-001.
+
+@pytest.mark.parametrize("needed,terminate,message", [
+    (True, False, "did not converge"),
+    (False, True, "premature termination"),
+    (False, False, None),
+])
+def test_event_iteration_fails_closed(needed, terminate, message):
+    """A stalled or self-terminating FMU is never a sampled value."""
+    class FakeFmu(object):
+        def newDiscreteStates(self):
+            return needed, terminate, False, False, False, 0.0
+
+    if message is None:
+        finish_event_iteration(FakeFmu())
+    else:
+        with pytest.raises(AssertionError, match=message):
+            finish_event_iteration(FakeFmu())
+
+
+def _fake_description(supports_me=True, states=0, variability="continuous",
+                      fmi_version="2.0", names=None, with_parameters=True):
+    """A metadata fixture shaped like the real omc export.
+
+    The declared outputs (``variability`` as parametrized) plus the sim-case
+    parameters as ``fixed`` variables - the shape the evaluator's guards and
+    its ``setReal`` parameter binding require.
+    """
+    names = list(names if names is not None else BOR_FMU_OUTPUTS)
+    if with_parameters:
+        names += sorted(load_sim_case()["parameters"])
+    return SimpleNamespace(
+        fmiVersion=fmi_version,
+        guid="fixture-guid",
+        modelExchange=(SimpleNamespace(modelIdentifier="fixture")
+                       if supports_me else None),
+        coSimulation=None,
+        numberOfContinuousStates=states,
+        modelVariables=[SimpleNamespace(name=name, valueReference=index,
+                                        variability=variability)
+                        for index, name in enumerate(names)])
+
+
+@pytest.mark.parametrize("supports_me,states,variability,fmi_version,message", [
+    (False, 0, "continuous", "2.0", "must support ModelExchange"),
+    (True, 1, "continuous", "2.0", "requires a stateless FMU"),
+    (True, -1, "continuous", "2.0", "requires a stateless FMU"),
+    (True, None, "continuous", "2.0", "requires a stateless FMU"),
+    (True, 0, "discrete", "2.0", "does not support discrete state variables"),
+    (True, 0, "continuous", "3.0", "must export FMI 2.0"),
+])
+def test_bor_rejects_unsupported_metadata_before_native_execution(
+        monkeypatch, supports_me, states, variability, fmi_version, message):
+    """HW-SIM-BOR-002: the guards fire before extraction or native code."""
+    fmpy = pytest.importorskip("fmpy")
+    import fmpy.fmi2
+
+    description = _fake_description(supports_me=supports_me, states=states,
+                                    variability=variability,
+                                    fmi_version=fmi_version)
+    reader = Mock(return_value=description)
+    extract = Mock(side_effect=AssertionError("extraction must not be reached"))
+    native = Mock(side_effect=AssertionError("native execution must not be reached"))
+    monkeypatch.setattr(fmpy, "read_model_description", reader)
+    monkeypatch.setattr(fmpy, "extract", extract)
+    monkeypatch.setattr(fmpy.fmi2, "FMU2Model", native)
+
+    with pytest.raises(AssertionError, match=message):
+        execute_bor("fixture.fmu", [0, 1])
+    reader.assert_called_once_with("fixture.fmu")
+    extract.assert_not_called()
+    native.assert_not_called()
+
+
+def test_missing_declared_output_is_rejected_before_native_execution(monkeypatch):
+    """HW-SIM-BOR-003: an FMU that dropped a declared output fails closed."""
+    fmpy = pytest.importorskip("fmpy")
+    import fmpy.fmi2
+
+    description = _fake_description(
+        names=[name for name in BOR_FMU_OUTPUTS if name != "nrst"])
+    extract = Mock(side_effect=AssertionError("extraction must not be reached"))
+    native = Mock(side_effect=AssertionError("native execution must not be reached"))
+    monkeypatch.setattr(fmpy, "read_model_description",
+                        Mock(return_value=description))
+    monkeypatch.setattr(fmpy, "extract", extract)
+    monkeypatch.setattr(fmpy.fmi2, "FMU2Model", native)
+
+    with pytest.raises(AssertionError, match="does not export nrst"):
+        execute_bor("fixture.fmu", [0, 1])
+    extract.assert_not_called()
+    native.assert_not_called()
+
+
+class _RecordingFmu(object):
+    """A scripted FMI 2.0 ModelExchange slave: records calls, returns sentinels.
+
+    Each declared output reads its own value reference as a sentinel, so the
+    fixture can prove WHICH variable was read at WHICH instant without
+    claiming any physics.
+    """
+
+    def __init__(self, **kwargs):
+        self.calls = []
+        self.kwargs = kwargs
+        self.time = None
+        self.reals = {}
+        self.terminate_raises = False
+
+    def _record(self, name, *args):
+        self.calls.append((name,) + args)
+
+    def instantiate(self):
+        self._record("instantiate")
+
+    def setupExperiment(self, **kwargs):
+        self._record("setupExperiment", tuple(sorted(kwargs.items())))
+
+    def setReal(self, references, values):
+        self._record("setReal", tuple(references), tuple(values))
+        self.reals.update(dict(zip(references, values)))
+
+    def enterInitializationMode(self):
+        self._record("enterInitializationMode")
+
+    def exitInitializationMode(self):
+        self._record("exitInitializationMode")
+
+    def newDiscreteStates(self):
+        self._record("newDiscreteStates")
+        return False, False, False, False, False, 0.0
+
+    def enterEventMode(self):
+        self._record("enterEventMode")
+
+    def enterContinuousTimeMode(self):
+        self._record("enterContinuousTimeMode")
+
+    def setTime(self, time):
+        self.time = time
+        self._record("setTime", time)
+
+    def getReal(self, references):
+        self._record("getReal", tuple(references))
+        return [float(reference) for reference in references]
+
+    def completedIntegratorStep(self):
+        self._record("completedIntegratorStep")
+        return False, False
+
+    def terminate(self):
+        self._record("terminate")
+        if self.terminate_raises:
+            raise RuntimeError("fmi2Terminate failed with status 3 (error)")
+
+    def freeInstance(self):
+        self._record("freeInstance")
+
+
+def _patch_native(monkeypatch, slave):
+    fmpy = pytest.importorskip("fmpy")
+    import fmpy.fmi2
+
+    monkeypatch.setattr(fmpy, "read_model_description",
+                        Mock(return_value=_fake_description()))
+    monkeypatch.setattr(fmpy, "extract", Mock(return_value="fixture-dir"))
+    monkeypatch.setattr(fmpy.fmi2, "FMU2Model", lambda **kwargs: slave)
+    monkeypatch.setattr(shutil, "rmtree", Mock())
+
+
+def test_execute_bor_advances_time_and_re_evaluates_events_per_sample(monkeypatch):
+    """HW-SIM-BOR-004: the evaluator's FMI sequence is the pinned contract."""
+    slave = _RecordingFmu()
+    _patch_native(monkeypatch, slave)
+
+    times_us = [0, 9999, 10000, 10100, 20000]
+    samples, terminate_error = execute_bor("fixture.fmu", times_us)
+
+    assert terminate_error is None
+    assert sorted(samples) == times_us
+    # Every sample maps each declared output name to its own sentinel, i.e.
+    # the read is by value reference and the mapping is not shuffled.
+    for time_us in times_us:
+        assert sorted(samples[time_us]) == sorted(BOR_SAMPLED_OUTPUTS)
+    references = {variable.name: index
+                  for index, variable in
+                  enumerate(_fake_description().modelVariables)}
+    assert samples[10000]["nrst"] == float(references["nrst"])
+
+    names = [call[0] for call in slave.calls]
+    # Setup: the sim-case parameters are bound BEFORE initialization.
+    assert names[:5] == ["instantiate", "setupExperiment", "setReal",
+                         "enterInitializationMode", "exitInitializationMode"]
+    set_real = next(call for call in slave.calls if call[0] == "setReal")
+    parameters = load_sim_case()["parameters"]
+    assert len(set_real[1]) == len(parameters) == len(set_real[2])
+    assert set(real for real in set_real[2]) == set(
+        float(value) for value in parameters.values())
+    # Initialization settles its events before the first sample is read.
+    init_index = names.index("exitInitializationMode")
+    assert names[init_index + 1:init_index + 3] == ["newDiscreteStates",
+                                                    "enterContinuousTimeMode"]
+    # Per sample: setTime -> event mode -> bounded event iteration ->
+    # continuous-time mode -> getReal -> completedIntegratorStep.
+    per_sample = names[names.index("setTime"):]
+    expected = []
+    for _ in times_us:
+        expected.extend(["setTime", "enterEventMode", "newDiscreteStates",
+                         "enterContinuousTimeMode", "getReal",
+                         "completedIntegratorStep"])
+    assert per_sample[:len(expected)] == expected
+    # The plant time is set from integer microseconds (determinism, rule 5).
+    set_times = [call[1] for call in slave.calls if call[0] == "setTime"]
+    assert set_times == [float(time_us) / 1e6 for time_us in times_us]
+    assert names[-2:] == ["terminate", "freeInstance"]
+
+
+def test_execute_bor_records_the_terminate_outcome_and_frees_the_instance(
+        monkeypatch):
+    """HW-SIM-BOR-005: terminate is non-value-carrying, never silently dropped."""
+    slave = _RecordingFmu()
+    slave.terminate_raises = True
+    _patch_native(monkeypatch, slave)
+
+    samples, terminate_error = execute_bor("fixture.fmu", [0, 10000])
+    assert sorted(samples) == [0, 10000]
+    assert terminate_error is not None and "status 3" in str(terminate_error)
+    assert [call[0] for call in slave.calls][-2:] == ["terminate",
+                                                      "freeInstance"]

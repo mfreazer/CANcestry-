@@ -78,7 +78,7 @@
       "y_units": "V"
     }
   ],
-  "source_evidence_hash": "sha256:17b197283aeba750235b4950da43a728e78ff9557cad232d1f149846f96e9471",
+  "source_evidence_hash": "sha256:d450407989aa2b54807d78e8be2d0abed5c7dda2710c1ebe12e4b4899b7e5a9a",
   "source_evidence_path": "hw/tests/evidence/t2_crc_001.json",
   "source_requirement": "HW-FR-003",
   "status": "pending",

@@ -18,7 +18,7 @@ Layers:
 Implementations under test: hw/virtual-bench/t2_bor_common.py,
 hw/virtual-bench/scenarios/t2_brownout_001.py.
 Requirements traced: HW-SF-002, HW-SF-004; HwAGENTS.md rules 4, 5 and 6.
-Test ids: HW-T2-BROWNOUT-001..011, HW-T2-BROWNOUT-E2E-001.
+Test ids: HW-T2-BROWNOUT-001..012, HW-T2-BROWNOUT-E2E-001.
 """
 
 from __future__ import annotations
@@ -29,6 +29,8 @@ import os
 import re
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -371,11 +373,21 @@ def test_preflight_reads_the_contracted_initial_state():
 # HW-T2-BROWNOUT-008: the FMI build script is the pinned configuration
 # ---------------------------------------------------------------------------
 
-def test_omc_build_script_targets_the_bor_model_as_fmi2_cs():
-    """HW-T2-BROWNOUT-008: FMI 2.0 CoSimulation only (bring-up finding F-2)."""
+def test_omc_build_script_targets_the_bor_model_as_fmi2_me():
+    """HW-T2-BROWNOUT-008: FMI 2.0 ModelExchange only (bring-up finding F-2).
+
+    ``fmuType="me"`` is part of the pinned build configuration, not a detail:
+    the BOR plant is a ZERO-STATE algebraic source and the pinned OpenModelica
+    1.24 CoSimulation runtime cannot step one (docs/hw/h04-enforcement.md; the
+    T1 hw-fast dispatches 36035296703 / 36036288651 / 36036948275 recorded
+    fmi2Error from ``fmi2Terminate`` and from ``fmi2DoStep`` at the modelled
+    collapse boundary). ``MePlantSlave`` below is the matching executor and
+    fails closed on an FMU that is not ModelExchange/stateless.
+    """
     script = t2bc.omc_build_script_text()
     assert "CancestryLib.Power.BOR" in script
-    assert 'version="2.0"' in script and 'fmuType="cs"' in script
+    assert 'version="2.0"' in script and 'fmuType="me"' in script
+    assert 'fmuType="cs"' not in script
     assert 'fileNamePrefix="cancestry_t2_bor"' in script, (
         "the prebuilt FMU path passed by the --check twin follows "
         "fileNamePrefix; it must stay pinned")
@@ -470,6 +482,243 @@ def test_committed_evidence_matches_canonical_regeneration():
     else:
         assert committed == t2bc.render_evidence_bytes(document), (
             "the executed-run artifact is not canonically rendered")
+
+
+# ---------------------------------------------------------------------------
+# HW-T2-BROWNOUT-012: the zero-state ModelExchange plant slave contract
+# ---------------------------------------------------------------------------
+#
+# Offline fixtures (no omc, no FMU, no Renode): they pin MePlantSlave's
+# fail-closed guards and its FMI 2.0 call sequence, i.e. the execution path
+# the brownout plant is run through. They claim no physics and are not a
+# simulation - the live run is HW-T2-BROWNOUT-E2E-001 on the T2 toolchain.
+
+class _RecordingPlant(object):
+    """A scripted FMI 2.0 ModelExchange slave.
+
+    Every declared variable reads its own value reference back as a sentinel,
+    so a test can prove WHICH variable was read at WHICH plant time without
+    claiming any value.
+    """
+
+    def __init__(self, terminate_raises=False, event_iterations=1,
+                 terminate_requested=False):
+        self.calls = []
+        self.time = None
+        self.terminate_raises = terminate_raises
+        self.event_iterations = event_iterations
+        self.terminate_requested = terminate_requested
+        self._iterations = 0
+
+    def _record(self, name, *args):
+        self.calls.append((name,) + args)
+
+    def names(self):
+        return [call[0] for call in self.calls]
+
+    def instantiate(self):
+        self._record("instantiate")
+
+    def setupExperiment(self, **kwargs):
+        self._record("setupExperiment", tuple(sorted(kwargs.items())))
+
+    def setReal(self, references, values):
+        self._record("setReal", tuple(references), tuple(values))
+
+    def enterInitializationMode(self):
+        self._record("enterInitializationMode")
+
+    def exitInitializationMode(self):
+        self._record("exitInitializationMode")
+
+    def newDiscreteStates(self):
+        self._record("newDiscreteStates")
+        self._iterations += 1
+        needed = self._iterations < self.event_iterations
+        return needed, self.terminate_requested, False, False, False, 0.0
+
+    def enterEventMode(self):
+        self._record("enterEventMode")
+
+    def enterContinuousTimeMode(self):
+        self._record("enterContinuousTimeMode")
+
+    def setTime(self, time):
+        self.time = time
+        self._record("setTime", time)
+
+    def getReal(self, references):
+        self._record("getReal", tuple(references))
+        return [float(reference) for reference in references]
+
+    def completedIntegratorStep(self):
+        self._record("completedIntegratorStep")
+        return False, False
+
+    def terminate(self):
+        self._record("terminate")
+        if self.terminate_raises:
+            raise RuntimeError("fmi2Terminate failed with status 3 (error)")
+
+    def freeInstance(self):
+        self._record("freeInstance")
+
+
+def _plant_description(supports_me=True, states=0, variability="continuous",
+                       fmi_version="2.0", omit=(), with_parameters=True):
+    """FMU metadata shaped like the pinned omc ModelExchange export."""
+    names = [t2bc.FMU_RAIL, t2bc.FMU_NRST, "reset_asserted"]
+    if with_parameters:
+        names += sorted(json.loads(
+            t2bc.SIM_CASE_PATH.read_text(encoding="utf-8"))["parameters"])
+    names = [name for name in names if name not in omit]
+    return SimpleNamespace(
+        fmiVersion=fmi_version,
+        guid="fixture-guid",
+        modelExchange=(SimpleNamespace(modelIdentifier="fixture")
+                       if supports_me else None),
+        coSimulation=None,
+        numberOfContinuousStates=states,
+        modelVariables=[SimpleNamespace(name=name, valueReference=index,
+                                        variability=variability)
+                        for index, name in enumerate(names)])
+
+
+def _patch_plant(monkeypatch, plant, description=None):
+    """Point MePlantSlave's FMPy calls at the recording fixture."""
+    import fmpy
+    import fmpy.fmi2
+
+    monkeypatch.setattr(
+        fmpy, "read_model_description",
+        Mock(return_value=description or _plant_description()))
+    monkeypatch.setattr(fmpy, "extract", Mock(return_value="fixture-dir"))
+    monkeypatch.setattr(fmpy.fmi2, "FMU2Model", lambda **kwargs: plant)
+    monkeypatch.setattr(t2bc.shutil, "rmtree", Mock())
+    return plant
+
+
+@pytest.mark.parametrize("kwargs,match", [
+    ({"supports_me": False}, "no ModelExchange interface"),
+    ({"states": 1}, "requires a stateless FMU"),
+    ({"states": None}, "requires a stateless FMU"),
+    ({"variability": "discrete"}, "does not support discrete state"),
+    ({"fmi_version": "3.0"}, "requires an FMI 2.0 FMU"),
+    ({"omit": (t2bc.FMU_NRST,)}, "does not export the plant signal"),
+    ({"omit": ("V_bor",)}, "omitted declared sim-case parameters"),
+])
+def test_plant_slave_rejects_unsupported_fmu_metadata(monkeypatch, kwargs,
+                                                      match):
+    """HW-T2-BROWNOUT-012a: the guards fire before any native instantiation."""
+    plant = _RecordingPlant()
+    _patch_plant(monkeypatch, plant, _plant_description(**kwargs))
+    with pytest.raises(t2bc.T2SetupError, match=match):
+        t2bc.MePlantSlave("fixture.fmu")
+    assert plant.names() == [], "no FMI call may follow a rejected description"
+
+
+def test_plant_slave_binds_the_sim_case_parameters_before_initialization(
+        monkeypatch):
+    """HW-T2-BROWNOUT-012b: the executed plant is the schema-validated case."""
+    plant = _patch_plant(monkeypatch, _RecordingPlant())
+    slave = t2bc.MePlantSlave("fixture.fmu", stop_us=1000)
+    names = plant.names()
+    assert names[:7] == ["instantiate", "setupExperiment", "setReal",
+                         "enterInitializationMode", "exitInitializationMode",
+                         "newDiscreteStates", "enterContinuousTimeMode"]
+    parameters = json.loads(
+        t2bc.SIM_CASE_PATH.read_text(encoding="utf-8"))["parameters"]
+    set_real = next(call for call in plant.calls if call[0] == "setReal")
+    assert len(set_real[1]) == len(parameters)
+    assert sorted(set_real[2]) == sorted(float(value)
+                                         for value in parameters.values())
+    setup = next(call for call in plant.calls if call[0] == "setupExperiment")
+    assert setup[1] == (("startTime", 0.0), ("stopTime", 1000 / 1e6))
+    assert slave.time_us == 0
+
+
+def test_plant_slave_advances_time_in_contiguous_integer_sub_steps(monkeypatch):
+    """HW-T2-BROWNOUT-012c: the master owns the plant time (rule 5)."""
+    plant = _patch_plant(monkeypatch, _RecordingPlant())
+    slave = t2bc.MePlantSlave("fixture.fmu", stop_us=300)
+    for current_us in (0, 100, 200):
+        slave.do_step_us(current_us, 100)
+    assert slave.time_us == 300
+    # Per sub-step: setTime -> event mode -> bounded event iteration ->
+    # continuous-time mode -> completedIntegratorStep.
+    per_step = plant.names()[plant.names().index("setTime"):]
+    assert per_step == ["setTime", "enterEventMode", "newDiscreteStates",
+                        "enterContinuousTimeMode", "completedIntegratorStep"] * 3
+    set_times = [call[1] for call in plant.calls if call[0] == "setTime"]
+    assert set_times == [100 / 1e6, 200 / 1e6, 300 / 1e6]
+    # A skipping, repeating or over-horizon orchestrator fails closed.
+    with pytest.raises(t2bc.T2BrownoutError, match="contiguous"):
+        slave.do_step_us(200, 100)
+    with pytest.raises(t2bc.T2BrownoutError, match="exceeds the declared"):
+        slave.do_step_us(300, 100)
+    with pytest.raises(t2bc.T2BrownoutError, match="must be positive"):
+        slave.do_step_us(300, 0)
+
+
+def test_plant_slave_reads_by_value_reference_and_rejects_unknown_names(
+        monkeypatch):
+    """HW-T2-BROWNOUT-012d: readout is by value reference, never by position."""
+    plant = _patch_plant(monkeypatch, _RecordingPlant())
+    slave = t2bc.MePlantSlave("fixture.fmu", stop_us=1000)
+    description = _plant_description()
+    references = {variable.name: variable.valueReference
+                  for variable in description.modelVariables}
+    assert slave.read_real(t2bc.FMU_NRST) == float(references[t2bc.FMU_NRST])
+    assert slave.read_real(t2bc.FMU_RAIL) == float(references[t2bc.FMU_RAIL])
+    reads = [call for call in plant.calls if call[0] == "getReal"]
+    assert reads[-1][1] == (references[t2bc.FMU_RAIL],)
+    with pytest.raises(t2bc.T2BrownoutError, match="unknown plant variable"):
+        slave.read_real("not_a_signal")
+
+
+@pytest.mark.parametrize("kwargs,match", [
+    ({"terminate_requested": True}, "premature termination"),
+    ({"event_iterations": t2bc.MAX_EVENT_ITERATIONS + 2}, "did not converge"),
+])
+def test_plant_slave_event_iteration_fails_closed(monkeypatch, kwargs, match):
+    """HW-T2-BROWNOUT-012e: a chattering plant aborts, it never yields a value."""
+    plant = _patch_plant(monkeypatch, _RecordingPlant(**kwargs))
+    with pytest.raises(t2bc.T2BrownoutError, match=match):
+        t2bc.MePlantSlave("fixture.fmu", stop_us=1000)
+    assert "freeInstance" in plant.names(), "a rejected plant is still freed"
+
+
+def test_plant_slave_close_records_the_terminate_outcome(monkeypatch):
+    """HW-T2-BROWNOUT-012f: terminate is recorded, never silently dropped."""
+    clean = _patch_plant(monkeypatch, _RecordingPlant())
+    slave = t2bc.MePlantSlave("fixture.fmu", stop_us=1000)
+    slave.close()
+    assert slave.terminate_error is None
+    assert clean.names()[-2:] == ["terminate", "freeInstance"]
+
+    failing = _RecordingPlant(terminate_raises=True)
+    _patch_plant(monkeypatch, failing)
+    slave = t2bc.MePlantSlave("fixture.fmu", stop_us=1000)
+    with pytest.raises(RuntimeError, match="status 3"):
+        slave.close()
+    assert slave.terminate_error is not None
+    # The instance is freed even when terminate failed (no leaked native state).
+    assert failing.names()[-2:] == ["terminate", "freeInstance"]
+
+
+def test_brownout_scenario_runs_the_plant_through_the_model_exchange_slave():
+    """HW-T2-BROWNOUT-012g: the runner does not fall back to CoSimulation."""
+    source = (VIRTUAL_BENCH / "t2_bor_common.py").read_text(encoding="utf-8")
+    assert "fmu = MePlantSlave(fmu_path)" in source
+    assert "FmpyFmuSlave(fmu_path)" not in source, (
+        "the zero-state BOR plant must not be stepped through the "
+        "CoSimulation doStep slave (the pinned OpenModelica CS runtime cannot "
+        "step a zero-state source)")
+    assert not hasattr(t2bc, "FmpyFmuSlave"), (
+        "t2_bor_common must not import the CoSimulation slave: the brownout "
+        "plant's only executor is MePlantSlave")
+    assert t2bc.MAX_EVENT_ITERATIONS == 100, (
+        "the event-iteration bound must stay the OR-002 evaluator's bound")
 
 
 # ---------------------------------------------------------------------------

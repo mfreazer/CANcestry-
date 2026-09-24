@@ -78,7 +78,7 @@
       "y_units": "V"
     }
   ],
-  "source_evidence_hash": "sha256:93ac484190499d30758b861c2c9cb47f83aca5c4d7490f0bc881fae8df750143",
+  "source_evidence_hash": "sha256:6d82c6f0b88105aa2867fa02343b21966db8899094a3553d77060952998c5da0",
   "source_evidence_path": "hw/tests/evidence/t2_busoff_001.json",
   "source_requirement": "HW-FR-003",
   "status": "pending",

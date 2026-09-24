@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Tool Qualification Plan and Evidence |
-| **Version** | 0.2.10 |
+| **Version** | 0.2.11 |
 | **Status** | Draft — H-11, pending QA and Human Reviewer approval |
 | **Owner** | System Engineer |
 | **Approver** | QA Lead |
@@ -39,7 +39,7 @@ gap fails closed. `-` represents an empty tool gap for TCL1 only.
 | tool_id | Tool / role and rationale | TI | TD | TCL | validation_gap |
 |---|---|---|---|---|---|
 | openmodelica | OpenModelica compiles Modelica into FMUs. A compiler bug can silently change simulation semantics, introducing errors into safety-related artifacts. OR-001/OR-002 regressions cover only exercised semantics. | TI2 | TD2 | TCL2 | Compiler semantics outside independently validated output remain unqualified; OR-001/OR-002 regressions do not cover all translation and solver behavior. |
-| fmpy | Bounded, independently oracle-checked FMU execution/readout only: OR-001 uses explicit CoSimulation `doStep` scheduling and OR-002 uses the guarded zero-state ModelExchange evaluator. Subject to §3.1; TD1 is conditional on detection coverage for the exact claimed outputs, not a claim that FMPy cannot introduce errors. | TI2 | TD1 | TCL1 | - |
+| fmpy | Bounded, independently oracle-checked FMU execution/readout only: OR-001 uses explicit CoSimulation `doStep` scheduling for the stateful Holdup plant, and OR-002 plus the H-11 BOR plant (both zero-state sources) use the guarded zero-state ModelExchange evaluator. Subject to §3.1; TD1 is conditional on detection coverage for the exact claimed outputs, not a claim that FMPy cannot introduce errors. | TI2 | TD1 | TCL1 | - |
 | capellambse | capellambse is a model reader, not a safety-case producer. Live structural checks and negative fixtures detect missed linkage/parse errors. | TI2 | TD1 | TCL1 | - |
 | cancestry-render-modelica | Pure-Python SVG renderer (H-05): it draws only what a schema-validated plot-data file declares, verifies the pinned source-evidence hash before drawing, and refuses to run on a broken hash chain or an unknown vocabulary. A defect can at worst fail to display a validated claim; it cannot introduce or alter a numerical result. | TI1 | TD1 | TCL1 | - |
 | fmi_bridge | Deterministic FMI 3.0 co-simulation master (H-07, issue #53): integer-microsecond fixed-step scheduling (100 µs master / 1 µs FMU internal), no wall clock and no randomness (source-lint-enforced), marshals plant/MCU values, captures events from the platform's hook-stamped trace slots and asserts the strict QA-EV-01 ordering against the OR-001-anchored plant trajectory. Every exchanged value is recorded in the hashed trace and the event times come from Renode-side registers, not from bridge computation: a bridge defect can at worst fail to detect a mismatch or halt the run; it cannot introduce or alter a numerical result into the item. Bounded contract tests HW-T2-BRIDGE-001..015 support the detection argument for this exact configuration. | TI1 | TD1 | TCL1 | - |
@@ -86,10 +86,17 @@ evidence**:
 This is a precondition on reuse, not retrospective tool qualification or a
 promotion of the currently pending pulse evidence. OpenModelica remains TCL2.
 
-**H-11 disposition (issue #64, v0.2.10): brownout/BOR configuration.** The
-brownout scenario steps a SECOND FMU (the BOR plant, `CancestryLib.Power.BOR`)
-with the same pinned FMPy 0.3.24 CoSimulation path, and its outputs are **not**
-oracle-checked: no registered oracle covers the BOR threshold behaviour, the
+**H-11 disposition (issue #64, v0.2.10; execution path corrected in v0.2.11):
+brownout/BOR configuration.** The brownout scenario steps a SECOND FMU (the BOR
+plant, `CancestryLib.Power.BOR`) with the pinned FMPy 0.3.24 — through the
+**guarded zero-state ModelExchange evaluator** (`t2_bor_common.MePlantSlave`,
+the same execution path OR-002 uses for the stateless pulse source), not
+through CoSimulation `doStep`: the pinned OpenModelica 1.24 CS runtime cannot
+step a zero-state source, and BOR.mo is algebraic by construction (T1 test
+HW-PHYS-BOR-008 forbids `der(`). No numerical integrator is qualified or used
+for this plant — the master sets the plant time from integer microseconds and
+the model's own equation set is re-evaluated at each instant. Its outputs are
+**not** oracle-checked: no registered oracle covers the BOR threshold behaviour, the
 hysteresis release gate or the reset timing (issue #64: oracle none), and the
 retention-domain branch is the only part OR-001 witnesses (analytically, at
 T1). Per this section's precondition the bounded TD1 argument therefore does
@@ -102,26 +109,48 @@ below. The scenario's own invariants are ordering, liveness and register-state
 checks over emulation virtual time (the injector stamps and the platform
 hooks): none of them is an FMPy output claim.
 
-**FMI lifecycle observation (H-11, v0.2.10).** The OpenModelica FMU runtime
-accepts `fmi2Terminate` only in `modelEventMode`/`modelContinuousTimeMode`
-(`SimulationRuntime/fmi/export/openmodelica/fmu2_model_interface.c.inc`:
-`fmi2Terminate` -> `invalidState(..., modelEventMode|modelContinuousTimeMode,
-~0)`) and returns `fmi2Error` otherwise: the terminate status is decided by
-the runtime's internal state machine, not by the simulated values. The T1
-brownout check (`hw/tests/test_bor_physics.py`) and the brownout runner
-therefore treat it as **non-value-carrying**: the FMU's outputs are read and
-asserted first (every recorded microsecond is compared against the reference
-implementation) and the terminate outcome is recorded and printed rather than
-allowed to invalidate a verified trajectory. The pinned runtime emits its
-failure-level log only when debug logging is switched on, and in dispatch
-36036288651 enabling `loggingOn` changed the runtime's **status reporting**
-for the collapse-boundary step (the identical `doStep` call reported
-`fmi2Error` with logging on and `OK` with logging off, while the FMU's values
-stayed correct at every sampled instant). The value guarantee is therefore the
-sample-by-sample comparison, not the log; this is a documented tool behaviour,
-not a modelling deviation, and it is inherited by any future FMU that reuses
-this lifecycle code. Re-verify both observations if the OpenModelica pin or
-the FMU build shape changes.
+**FMI execution-path finding (H-11, v0.2.11): the pinned OpenModelica 1.24
+CoSimulation runtime cannot step the zero-state BOR source.** Three hw-fast
+dispatches of the T1 brownout check (`hw/tests/test_bor_physics.py`,
+HW-SIM-BOR-001) recorded it against an FMU built `fmuType="cs"`:
+
+- 36035296703 — the whole 1 µs `fmi2DoStep` loop over the 20 ms case returned
+  values that matched the reference implementation at every sampled
+  microsecond, and then `fmi2Terminate` returned fmi2Error. The runtime
+  accepts terminate only in `modelEventMode`/`modelContinuousTimeMode`
+  (`OMCompiler/SimulationRuntime/fmi/export/openmodelica/fmu2_model_interface.c`:
+  `fmi2Terminate` → `invalidState(..., modelEventMode|modelContinuousTimeMode,
+  ~0)`), i.e. its internal state machine, not the simulated values, decides
+  that status.
+- 36036288651 — `fmi2DoStep(0.01, 1e-6)` returned fmi2Error at the modelled
+  collapse boundary t = 10 ms (that dispatch had debug logging on).
+- 36036948275 — the identical `fmi2DoStep(0.01, 1e-6)` returned fmi2Error with
+  logging off. The same call therefore reported different statuses in
+  different dispatches of the same artifact.
+
+A status code that is not reproducible between identical dispatches cannot
+carry evidence (HwAGENTS.md rule 5), so this programme does not consume one:
+it is the same finding already recorded for the OR-002 pulse fixture
+(`docs/hw/h04-enforcement.md`: "OpenModelica 1.24 CS cannot step the zero-state
+source, so the evaluator explicitly requires zero continuous and discrete state
+variables and fails closed if that changes"). **Disposition:** the BOR plant is
+built `fmuType="me"` and executed through the guarded zero-state ModelExchange
+evaluator in both consumers — the T1 check (`execute_bor`, whose guards,
+call sequence and event-iteration bound are themselves pinned offline by
+HW-SIM-BOR-002..005) and the T2 runner (`MePlantSlave`, pinned offline by
+HW-T2-BROWNOUT-012a..g). The evaluator's guards fail closed on a stateful,
+discrete-state, non-ModelExchange or non-FMI-2.0 description before any native
+instantiation, its event iteration is bounded at 100 (a chattering relation is
+a failure, never a sampled value), and the master owns time: the plant instant
+is set from integer microseconds and never accumulated in floating point.
+`fmi2Terminate` remains **non-value-carrying** and is recorded, printed and
+re-raised rather than silently dropped (in the ModelExchange path the FMU is in
+continuous-time mode at terminate, which the runtime accepts, so a clean
+terminate is the expected outcome); every claim comes from the sampled values,
+which are compared sample by sample against the reference implementation. This
+is a documented tool behaviour, not a modelling deviation, and it is inherited
+by any future FMU that reuses this runtime. Re-verify all of it if the
+OpenModelica pin or the FMU build shape changes.
 
 **H-06 disposition (issue #49, v0.2.6): pulse 5a configuration.** The H-06
 selector-8 branch recompiles the `PulseISO7637_2` FMU (new equation branch and
@@ -460,13 +489,17 @@ FMU/configuration/version, or a future use. Those uses remain subject to the
   `bor_reset_injector` scripted peripheral at the issue-pinned 0x40001000
   (NRST active-low with a 100 us pulse, main-SRAM marker discard,
   RCC_CSR.BORRSTF, BOR machine reset), brought up by
-  `cancestry-hw-bor.resc`. The plant is the BOR FMU - FMI 2.0 CoSimulation,
-  built headless by the pinned OpenModelica 1.24 from
-  `hw/model/CancestryLib/Power/BOR.mo` under
-  `hw/tests/cases/bor_brownout_001.simcase.json` - stepped by
-  `t2_bor_common.py` over the H-07 100 us master / 1 us FMU contract; the
-  MODELLED BOR assertion drives the injector command, so the injection is a
-  plant-driven event and not a scenario constant that happens to be 10 ms.
+  `cancestry-hw-bor.resc`. The plant is the BOR FMU - FMI 2.0
+  **ModelExchange** (the pinned OpenModelica 1.24 CS runtime cannot step this
+  zero-state source; see the §3.1 execution-path finding), built headless by
+  the pinned OpenModelica 1.24 from `hw/model/CancestryLib/Power/BOR.mo` under
+  `hw/tests/cases/bor_brownout_001.simcase.json` - advanced by
+  `t2_bor_common.MePlantSlave` over the H-07 100 us master / 1 us plant
+  sub-step contract (each sub-step an explicit `setTime` from integer
+  microseconds plus a bounded event iteration, so the modelled assertion is
+  observed at the exact microsecond the model declares); the MODELLED BOR
+  assertion drives the injector command, so the injection is a plant-driven
+  event and not a scenario constant that happens to be 10 ms.
 - The BOR Modelica model as a TCL2-governed artifact (issue #64 deliverable
   13: "BOR Modelica model as TCL2"). The model is not a tool, so it is not a
   controlled-table row: its PRODUCER (`openmodelica`, TCL2) is, and the
@@ -479,8 +512,9 @@ FMU/configuration/version, or a future use. Those uses remain subject to the
   reset timing, and the hysteresis value and the resumption latency are
   declared engineering fixtures. The model may therefore only ever be consumed
   pending / CL0; the T1 regressions (`hw/tests/test_bor_physics.py`
-  HW-PHYS-BOR-001..008 plus the toolchain FMU check HW-SIM-BOR-001) bound the
-  behaviour without qualifying it.
+  HW-PHYS-BOR-001..008, the toolchain FMU check HW-SIM-BOR-001 and the offline
+  evaluator contract HW-SIM-BOR-002..005) bound the behaviour without
+  qualifying it.
 - Documented deviations from the issue's wording: (a) the evidence hash chain
   is FMU + ELF + bridge + injector + trace (the reset line is a platform
   extension, so its hash joins the chain); (b) the issue's "symbol hook on the
@@ -495,7 +529,7 @@ FMU/configuration/version, or a future use. Those uses remain subject to the
 - Status: **no executed T2 brownout run exists.** The committed artifact is a
   pending manifest (pass=false, CL0, `oracle_id` "none"); the ledger row
   `(HW-SF-002, virtual_bench)` stays `sim-pending`. The scenario machinery is
-  host-tested offline (HW-T2-BROWNOUT-001..011), which is not T2 evidence.
+  host-tested offline (HW-T2-BROWNOUT-001..012), which is not T2 evidence.
 - Acceptance for a future executed run: the hw-nightly T2 job runs the
   scenario twice (`--check`) against the committed artifact; a passing run
   captures `retention_write < bor_detect < recovery`, NRST asserted for
@@ -548,6 +582,7 @@ OR-002 has no qualified passing claim. Oracle/model gaps remain in
 
 | Version | Date | Change |
 |---|---|---|
+| 0.2.11 | 2026-09-24 | H-11 #64 execution-path correction: the BOR plant is a ZERO-STATE source, and the pinned OpenModelica 1.24 CoSimulation runtime cannot step one - recorded as the §3.1 "FMI execution-path finding" with the three hw-fast dispatches that showed it (36035296703 `fmi2Terminate` fmi2Error after a value-correct `doStep` loop; 36036288651 and 36036948275 `fmi2DoStep(0.01, 1e-6)` fmi2Error at the modelled collapse boundary, with and without debug logging, i.e. not reproducible between identical dispatches). The BOR FMU is now built `fmuType="me"` and executed through the guarded zero-state ModelExchange evaluator in both consumers (T1 `execute_bor`, pinned offline by HW-SIM-BOR-002..005; T2 `MePlantSlave`, pinned offline by HW-T2-BROWNOUT-012a..g) - the same path OR-002 already uses for the stateless pulse source (`docs/hw/h04-enforcement.md`). §4.6 configuration and the `fmpy` controlled-table rationale updated accordingly; §3.1 keeps the BOR output OUTSIDE the bounded FMPy TD1 argument. Hash cascade re-issued for every evidence artifact and visual pinning this document. No qualification promotion; the brownout row stays sim-pending / CL0. |
 | 0.2.10 | 2026-09-24 | H-11 #64: `bor_reset_injector` classified TCL1 (TI1/TD1) for the bounded reset-line role; the BOR Modelica model recorded as a TCL2-governed artifact (openmodelica gap inherited verbatim, plus the model-level no-oracle gap in the new §4.6); §3.1 disposition for the new T2 brownout configuration (BOR FMU output is NOT inside the bounded FMPy TD1 argument - no passing claim may be consumed from it). Hash cascade re-issued for every evidence artifact and visual pinning this document. No qualification promotion; the brownout row stays sim-pending / CL0. |
 | 0.2.9 | 2026-09-24 | H-10 #62: `can_fault_injector` classified TCL1 (TI1/TD1) for the bounded shared-medium fault-projection role; §3.1 disposition for the new T2 CAN fault scenarios (no FMPy/FMU — precondition not triggered; renode gap inherited verbatim; pending-only consumption at CL0); §4.5 qualification-pending record incl. the documented deviations (ELF+bridge+injector+trace hash chain, detection/recovery function hooks, MALFORMED_FRAME mapping). Hash cascade re-issued for every evidence artifact pinning this document. No qualification promotion; Bus-Off/CRC rows stay sim-pending / CL0. |
 | 0.2.8 | 2026-09-24 | H-09 #56: fmeda classified TCL2 (TI2/TD2) for `tools/fmeda-calculator.py` with the declared Annex E Table E.1 gap; §4.4 qualification record (exact-arithmetic Annex C oracle, TI SLYP685 n = 1..4 and Chalmers 2023 public fixtures reproduced to publication precision, byte-identical output, `--check` drift gate). Hash cascade re-issued for every evidence artifact pinning this document. No qualification promotion of any other tool; no ASIL-B metric claim. |

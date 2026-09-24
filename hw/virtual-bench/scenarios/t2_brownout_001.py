@@ -2,8 +2,10 @@
 """T2 scenario t2_brownout_001: brownout / BOR reset on the virtual bench (H-11).
 
 Issue #64, commit 3: start the v1.0.0 firmware (off-tree bor_brownout driver)
-in Renode, step the CancestryLib.Power.BOR plant over the deterministic FMI
-2.0 co-simulation, let the MODELLED BOR assertion drive the brownout injection
+in Renode, step the CancestryLib.Power.BOR plant over the deterministic
+100 us master / 1 us plant sub-step contract (the zero-state plant is executed
+through the guarded FMI 2.0 ModelExchange slave, t2_bor_common.MePlantSlave),
+let the MODELLED BOR assertion drive the brownout injection
 through the BOR reset injector (t = 10 ms, NRST asserted for 100 us), capture
 the firmware's retention-write, BOR-detection and recovery timestamps, and
 assert the issue's ordering chain:
@@ -52,8 +54,10 @@ SCENARIO = ScenarioSpec(
     evidence_of=(
         "T2 virtual-bench brownout scenario for HW-SF-002 (H-11, issue #64): "
         "the H-11 plant CancestryLib.Power.BOR (hw/model/CancestryLib/Power/"
-        "BOR.mo, compiled to an FMI 2.0 CoSimulation FMU by the pinned "
-        "OpenModelica) collapses the 3V3 rail at t = 10 ms; its modelled BOR "
+        "BOR.mo, compiled to an FMI 2.0 ModelExchange FMU by the pinned "
+        "OpenModelica and executed by the guarded zero-state ModelExchange "
+        "slave t2_bor_common.MePlantSlave) collapses the 3V3 rail at t = 10 "
+        "ms; its modelled BOR "
         "assertion drives the BOR reset injector "
         "(hw/virtual-bench/renode/bor_reset_injector.py), which pulls the "
         "active-low NRST line for 100 us, discards the main-SRAM marker word, "
@@ -111,6 +115,17 @@ SCENARIO = ScenarioSpec(
         "temperature, option-byte configuration, backup-domain switching) is "
         "not_simulated: the injector models the RESET LINE and its retention "
         "consequences, never the cell.",
+        "The plant is executed through FMI 2.0 ModelExchange with the master "
+        "setting the plant time explicitly (t2_bor_common.MePlantSlave), "
+        "because the pinned OpenModelica 1.24 CoSimulation runtime cannot step "
+        "a zero-state source (docs/hw/h04-enforcement.md; hw-fast dispatches "
+        "36035296703 / 36036288651 / 36036948275). No numerical integrator is "
+        "qualified for this plant and none is used: the model is algebraic, so "
+        "the executed value at each microsecond is the model's own equation "
+        "set. Per docs/hw/tool-qualification.md section 3.1 the bounded FMPy "
+        "TD1 argument does NOT extend to the BOR configuration, so no passing "
+        "claim may be consumed from BOR FMU output without a registered oracle "
+        "or an explicit FMPy reclassification.",
         "DWT CYCCNT accuracy is deliberately unexercised (bring-up finding "
         "F-27): events are captured from emulation virtual time and carry the "
         "renode TCL2 gap inherited above.",

@@ -33,8 +33,8 @@
   "source_hashes": {
     "ci/docker/Dockerfile.t2": "sha256:79b533163dc4919f4cd45f9581c0a119a150b15efde6061e5747160a2c09cf85",
     "ci/docker/renode-1.16.1.pin": "sha256:091ef14d0677440408bc2436530442e4fea1690439b1827a7bd08d495c6b44f1",
-    "docs/hw/tool-qualification.md": "sha256:00fcd7765ca9f1ac0b53e432394fb551297889a4f50cd93371dd815a1943e2d6",
-    "docs/hw/virtual-bench-plan.md": "sha256:789376d2075a5ea86dd33a3a0cc94217d244ca4917d79a3f58a56383a710c055",
+    "docs/hw/tool-qualification.md": "sha256:05cf955bac35f8cc8396e53bdee090bdd04723913cdd014c895723e968ab3beb",
+    "docs/hw/virtual-bench-plan.md": "sha256:96bd00cd2cdd53d98f60a98b0f9782e2e005b473aaf8bbba346bf99f7931c652",
     "hw/virtual-bench/firmware/build_firmware.sh": "sha256:68a96f7a3ea7b50574a399c57608c4199d437f90470e3a1a3729903e6264cbbc",
     "hw/virtual-bench/firmware/can_fault.c": "sha256:3d2258044d6a9dbe727dc95da8c097559beaef4f9c09818e699cfb46c1d3508d",
     "hw/virtual-bench/firmware/startup.s": "sha256:8182c84a3c7028723006271fa0678f8c54bd0040d0476fc3ee2d93ca1e9e5606",

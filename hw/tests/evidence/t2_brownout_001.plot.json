@@ -78,7 +78,7 @@
       "y_units": "V"
     }
   ],
-  "source_evidence_hash": "sha256:eac880409167cf1dd24fb56aad0fa5ddb67d231ad380940ff77c745f1dbd8e08",
+  "source_evidence_hash": "sha256:685e4c30c590626ae37b39cd1372b43a92d8c66d5c84bf73679d2c2ad6070e1a",
   "source_evidence_path": "hw/tests/evidence/t2_brownout_001.json",
   "source_requirement": "HW-SF-002",
   "status": "pending",

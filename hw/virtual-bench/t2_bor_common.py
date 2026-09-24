@@ -8,15 +8,22 @@ the platform described by ``renode/stm32g474-cancestry.repl`` plus the BOR
 reset injector (``renode/bor_reset_injector.py``), brought up by
 ``renode/cancestry-hw-bor.resc`` - AND it steps the H-11 plant
 (``CancestryLib.Power.BOR``, compiled headless by the pinned OpenModelica)
-over the deterministic 100 us master / 1 us FMU co-simulation contract of the
-H-07 bridge.
+over the deterministic 100 us master / 1 us plant sub-step contract of the
+H-07 bridge. The plant is a ZERO-STATE algebraic source, so it is executed
+through the guarded FMI 2.0 ModelExchange slave ``MePlantSlave`` below - the
+execution path this repository qualifies for stateless sources (OR-002 pulse
+fixture, docs/hw/h04-enforcement.md) - and not through CoSimulation
+``doStep``, which the pinned OpenModelica 1.24 runtime cannot drive for a
+zero-state source.
 
 Scenario shape:
 
 1. preflight: pinned Renode version, brownout ELF, platform magic, injector
    window magic / NRST level / counters, all trace slots at 0.
 2. The machine is advanced exclusively with fixed ``emulation RunFor`` quanta
-   (100 us master step); the plant is advanced in 1 us FMU sub-steps.
+   (100 us master step); the plant time is advanced in 1 us sub-steps, each
+   one an explicit ``setTime`` + bounded event iteration (integer
+   microseconds, never floating-point accumulation).
 3. The MODELLED BOR ASSERTION drives the reset injection: the first master
    step at which the plant's ``nrst`` signal reads asserted (the modelled
    threshold crossing at t = 10 ms, issue #64) is the instant the orchestrator
@@ -59,7 +66,9 @@ hysteresis or the reset timing - the row stays sim-pending / CL0).
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -81,7 +90,6 @@ from fmi_bridge import (  # noqa: E402
     FIXED_SEED,
     FMU_STEP_US,
     MASTER_STEP_US,
-    FmpyFmuSlave,
     RenodeMonitorEndpoint,
     safe_latch_asserted,
     vbat_to_millivolts,
@@ -319,6 +327,233 @@ def inject_brownout(endpoint):
 
 
 # ---------------------------------------------------------------------------
+# The plant slave: guarded zero-state FMI 2.0 ModelExchange execution
+# ---------------------------------------------------------------------------
+
+# The bound the qualified OR-002 pulse evaluator uses
+# (hw/tests/test_pulse_sim.py): an event iteration that does not settle is a
+# FAILURE, never a sampled value.
+MAX_EVENT_ITERATIONS = 100
+
+
+class MePlantSlave(object):
+    """FMPy-driven FMI 2.0 ModelExchange plant slave for a ZERO-STATE source.
+
+    Interface-compatible with ``fmi_bridge.FmpyFmuSlave`` (``do_step_us``,
+    ``read_real``, ``close``), so the H-07 contract the bridge is written
+    against is unchanged: 100 us Renode master steps, the plant advanced in
+    1 us sub-steps, outputs read at the sub-step's end instant.
+
+    Why ModelExchange and not CoSimulation ``doStep``
+    -------------------------------------------------
+    ``CancestryLib.Power.BOR`` is a zero-state algebraic source (its T1 test
+    HW-PHYS-BOR-008 forbids ``der(``; the model is a fixture in the
+    ``PulseISO7637_2`` class). The pinned OpenModelica 1.24 CoSimulation
+    runtime cannot step such a source - the finding this repository already
+    recorded for the OR-002 pulse fixture (docs/hw/h04-enforcement.md:
+    "OpenModelica 1.24 CS cannot step the zero-state source, so the evaluator
+    explicitly requires zero continuous and discrete state variables and
+    fails closed if that changes") and reproduced for the BOR plant by three
+    hw-fast dispatches of the T1 check: 36035296703 (``fmi2Terminate``
+    returned fmi2Error after a value-correct ``doStep`` loop), 36036288651 and
+    36036948275 (``fmi2DoStep(0.01, 1e-6)`` returned fmi2Error at the
+    modelled collapse boundary t = 10 ms - with and without debug logging,
+    i.e. not reproducible run to run). A status code that differs between
+    identical dispatches cannot carry evidence (HwAGENTS.md rule 5), so the
+    brownout plant is not stepped through one.
+
+    Here the MASTER owns time: ``do_step_us`` sets the plant time to the
+    sub-step's end instant (computed from integer microseconds, never
+    accumulated in floating point) and re-evaluates the event relations
+    there, so the modelled BOR assertion is observed at the exact microsecond
+    the model declares - which is what makes the plant-driven injection stamp
+    exact. ModelExchange executes the SAME compiled equations; it is not a
+    Python waveform substitute. Guards fail closed before any native code is
+    instantiated, and the recorded evidence keeps the openmodelica TCL2
+    producer gap verbatim (docs/hw/tool-qualification.md section 3.1: BOR FMU
+    output is NOT inside the bounded FMPy TD1 argument).
+    """
+
+    def __init__(self, fmu_path, stop_us=SCENARIO_DURATION_US,
+                 instance_name="cancestry_t2_bor", parameters=None):
+        try:
+            import fmpy
+            from fmpy.fmi2 import FMU2Model
+        except ImportError as error:
+            raise T2SetupError(
+                "FMPy is not installed; the T2 brownout bridge refuses to run "
+                "without the pinned FMU executor (fail-closed): %s" % error)
+
+        description = fmpy.read_model_description(str(fmu_path))
+        if not str(description.fmiVersion).startswith("2.0"):
+            raise T2SetupError(
+                "T2 requires an FMI 2.0 FMU (bring-up finding F-2: the pinned "
+                "OpenModelica 1.24.0 cannot export FMI 3.0); %s declares "
+                "fmiVersion %r" % (fmu_path, description.fmiVersion))
+        if description.modelExchange is None:
+            raise T2SetupError(
+                "%s has no ModelExchange interface: the BOR plant must be "
+                "built with fmuType=\"me\" (the pinned OpenModelica CS "
+                "runtime cannot step this zero-state source)" % fmu_path)
+        if description.numberOfContinuousStates != 0:
+            raise T2SetupError(
+                "the BOR plant slave requires a stateless FMU (BOR.mo is "
+                "algebraic by construction, T1 test HW-PHYS-BOR-008); %s "
+                "declares %r continuous states"
+                % (fmu_path, description.numberOfContinuousStates))
+        if any(variable.variability == "discrete"
+               for variable in description.modelVariables):
+            raise T2SetupError(
+                "the BOR plant slave does not support discrete state "
+                "variables: %s declares one" % fmu_path)
+
+        references = {variable.name: variable.valueReference
+                      for variable in description.modelVariables}
+        for name in (FMU_RAIL, FMU_NRST):
+            if name not in references:
+                raise T2SetupError(
+                    "the BOR FMU does not export the plant signal %r "
+                    "(the bridge marshals %r and %r)"
+                    % (name, FMU_RAIL, FMU_NRST))
+        # Bind the executed plant to the schema-validated sim case instead of
+        # relying on implied defaults (the T1 evaluator does the same).
+        if parameters is None:
+            with open(SIM_CASE_PATH, "r", encoding="utf-8") as handle:
+                parameters = json.load(handle)["parameters"]
+        missing = sorted(set(parameters) - set(references))
+        if missing:
+            raise T2SetupError(
+                "the BOR FMU omitted declared sim-case parameters: %s"
+                % ", ".join(missing))
+
+        self._fmu_path = Path(fmu_path)
+        self._stop_us = int(stop_us)
+        self._time_us = 0
+        self._references = references
+        self.terminate_error = None
+        self._directory = fmpy.extract(str(fmu_path))
+        self._slave = FMU2Model(
+            guid=description.guid, unzipDirectory=self._directory,
+            modelIdentifier=description.modelExchange.modelIdentifier,
+            instanceName=instance_name)
+        try:
+            self._slave.instantiate()
+            self._slave.setupExperiment(startTime=0.0,
+                                        stopTime=self._stop_us / 1e6)
+            names = sorted(parameters)
+            self._slave.setReal([references[name] for name in names],
+                                [float(parameters[name]) for name in names])
+            self._slave.enterInitializationMode()
+            self._slave.exitInitializationMode()
+            self._finish_event_iteration()
+            self._slave.enterContinuousTimeMode()
+        except Exception:
+            # Release the native instance, but let the ORIGINAL failure be the
+            # one that reaches the runner: a cleanup status (see close()) is
+            # not value-carrying and must not mask why the plant was rejected.
+            try:
+                self.close()
+            except Exception:  # noqa: BLE001 - cleanup status, not the report
+                pass
+            raise
+
+    # -- plant advance ----------------------------------------------------
+    def _finish_event_iteration(self):
+        """Bound the FMI event iteration; a stalled FMU is never a value."""
+        for _ in range(MAX_EVENT_ITERATIONS):
+            needed, terminate = self._slave.newDiscreteStates()[:2]
+            if terminate:
+                raise T2BrownoutError(
+                    "the BOR plant requested premature termination at %d us "
+                    "(fail-closed: no evidence is written)" % self._time_us)
+            if not needed:
+                return
+        raise T2BrownoutError(
+            "the BOR plant event iteration did not converge within %d "
+            "iterations at %d us (chattering at a relation boundary is a "
+            "fail-closed condition, not a value)"
+            % (MAX_EVENT_ITERATIONS, self._time_us))
+
+    def do_step_us(self, current_us, step_us):
+        """Advance the plant to the end of one sub-step and settle its events.
+
+        ``current_us`` must be the plant's own current time and the target
+        must stay inside the declared horizon: the sub-step sequence is part
+        of the deterministic contract, so a skipping or repeating orchestrator
+        aborts the run instead of silently sampling a different instant.
+        """
+        current_us = int(current_us)
+        step_us = int(step_us)
+        if step_us <= 0:
+            raise T2BrownoutError("the plant sub-step must be positive")
+        if current_us != self._time_us:
+            raise T2BrownoutError(
+                "the plant is at %d us but the orchestrator asked to step "
+                "from %d us (the sub-step sequence must be contiguous and "
+                "exactly once)" % (self._time_us, current_us))
+        target_us = current_us + step_us
+        if target_us > self._stop_us:
+            raise T2BrownoutError(
+                "the plant sub-step to %d us exceeds the declared horizon "
+                "%d us (setupExperiment stopTime)" % (target_us,
+                                                      self._stop_us))
+        self._slave.setTime(target_us / 1e6)
+        self._slave.enterEventMode()
+        self._finish_event_iteration()
+        self._slave.enterContinuousTimeMode()
+        self._time_us = target_us
+        _, terminate = self._slave.completedIntegratorStep()
+        if terminate:
+            raise T2BrownoutError(
+                "the BOR plant requested premature termination at %d us"
+                % target_us)
+
+    @property
+    def time_us(self):
+        return self._time_us
+
+    # -- readout ----------------------------------------------------------
+    def read_real(self, name):
+        if name not in self._references:
+            raise T2BrownoutError("unknown plant variable %r" % name)
+        values = self._slave.getReal([self._references[name]])
+        return float(values[0])
+
+    # -- lifecycle --------------------------------------------------------
+    def close(self):
+        """Terminate and free the instance; never drop the terminate outcome.
+
+        In the ModelExchange path the FMU is in continuous-time mode here,
+        which is one of the two states the pinned runtime accepts
+        ``fmi2Terminate`` in, so a clean terminate is the expected outcome;
+        the recording discipline stays (docs/hw/tool-qualification.md
+        section 3.1) and the outcome is re-raised for the runner to print -
+        it is non-value-carrying either way, because every scenario claim
+        comes from the platform stamps and the firmware slots, which are
+        asserted before any evidence is written.
+        """
+        error = None
+        slave = getattr(self, "_slave", None)
+        if slave is not None:
+            try:
+                slave.terminate()
+            except Exception as terminate_error:  # noqa: BLE001 - recorded
+                error = terminate_error
+            self._slave = None
+            try:
+                slave.freeInstance()
+            except Exception as free_error:  # noqa: BLE001 - recorded
+                error = error or free_error
+        directory = getattr(self, "_directory", None)
+        if directory is not None:
+            shutil.rmtree(str(directory), ignore_errors=True)
+            self._directory = None
+        self.terminate_error = error
+        if error is not None:
+            raise error
+
+
+# ---------------------------------------------------------------------------
 # The plant-driven co-simulation
 # ---------------------------------------------------------------------------
 
@@ -327,7 +562,8 @@ class BrownoutBridge(object):
 
     Per master step (100 us):
 
-    1. the FMU advances in 1 us internal sub-steps (the H-07 bridge contract);
+    1. the plant advances in 1 us sub-steps (the H-07 bridge contract, here
+       an explicit ModelExchange ``setTime`` per sub-step - MePlantSlave);
        until the injection has happened every sub-step is checked for the
        modelled BOR assertion, so the plant-side stamp is exact to 1 us;
     2. Renode advances by exactly one master quantum (``emulation RunFor``);
@@ -344,6 +580,11 @@ class BrownoutBridge(object):
     boundary at which the plant's reset signal reads asserted. After the
     machine reset the co-simulation continues: the post-reset firmware path is
     what the scenario captures.
+
+    The plant interface is the ``do_step_us`` / ``read_real`` pair the H-07
+    bridge contract defines (``fmi_bridge.FmpyFmuSlave`` for the stateful
+    Holdup plant, ``MePlantSlave`` for this zero-state one), so the bridge is
+    agnostic to which FMI execution path the plant's model shape requires.
     """
 
     def __init__(self, renode, fmu, spec,
@@ -615,7 +856,12 @@ def run_brownout_scenario(renode_bin, elf_path, fmu_path, spec,
         endpoint = connect_monitor(port, transcript_path=transcript_log,
                                    clock=time.time)
         preflight(endpoint, spec)
-        fmu = FmpyFmuSlave(fmu_path)
+        # The plant is the zero-state BOR source: it is executed through the
+        # guarded FMI 2.0 ModelExchange slave (MePlantSlave), NOT through the
+        # CoSimulation doStep path the retention scenario uses for the
+        # stateful Holdup plant - the pinned OpenModelica 1.24 CS runtime
+        # cannot step a zero-state source (see MePlantSlave).
+        fmu = MePlantSlave(fmu_path)
         try:
             events, summary, counters, samples = BrownoutBridge(
                 endpoint, fmu, spec).run()
@@ -623,11 +869,14 @@ def run_brownout_scenario(renode_bin, elf_path, fmu_path, spec,
             # FMI 2.0 lifecycle note (the same one as the T1 check,
             # hw/tests/test_bor_physics.py): the OpenModelica runtime accepts
             # fmi2Terminate only in EventMode|ContinuousTimeMode
-            # (fmu2_model_interface.c.inc) and returns fmi2Error otherwise.
-            # The terminate status is not value-carrying: every scenario claim
-            # comes from the platform stamps and the firmware slots, which are
-            # asserted before the evidence is written. The outcome is printed,
-            # never silently dropped, and it never blocks a run whose
+            # (fmu2_model_interface.c) and returns fmi2Error otherwise - the
+            # CoSimulation dispatch 36035296703 hit exactly that after a
+            # value-correct step loop. The ModelExchange slave terminates from
+            # continuous-time mode, so a clean terminate is expected; the
+            # outcome is still recorded and printed, never silently dropped.
+            # It is not value-carrying: every scenario claim comes from the
+            # platform stamps and the firmware slots, which are asserted
+            # before the evidence is written, and it never blocks a run whose
             # invariants already passed.
             try:
                 fmu.close()
@@ -682,12 +931,17 @@ def run_brownout_scenario(renode_bin, elf_path, fmu_path, spec,
 def omc_build_script_text():
     """Text of the omc script that builds the BOR FMU (pure, pinned).
 
-    FMPy 0.3.24's CoSimulation path is used, so the FMU must be an FMI 2.0 CS
-    archive (H-08 bring-up finding F-2: the pinned OpenModelica 1.24.0 cannot
-    export FMI 3.0). Shape kept in lockstep with the proven retention build
-    (``run_t2_retention.omc_build_script_text``): the package chain is loaded
-    explicitly and ``fileNamePrefix`` names the archive, so the built file is
-    deterministic and can be passed to the ``--check`` twin with ``--fmu``.
+    The plant is executed through FMPy 0.3.24's guarded zero-state
+    ModelExchange path (``MePlantSlave``), so the FMU must be an FMI 2.0 ME
+    archive; version stays "2.0" (H-08 bring-up finding F-2: the pinned
+    OpenModelica 1.24.0 cannot export FMI 3.0). ``fmuType="cs"`` is
+    deliberately NOT used: the pinned CS runtime cannot step a zero-state
+    source (docs/hw/h04-enforcement.md; hw-fast dispatches 36035296703 /
+    36036288651 / 36036948275 on the T1 check). Shape kept in lockstep with
+    the proven retention build (``run_t2_retention.omc_build_script_text``):
+    the package chain is loaded explicitly and ``fileNamePrefix`` names the
+    archive, so the built file is deterministic and can be passed to the
+    ``--check`` twin with ``--fmu``.
     """
     model_root = REPO_ROOT / "hw" / "model" / "CancestryLib"
     return (
@@ -699,7 +953,7 @@ def omc_build_script_text():
         "getErrorString();\n"
         'loadFile("%s");\n' % MODEL_PATH +
         "getErrorString();\n"
-        'buildModelFMU(CancestryLib.Power.BOR, version="2.0", fmuType="cs", '
+        'buildModelFMU(CancestryLib.Power.BOR, version="2.0", fmuType="me", '
         'fileNamePrefix="cancestry_t2_bor");\n'
         "getErrorString();\n")
 
