@@ -322,3 +322,13 @@ host test still passes.
 This manual is the `1.0.0-rc.1` candidate software safety-manual baseline;
 QA-EV-01 remains open. It must not be represented as an ISO 26262 certificate
 or as evidence that a complete vehicle item has achieved ASIL-B.
+
+## Known Limitations
+
+### Human Safety Review (HS-01 / HS-02)
+
+The project intended to use an independent human safety reviewer (mid-career functional-safety engineer with ISO 26262/16750 familiarity) to review safety-critical evidence promotion. Due to resource constraints, this reviewer was not secured. 
+
+**Mitigation:** Safety-critical evidence promotion is reviewed by the QA Lead (internal, not independent). The deviation is documented in `docs/hw/review/hs-01-hs-02-deviation.md`. If a human safety reviewer becomes available later, HS-01/HS-02 can be closed retroactively.
+
+**Impact:** The safety case lacks independent human review for safety-critical evidence promotion. External auditors should review this limitation when assessing the safety case.
