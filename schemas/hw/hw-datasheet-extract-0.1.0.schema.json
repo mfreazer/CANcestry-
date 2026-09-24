@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://cancestry.dev/schemas/hw/hw-datasheet-extract-0.1.0.schema.json",
   "title": "CANcestry hardware datasheet parameter extract (v0.1.0)",
-  "description": "Schema for a hardware datasheet parameter extract under hw/bom/datasheets/ (issue #35, H-02; HwAGENTS.md rule 2, HW-PLAN §7/§9). Cites manufacturer, document ID, and retrieval date. Every parameter carries a source discriminator and citation. Numbers without an extract are defects. H-04 (HW-SF-002, HW-FR-009): source_pdf_hash is mandatory; null explicitly records no retained PDF and requires source_url. The requested urn:cancestry:schema:hw:datasheet-extract-0.1.0 ID is deferred because the shared schema gate is frozen for this issue.",
+  "description": "Schema for a hardware datasheet parameter extract under hw/bom/datasheets/ (issue #35, H-02; HwAGENTS.md rule 2, HW-PLAN §7/§9). Cites manufacturer, document ID, and retrieval date. Every parameter carries a source discriminator and citation. Numbers without an extract are defects. H-04 (HW-SF-002, HW-FR-009): source_pdf_hash is mandatory; null explicitly records no retained PDF and requires source_url. The requested urn:cancestry:schema:hw:datasheet-extract-0.1.0 ID is deferred because the shared schema gate is frozen for this issue. H-09 (issue #56): source may also be 'analysis' (value derived by the WCCA, citation_type=wcca_analysis) or 'publication' (value transcribed from a cited public publication used as a tool-qualification fixture).",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -110,13 +110,16 @@
               "hwers",
               "datasheet",
               "budget",
-              "standard"
+              "standard",
+              "analysis",
+              "publication"
             ]
           },
           "citation_type": {
             "enum": [
               "datasheet",
-              "budget"
+              "budget",
+              "wcca_analysis"
             ]
           },
           "citation": {

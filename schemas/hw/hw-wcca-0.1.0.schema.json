@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cancestry.dev/schemas/hw/hw-wcca-0.1.0.schema.json",
+  "title": "CANcestry hardware WCCA / derating row (v0.1.0)",
+  "description": "Row contract for hw/wcca/wcca-analysis.csv (issue #56, H-09; HW-NF-002, HW-NF-003; HwAGENTS.md rules 1, 2, 15). One row per (component, stress) pair: the rated maximum, the worst-case operating value derived in docs/hw/wcca-derating.md, the derating ratio worst_case/rated_max, the HW-NF-003 threshold that applies to the stress/category pair (0.80 for capacitor voltage/current and for every temperature row per HW-NF-002; 0.70 for voltage/current of every other category) and the verdict. A FAIL row must name a waiver_id registered on its own line in the waiver register of docs/hw/wcca-derating.md; ci/check_hw_wcca.py recomputes the ratio, the threshold and the verdict and fails closed on any drift, on an unregistered waiver or on a malformed row. Every number cites a schema-validated extract under hw/bom/datasheets/ (source_extract + source_entry).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "wcca_id",
+    "part_id",
+    "component",
+    "category",
+    "stress",
+    "unit",
+    "rated_max",
+    "rated_basis",
+    "worst_case",
+    "condition",
+    "derating_ratio",
+    "threshold",
+    "verdict",
+    "waiver_id",
+    "requirement_ids",
+    "source_extract",
+    "source_entry",
+    "note"
+  ],
+  "properties": {
+    "wcca_id": {
+      "type": "string",
+      "pattern": "^WCCA-\\d{3}$"
+    },
+    "part_id": {
+      "type": "string",
+      "pattern": "^(PRT-\\d{3}|NET-[A-Z0-9_]+)$",
+      "description": "BOM part (PRT-nnn of hw/bom/bom.json) or a named net/conductor (NET-xxx) for conductor rows."
+    },
+    "component": {
+      "type": "string",
+      "minLength": 1
+    },
+    "category": {
+      "enum": [
+        "mcu",
+        "capacitor",
+        "resistor",
+        "inductor",
+        "diode",
+        "regulator",
+        "transceiver",
+        "watchdog",
+        "connector",
+        "crystal",
+        "passive",
+        "conductor",
+        "other"
+      ],
+      "description": "BOM category (hw-bom-0.1.0) plus 'conductor' for PCB traces; selects the HW-NF-003 threshold together with the stress."
+    },
+    "stress": {
+      "enum": [
+        "voltage",
+        "current",
+        "temperature"
+      ]
+    },
+    "unit": {
+      "enum": [
+        "V",
+        "A",
+        "degC"
+      ]
+    },
+    "rated_max": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "rated_basis": {
+      "enum": [
+        "absolute-maximum",
+        "recommended-operating-maximum",
+        "selection-constraint",
+        "computed-ampacity"
+      ],
+      "description": "What the rating is: a datasheet absolute maximum, a recommended-operating maximum, a minimum rating the part selection must meet (selection-constraint; the WCCA sets it), or a computed conductor ampacity."
+    },
+    "worst_case": {
+      "type": "number",
+      "minimum": 0
+    },
+    "condition": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Worst-case operating condition under which worst_case applies (rail tolerance, ambient, load)."
+    },
+    "derating_ratio": {
+      "type": "number",
+      "minimum": 0,
+      "description": "worst_case / rated_max rounded to 6 decimals; recomputed by ci/check_hw_wcca.py."
+    },
+    "threshold": {
+      "enum": [
+        0.7,
+        0.8
+      ]
+    },
+    "verdict": {
+      "enum": [
+        "PASS",
+        "FAIL"
+      ],
+      "description": "PASS iff derating_ratio <= threshold. FAIL rows require a registered waiver_id; the waiver never turns the verdict into PASS."
+    },
+    "waiver_id": {
+      "type": "string",
+      "pattern": "^(-|WCCA-W-\\d{3})$",
+      "description": "'-' for PASS rows; WCCA-W-nnn registered in the waiver register of docs/hw/wcca-derating.md for FAIL rows."
+    },
+    "requirement_ids": {
+      "type": "string",
+      "pattern": "^HW-(SF|FR|NF)-\\d{3}(;HW-(SF|FR|NF)-\\d{3})*$"
+    },
+    "source_extract": {
+      "type": "string",
+      "pattern": "^hw/bom/datasheets/extract-[a-z0-9-]+\\.json(;hw/bom/datasheets/extract-[a-z0-9-]+\\.json)*$",
+      "description": "Schema-validated extract(s) under hw/bom/datasheets/ carrying rated_max and the worst-case inputs; ';'-separated when several."
+    },
+    "source_entry": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_]*(;[A-Za-z][A-Za-z0-9_]*)*$",
+      "description": "Entry name(s) in source_extract carrying rated_max and the worst-case inputs."
+    },
+    "note": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

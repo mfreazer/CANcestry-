@@ -8,7 +8,7 @@
     "source_pdf_hash": null,
     "source_url": "https://github.com/mfreazer/CANcestry-/blob/ec28a001bb7e17d2ca8127858a046887be529a58/docs/hw/HwRS.md"
   },
-  "note": "H-01 fixes the requirement bounds and one engineering budget; the vendor datasheet (with table and page) replaces the budget entries at H-02 BOM selection. No value in this extract is an un-cited number (HwAGENTS.md rule 2). H-04 provenance: no source PDF is retained; source_url is a fallback, not a verified PDF digest.",
+  "note": "H-01 fixes the requirement bounds and one engineering budget; the vendor datasheet (with table and page) replaces the budget entries at H-02 BOM selection. No value in this extract is an un-cited number (HwAGENTS.md rule 2). H-04 provenance: no source PDF is retained; source_url is a fallback, not a verified PDF digest. H-09 (issue #56): R_path is closed by the T0 WCCA (docs/hw/wcca-derating.md WCCA-R-001, citation_type wcca_analysis); ESR_budget remains a budget until the H-02 vendor datasheet.",
   "entries": [
     {
       "name": "C_nominal",
@@ -39,10 +39,10 @@
       "name": "R_path",
       "value": 0.05,
       "unit": "ohm",
-      "condition": "Budget for the VBAT charge path (idealized diode + trace/diode impedance). Not exercised by holdup_001 (the diode is off for the whole event); shapes charge dynamics in the H-02 transient cases. Pinned by H-02 WCCA/netlist.",
-      "source": "budget",
-      "citation_type": "budget",
-      "citation": "HwAGENTS.md rule 2 (no value without an extract); WCCA (wcca-derating.md) due at H-02"
+      "condition": "Ohmic series resistance of the VBAT charge path (trace + vias; the ideal-diode forward drop is bounded separately by WCCA-A-004 and the ESR by ESR_budget). WCCA upper bound: R_path_worst_case = 0.044229 ohm at 85 degC under the layout allowances WCCA-A-005/A-006, so 0.05 ohm holds with 11.5 % margin. Not exercised by holdup_001 (the diode is off for the whole event); shapes charge dynamics in the planned holdup_charge_001 case. Re-pinned by the netlist/layout query (OR-005).",
+      "source": "analysis",
+      "citation_type": "wcca_analysis",
+      "citation": "docs/hw/wcca-derating.md WCCA-R-001 (H-09, issue #56); inputs hw/bom/datasheets/extract-wcca-allowances.json (R_path_worst_case, R_path_bound) and extract-copper-ipc2221.json (IEC 60028 copper constants)"
     }
   ]
 }

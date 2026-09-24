@@ -1,0 +1,94 @@
+{
+  "kind": "datasheet_extract",
+  "schema_version": "0.1.0",
+  "source": {
+    "manufacturer": "Chalmers University of Technology, Department of Industrial and Materials Science (MSc thesis, Sofia Dahl, 2023; supervisor Stefan Pierrau, Scania CV AB; examiner Dag Henrik Bergsjo)",
+    "document_id": "'Implementing ISO 26262-5 - A guide to Functional Safety for Product Development at Hardware Level', sections 4.4.2-4.4.4 (SPFM, LFM, PMHF equations) and 4.5 / 5.3.2 (worked example totals and results)",
+    "retrieval_date": "2026-09-24",
+    "source_pdf_hash": null,
+    "source_url": "https://odr.chalmers.se/bitstreams/99654b5f-ba7e-4ffe-8571-b476d8285842/download"
+  },
+  "note": "H-09 (issue #56) second tool-qualification fixture for tools/fmeda-calculator.py (OR-004). The thesis works an FMEDA example that the author states is 'based on an example provided in ISO 26262-5' (ASIL C safety goal 'Avoid unintended drive off', function 'Gearbox must be in neutral'; 1 ECU, 5 resistors, 2 inductors, 3 capacitors). Only the aggregate sums and results are available as text (the per-component Table 5 is an image), so this fixture exercises the metric equations from the sums: SPFM = 1 - 6.9055/127 = 94.56 %, LFM = 1 - 7.4/(127 - 6.9055) = 93.84 %, PMHF = 6.9055 + 7.4 x 76.372 x 1e5/1e9 = 6.9620 FIT with T_lifetime = 100 000 h, reproduced exactly by the calculator at the thesis precision. The thesis result is itself an honest failure (SPFM 94.56 % < 97 % ASIL C target) and is used verbatim. No PDF is retained; source_url is the university repository.",
+  "entries": [
+    {
+      "name": "total_fit",
+      "value": 129.0,
+      "unit": "FIT",
+      "condition": "Total FIT of all components of the example",
+      "source": "publication",
+      "citation": "Thesis section 4.5, results list item 1 'Total FIT 129'"
+    },
+    {
+      "name": "non_safety_related_fit",
+      "value": 2.0,
+      "unit": "FIT",
+      "condition": "Total FIT of components not related to the safety goal (excluded)",
+      "source": "publication",
+      "citation": "Thesis section 4.5, item 2 'Total non-safety related FIT 2'"
+    },
+    {
+      "name": "safety_related_fit",
+      "value": 127.0,
+      "unit": "FIT",
+      "condition": "Total safety-related FIT (denominator of SPFM)",
+      "source": "publication",
+      "citation": "Thesis section 4.5, item 3 'Total safety related FIT 127'"
+    },
+    {
+      "name": "spf_rf_fit",
+      "value": 6.9055,
+      "unit": "FIT",
+      "condition": "Sum of single-point and residual fault FIT",
+      "source": "publication",
+      "citation": "Thesis section 4.5, item 4 'Sum SPF and Sum RF FIT 6.9055'"
+    },
+    {
+      "name": "mpf_latent_fit",
+      "value": 7.4,
+      "unit": "FIT",
+      "condition": "Sum of latent multiple-point fault FIT",
+      "source": "publication",
+      "citation": "Thesis section 4.5, item 5 'Sum MPF_lat FIT 7.4'"
+    },
+    {
+      "name": "mpf_detected_fit",
+      "value": 76.372,
+      "unit": "FIT",
+      "condition": "Sum of detected multiple-point fault FIT",
+      "source": "publication",
+      "citation": "Thesis section 4.5, item 6 'Sum MPF_det FIT 76.372'"
+    },
+    {
+      "name": "lifetime_hours",
+      "value": 100000.0,
+      "unit": "h",
+      "condition": "Vehicle lifetime T_lifetime used in the PMHF estimate (expressed by the thesis as the fraction of 1e9 h)",
+      "source": "publication",
+      "citation": "Thesis section 4.4.4 (T_lifetime definition) and 4.5 PMHF calculation"
+    },
+    {
+      "name": "spfm_percent",
+      "value": 94.56,
+      "unit": "%",
+      "condition": "SPFM = 1 - 6.9055/127 = 0.94562598 ~ 94.56 % (fails the ASIL C target of 97 %)",
+      "source": "publication",
+      "citation": "Thesis section 4.5 'Single-Point Fault Metric 1 - 6.9055/127 = 0.94562598 ~ 94.56%'; section 5.3.2"
+    },
+    {
+      "name": "lfm_percent",
+      "value": 93.84,
+      "unit": "%",
+      "condition": "LFM = 1 - 7.4/(127 - 6.9055) = 0.93838186 ~ 93.84 % (meets the ASIL C target of 80 %)",
+      "source": "publication",
+      "citation": "Thesis section 4.5 'Latent Fault Metric 1 - 7.4/(127-6.9055) = 0.93838186 ~ 93.84%'"
+    },
+    {
+      "name": "pmhf_fit",
+      "value": 6.962,
+      "unit": "FIT",
+      "condition": "PMHF_est = SPF+RF + MPF_det x MPF_lat x T_lifetime = 6.9055 + 76.372 x 7.4 x 1e-4 = 6.9620 FIT (meets the ASIL C target of 100 FIT)",
+      "source": "publication",
+      "citation": "Thesis section 4.5 'PMHF ... was calculated to 6.9620 and fulfils the requirements'; section 5.3.2 'Probabilistic Metric for Hardware Failures 6.9620 FIT'"
+    }
+  ]
+}

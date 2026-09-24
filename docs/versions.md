@@ -52,6 +52,19 @@ Hardware documents are versioned independently of the software release
 | `hw/bom/datasheets/extract-iso16750-2-2012.json` | 0.1.0 | HW-FR-004 Table 6 numeric source transcription, URL fallback (no invented PDF hash) |
 | [`docs/hw/pulse-coverage.md`](hw/pulse-coverage.md) | 0.1.1 | Exact Pulse 4/Test B pending scope; F3 qualification-versus-run-status distinction |
 
+H-09 (#56) T0 analyses — WCCA/derating, FMEDA, RAMS, reliability growth — pending QA (waiver WCCA-W-001) and Human Reviewer approval:
+
+| Document / Artifact | Version | Status |
+|---|---|---|
+| [`docs/hw/wcca-derating.md`](hw/wcca-derating.md), `hw/wcca/wcca-analysis.csv`, `schemas/hw/hw-wcca-0.1.0.schema.json`, `ci/check_hw_wcca.py` | 0.1.0 | H-09 — HW-NF-002/HW-NF-003 derating rows (80 % capacitors, 70 % others, 80 % Tj) gated in hw-fast 1.6; charge-path WCCA closes `R_path` (WCCA-R-001); CMOS supply-pin waiver WCCA-W-001 proposed, pending QA |
+| `hw/bom/bom.json`, `schemas/hw/hw-bom-0.1.0.schema.json`, `hw/bom/datasheets/extract-{mcu-ratings,copper-ipc2221,wcca-allowances,ti-slyp685-fmeda-example,chalmers-2023-fmeda-example,iso26262-5-2018-targets}.json` | 0.1.0 | H-09 — `bom.json` authoritative (QA 2026-09-22); `R_path` cited as `wcca_analysis`; `fit_source` curated; new schema-validated extracts for every number used |
+| `hw/bom/fit-database.json`, `schemas/hw/hw-fit-database-0.1.0.schema.json` | 0.1.0 | H-09 — SN 29500 base-rate classes via TI SLYP685 (secondary tabulation); IEC TR 62380 and vendor AEC-Q data declared, no entry yet |
+| `tools/fmeda-calculator.py`, `hw/fmeda/fmeda-analysis.csv`, `schemas/hw/hw-fmeda-0.1.0.schema.json`, [`docs/hw/fmeda.md`](hw/fmeda.md) | 0.1.0 | H-09 — exact-arithmetic ISO 26262-5:2018 Annex C metrics; SPFM 76.02 % (ASIL-B target not met), LFM 91.99 %, PMHF 36.53 FIT; no ASIL-B claim; hw-fast 1.7 `--check` |
+| [`docs/hw/tool-qualification.md`](hw/tool-qualification.md) | 0.2.8 | H-09 — `fmeda` TCL2 (TI2/TD2) with declared Annex E Table E.1 gap; §4.4 qualification record; hash cascade re-issued |
+| [`docs/hw/rams-summary.md`](hw/rams-summary.md), `README.md` RAMS section | 0.1.0 | H-09 — reliability/warranty arithmetic, fail-safe availability policy, FRU/UDS maintainability, honest safety alignment |
+| `ci/check_hw_reliability_growth.py`, `hw/fmeda/mtbf-history.csv`, `schemas/hw/hw-mtbf-history-0.1.0.schema.json`, `.github/workflows/hw-nightly.yml` | 0.1.0 | H-09 — MTBF regression gate (> 10 % drop fails; missing/corrupted history fails closed) in hw-nightly |
+| `hw/tests/traceability.csv`, `hw/tests/oracles/registry.json` (OR-004), `hw/tests/evidence/*` | H-09 | HW-NF-003 and HW-SF-005 `analysis-pending` rows; OR-004 re-scoped to the Annex C recomputation; evidence hashes re-issued for tool-qualification 0.2.8 / bom.json / schema changes, determinism test green |
+
 These are document baselines, not release candidates: H-Phase 1 has no
 software-release semantics, and the `VERSION`/`CMakeLists.txt` pair above
 remains the sole source of truth for software releases.

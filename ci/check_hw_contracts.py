@@ -2,7 +2,12 @@
 """Validate H-04 contracts and render their compatibility/document views.
 
 Implements: HW-SF-001..005, HW-FR-001..010 (provenance and structural
-verification). No physics, requirement text or software gates are changed.
+verification); HW-NF-004 FIT provenance (H-09, issue #56): every
+``hw/bom/bom.json`` part whose ``fit_source.status`` is ``curated`` must
+name a ``hw/bom/fit-database.json`` entry of the same part with the same
+standard and rate, and the database must cite a declared standard and an
+existing schema-validated extract entry. No physics, requirement text or
+software gates are changed.
 Usage: python3 ci/check_hw_contracts.py . [--export]
 The default checks for drift; --export regenerates views only after validation.
 """
@@ -20,6 +25,8 @@ import jsonschema
 REGISTRY = 'hw/tests/oracles/registry.json'
 BRIDGE = 'hw/model/bridge.json'
 TRADES = 'hw/model/trades.json'
+BOM = 'hw/bom/bom.json'
+FIT_DATABASE = 'hw/bom/fit-database.json'
 CLASSES = {'analytical': '(a)', 'standard': '(b)',
            'golden_measurement': '(c)', 'independent_model': '(d)'}
 
@@ -127,6 +134,45 @@ def rendered_view(path, marker, table):
     return before + start + '\n' + table + '\n' + end + after
 
 
+def check_fit_provenance(root, extracts):
+    """HW-NF-004: curated BOM FIT rates are exactly the FIT database entries."""
+    bom = load_contract(root, BOM, 'bom')
+    database = load_contract(root, FIT_DATABASE, 'fit-database')
+    standards = unique_records(database['standards'], 'standard_id', FIT_DATABASE)
+    entries = {}
+    for entry in database['entries']:
+        if entry['fit_id'] in entries:
+            raise ValueError(f"{FIT_DATABASE}: duplicate fit_id {entry['fit_id']}")
+        if entry['standard'] not in standards:
+            raise ValueError(f"{FIT_DATABASE}: {entry['fit_id']} cites undeclared standard {entry['standard']!r}")
+        names = {item['name'] for item in extracts.get(entry['source_extract'], {}).get('entries', [])}
+        if entry['source_entry'] not in names:
+            raise ValueError(f"{FIT_DATABASE}: {entry['fit_id']} cites {entry['source_extract']} "
+                             f"entry {entry['source_entry']!r} which does not exist")
+        entries[entry['fit_id']] = entry
+    parts = {part['part_id'] for part in bom['parts']}
+    for fit_id, entry in entries.items():
+        if entry['part_id'] not in parts:
+            raise ValueError(f'{FIT_DATABASE}: {fit_id} names unknown BOM part {entry["part_id"]}')
+    for part in bom['parts']:
+        source = part['fit_source']
+        if source['status'] != 'curated':
+            continue
+        entry = entries.get(source['database_entry'])
+        if entry is None or entry['part_id'] != part['part_id']:
+            raise ValueError(f"{BOM}: {part['part_id']} fit_source.database_entry "
+                             f"{source['database_entry']} is not a FIT database entry of this part")
+        if entry['standard'] != source['standard']:
+            raise ValueError(f"{BOM}: {part['part_id']} fit_source.standard {source['standard']!r} "
+                             f"!= {entry['fit_id']} standard {entry['standard']!r}")
+        if entry['fit_rate_per_1e9_hours'] != source['rate_per_1e9_hours']:
+            raise ValueError(f"{BOM}: {part['part_id']} fit_source.rate_per_1e9_hours "
+                             f"{source['rate_per_1e9_hours']!r} != {entry['fit_id']} rate "
+                             f"{entry['fit_rate_per_1e9_hours']!r}")
+        if entry['fit_id'] not in source['citation']:
+            raise ValueError(f"{BOM}: {part['part_id']} fit_source.citation must name {entry['fit_id']}")
+
+
 def check_contracts(root, export=False):
     """Validate all instances first; never generate output from invalid input."""
     registry = load_registry(root)
@@ -150,8 +196,11 @@ def check_contracts(root, export=False):
     extracts = sorted((root / 'hw/bom/datasheets').glob('*.json'))
     if not extracts:
         raise ValueError('No datasheet extracts found')
+    documents = {}
     for path in extracts:
-        load_contract(root, str(path.relative_to(root)), 'datasheet-extract')
+        relative = str(path.relative_to(root))
+        documents[relative] = load_contract(root, relative, 'datasheet-extract')
+    check_fit_provenance(root, documents)
     hwrs = (root / 'docs/hw/HwRS.md').read_text(encoding='utf-8')
     requirements = set(re.findall(r'^\|\s*(HW-(?:SF|FR|NF)-\d{3})\s*\|', hwrs, re.M))
     cited = {req for row in registry['oracles'] for req in row['serves']}

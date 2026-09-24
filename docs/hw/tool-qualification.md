@@ -3,11 +3,11 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Tool Qualification Plan and Evidence |
-| **Version** | 0.2.7 |
-| **Status** | Draft — H-07, pending QA and Human Reviewer approval |
+| **Version** | 0.2.8 |
+| **Status** | Draft — H-09, pending QA and Human Reviewer approval |
 | **Owner** | System Engineer |
 | **Approver** | QA Lead |
-| **Last Review** | 2026-09-22 |
+| **Last Review** | 2026-09-24 |
 | **Repository location** | `docs/hw/tool-qualification.md` |
 | **Governing documents** | ISO 26262-8:2018 §13; hardware policy |
 
@@ -43,7 +43,7 @@ gap fails closed. `-` represents an empty tool gap for TCL1 only.
 | capellambse | capellambse is a model reader, not a safety-case producer. Live structural checks and negative fixtures detect missed linkage/parse errors. | TI2 | TD1 | TCL1 | - |
 | cancestry-render-modelica | Pure-Python SVG renderer (H-05): it draws only what a schema-validated plot-data file declares, verifies the pinned source-evidence hash before drawing, and refuses to run on a broken hash chain or an unknown vocabulary. A defect can at worst fail to display a validated claim; it cannot introduce or alter a numerical result. | TI1 | TD1 | TCL1 | - |
 | fmi_bridge | Deterministic FMI 3.0 co-simulation master (H-07, issue #53): integer-microsecond fixed-step scheduling (100 µs master / 1 µs FMU internal), no wall clock and no randomness (source-lint-enforced), marshals plant/MCU values, captures events from the platform's hook-stamped trace slots and asserts the strict QA-EV-01 ordering against the OR-001-anchored plant trajectory. Every exchanged value is recorded in the hashed trace and the event times come from Renode-side registers, not from bridge computation: a bridge defect can at worst fail to detect a mismatch or halt the run; it cannot introduce or alter a numerical result into the item. Bounded contract tests HW-T2-BRIDGE-001..015 support the detection argument for this exact configuration. | TI1 | TD1 | TCL1 | - |
-| fmeda | FMEDA calculator is not implemented; independent ISO 26262-5 Annex D gate required before use. | pending | pending | pending | No qualification evidence. |
+| fmeda | `tools/fmeda-calculator.py` (H-09, issue #56): ISO 26262-5:2018 Annex C metric calculator (SPFM, LFM, PMHF, MTBF) over `hw/fmeda/fmeda-analysis.csv` and `hw/bom/fit-database.json`. A defect can silently misstate a hardware architectural metric in `docs/hw/fmeda.md` and the reliability figures of `docs/hw/rams-summary.md`, so it can introduce an error into a safety-related work product (TI2). Detection (§4.4): exact rational arithmetic with fixed half-up rendering, an independent Annex C oracle, the public TI SLYP685 n = 1..4 teaching example and the Chalmers 2023 aggregate example reproduced to publication precision, byte-identical output across runs, and the `--check` drift gate on the CSV's derived columns and the generated document blocks (TD2, not TD1: the ISO 26262-5:2018 Annex E worked example is not publicly available and is not reproduced). | TI2 | TD2 | TCL2 | ISO 26262-5:2018 Annex E Table E.1 worked example not reproduced (values not publicly available); qualification rests on the Annex C equations, the exact-arithmetic oracle and two public fixtures (TI SLYP685, Chalmers 2023); the T0 inputs (assumed failure-mode distributions, secondary-tabulated SN 29500 rates) are outside the tool's qualification scope and no evidence artifact may claim ASIL-B metrics from them. |
 | renode | Renode executes the real v1.0.0 firmware ELF on the T2 virtual bench (H-07, issue #53). A platform-model defect (scripted IWDG/RTC_BKP/GPIO/RCC peripheral models, DWT accuracy) can silently alter firmware-visible register or timing semantics, introducing errors into T2 evidence — the ELF cannot be re-derived independently, so detection rests on golden-trace/vendor-reference correlation which does not exist yet. | TI2 | TD2 | TCL2 | Renode peripheral models (IWDG, GPIO, RTC_BKP, DWT) are scripted emulations, not vendor-validated silicon models: platform-model bugs can alter firmware-visible timing or register semantics, and this gap is inherited by every T2 evidence artifact; golden-trace correlation against vendor reference behavior and T4 bench correlation are required before any promotion. |
 <!-- END TOOL CLASSIFICATION -->
 
@@ -281,6 +281,53 @@ FMU/configuration/version, or a future use. Those uses remain subject to the
   recipe reaching the firmware via CAN traffic is not yet defined), and all
   T4 physical correlation.
 
+### 4.4 FMEDA calculator against public reference computations (H-09, issue #56)
+
+- Requirement: HW-SF-005 (FMEDA; oracle OR-004 re-scoped to the FMEDA metric
+  recomputation, `hw/tests/oracles/registry.json`) and HW-NF-004 (FIT
+  provenance). Tool: `tools/fmeda-calculator.py` v0.1.0, tool id `fmeda`.
+- Role: computes the ISO 26262-5:2018 Annex C metrics (C.1..C.8: SPFM, LFM,
+  PMHF with the ISO 26262-10 simplified dual-point term and an explicit
+  lifetime parameter, reliability MTBF) from `hw/fmeda/fmeda-analysis.csv`
+  and `hw/bom/fit-database.json`, renders `docs/hw/fmeda.md`'s generated
+  blocks and feeds `ci/check_hw_reliability_growth.py`. TI2: a wrong metric
+  is a wrong safety-related claim. TD2: every quantity is exact
+  (`fractions.Fraction`) and independently re-derivable, but the standard's
+  own worked example is not available for a full-output comparison.
+- Qualification evidence (`tests/unit/tools/test_fmeda_calculator.py`,
+  hw-fast gate 2 with the 95 % branch-coverage bar, and gate 1.7 `--check`):
+  (a) an independent Annex C oracle written without shared code, compared as
+  exact fractions over a diagnostic-coverage sweep covering the Annex D
+  classes 60 / 90 / 99 % and the 0 / 100 % corners; (b) the public TI SLYP685
+  teaching example, iterations n = 1..4, specified by the schema-validated
+  extract `hw/bom/datasheets/extract-ti-slyp685-fmeda-example.json`: every
+  FIT-level sum (111/56, 121/11/55, 121/11/10, 131/1.5/20) and PMHF (56, 66,
+  21, 21.5 FIT under the source's RF + MPF,L simplification) reproduced
+  exactly, percentages reproduced to the published one-decimal precision
+  (49.5 %, 90.9 %, 50.0 %) where the publication is correctly rounded, and
+  the two publication defects (n = 3 "90.1 %" for 1 − 10/110 = 90.9 %; n = 4
+  truncated 98.8 % / 84.5 %) asserted as defects rather than reproduced; (c)
+  the Chalmers 2023 aggregate example (127 FIT safety-related, Σ(SPF+RF)
+  6.9055, ΣMPF,L 7.4, ΣMPF,DP 76.372, T = 1e5 h) reproduced to the published
+  two decimals (SPFM 94.56 %, LFM 93.84 %) and three decimals (PMHF 6.962
+  FIT); (d) the repository FMEDA byte-identical across runs and against the
+  committed document; (e) every fail-closed path (drifted derived column,
+  fractions not summing to 1, FIT database mismatch, malformed CSV/JSON,
+  missing inputs, inconsistent classification flags).
+- Declared gap (normative): the issue #56 acceptance criterion names the
+  "ISO 26262-5:2018 Annex D Tables D.1..D.3 worked example". In the 2018
+  edition Annex D is the diagnostic-coverage evaluation (Table D.1 = the DC
+  classes, used here as the DC vocabulary) and the SPFM/LFM worked example is
+  Annex E, Table E.1. Neither the licensed text nor any public source quotes
+  Table E.1's rows, so the calculator is **not** validated against it; the
+  qualification claim is limited to the Annex C equations and the two public
+  fixtures above. Obtaining the licensed standard and adding the Table E.1
+  fixture is a QA action before any passing ASIL-B metric claim
+  (`hw/tests/traceability.csv` HW-SF-005 stays `analysis-pending`).
+- Not covered: the correctness of the inputs (failure-mode distributions are
+  T0 assumptions; FIT rates are secondary-tabulated SN 29500 classes), the
+  FTA cut-set analysis demanded by HW-SF-005, and any T2/T4 evidence.
+
 ## 5. Validation-gap inheritance (normative)
 
 The hardware ledger `hw/tests/traceability.csv` adds
@@ -317,6 +364,7 @@ OR-002 has no qualified passing claim. Oracle/model gaps remain in
 
 | Version | Date | Change |
 |---|---|---|
+| 0.2.8 | 2026-09-24 | H-09 #56: fmeda classified TCL2 (TI2/TD2) for `tools/fmeda-calculator.py` with the declared Annex E Table E.1 gap; §4.4 qualification record (exact-arithmetic Annex C oracle, TI SLYP685 n = 1..4 and Chalmers 2023 public fixtures reproduced to publication precision, byte-identical output, `--check` drift gate). Hash cascade re-issued for every evidence artifact pinning this document. No qualification promotion of any other tool; no ASIL-B metric claim. |
 | 0.2.7 | 2026-09-22 | H-07 #53: renode classified TCL2 (TI2/TD2) with the scripted-peripheral validation gap inherited by every T2 artifact; fmi_bridge added as TCL1 (TI1/TD1) for the bounded deterministic-master role; §3.1 disposition for the T2 configuration (FMI 3.0 Holdup build, coupled co-simulation) recorded — pending-only consumption in this PR; §4.3 T2 foundation record added. No executed T2 run exists; no qualification promotion. |
 | 0.2.6 | 2026-09-21 | H-06 #49: record the pulse 5a (ISO 16750-2:2012 Test A, §4.6.4.2.2 Figure 8 / Table 5) configuration in §4.2 as OR-002 regression-only evidence with the Table 5-vs-Table 6 citation disposition; add the §3.1 disposition review for the recompiled selector-8 FMU (unchanged bounded FMPy TCL1 scope, OpenModelica stays TCL2, gap inherited verbatim by the new pulse_5a_001 case manifest and its pending placeholder view). Controlled §3 table untouched. No qualification promotion; shape qualification deferred to #41. |
 | 0.2.5 | 2026-09-21 | N2 audit (PR #43): pin the hold-up build/execution to explicit CoSimulation, add the §4.1.1 execution-mode audit and the updated fmpy row, test the mode gate and real-FMU interface, and retain FMPy TCL1 only for the bounded OR-001 output-detection argument. Merged on top of 0.2.4. No FMPy gap waiver or pulse promotion. |

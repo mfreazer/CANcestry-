@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cancestry.dev/schemas/hw/hw-mtbf-history-0.1.0.schema.json",
+  "title": "CANcestry reliability-growth history row (v0.1.0)",
+  "description": "Row contract for hw/fmeda/mtbf-history.csv (issue #56, H-09 commit 4; HW-NF-004, HW-SF-005). Append-only history written by ci/check_hw_reliability_growth.py: one row per accepted FMEDA state, keyed by the sha256 of hw/fmeda/fmeda-analysis.csv (no wall-clock timestamps; HwAGENTS.md rule 5). mtbf_hours is the reliability MTBF 1e9 / sum(lambda_total FIT) over every part of the FMEDA; pmhf_fit and mean_time_to_sg_violation_hours (1e9 / PMHF) are recorded alongside so the two 'MTBF' notions of issue #56 are never conflated. The checker fails closed on a missing, empty, malformed or non-monotonic history and on an MTBF drop greater than 10 percent against the last accepted row.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sequence",
+    "fmeda_csv_sha256",
+    "total_fit",
+    "mtbf_hours",
+    "pmhf_fit",
+    "mean_time_to_sg_violation_hours",
+    "spfm_percent",
+    "lfm_percent",
+    "issue_ref"
+  ],
+  "properties": {
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "fmeda_csv_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "total_fit": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "mtbf_hours": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "pmhf_fit": {
+      "type": "number",
+      "minimum": 0
+    },
+    "mean_time_to_sg_violation_hours": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "spfm_percent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "lfm_percent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "issue_ref": {
+      "type": "string",
+      "pattern": "^#\\d+( .*)?$"
+    }
+  }
+}

@@ -1,0 +1,201 @@
+{
+  "kind": "datasheet_extract",
+  "schema_version": "0.1.0",
+  "source": {
+    "manufacturer": "CANcestry System Engineer (T0 WCCA, docs/hw/wcca-derating.md v0.1.0)",
+    "document_id": "docs/hw/wcca-derating.md v0.1.0 (H-09, issue #56): line-anchored allowances WCCA-A-001..007, derived results WCCA-R-001..005 and selection constraints WCCA-C-001..004",
+    "retrieval_date": "2026-09-24",
+    "source_pdf_hash": null,
+    "source_url": "https://github.com/mfreazer/CANcestry-/blob/main/docs/hw/wcca-derating.md"
+  },
+  "note": "H-09 (issue #56) WCCA allowance and result extract (HW-NF-002, HW-NF-003, HW-FR-009, HW-SF-002). Every value is either a requirement bound (source=hwers), a line-anchored engineering allowance the H-02 part selection and layout review must meet (source=budget, citation names the WCCA-A-nnn line; HwAGENTS.md rule 15), or a WCCA result derived in the cited WCCA-R-nnn section (source=analysis, citation_type=wcca_analysis). Allowances are not measurements: they are the envelope the design is verified against, and they are re-pinned by vendor datasheets and the netlist at H-02 (OR-005). No source PDF exists; source_url is the repository record.",
+  "entries": [
+    {
+      "name": "T_ambient_max",
+      "value": 85.0,
+      "unit": "degC",
+      "condition": "Maximum operating ambient (requirement bound)",
+      "source": "hwers",
+      "citation": "HwRS.md HW-NF-001 (v0.3.0): 'Operating ambient -40...+85 degC'"
+    },
+    {
+      "name": "V_rail_tolerance",
+      "value": 0.03,
+      "unit": "1",
+      "condition": "Allowance WCCA-A-001: VDD_3V3 total regulation window +/-3 % (initial accuracy, line, load, temperature) pending the LDO datasheet (no HwRS ID yet, HAD section 6 note)",
+      "source": "budget",
+      "citation_type": "budget",
+      "citation": "docs/hw/wcca-derating.md WCCA-A-001; pinned by the LDO datasheet at H-02"
+    },
+    {
+      "name": "V_main_max",
+      "value": 3.399,
+      "unit": "V",
+      "condition": "Worst-case high VDD_3V3 = 3.3 V x (1 + 0.03); the VBAT node charges to at most this value",
+      "source": "analysis",
+      "citation_type": "wcca_analysis",
+      "citation": "docs/hw/wcca-derating.md WCCA-R-002 (from V_main_nominal, extract-mcu-vbat.json, and WCCA-A-001)"
+    },
+    {
+      "name": "V_main_min",
+      "value": 3.201,
+      "unit": "V",
+      "condition": "Worst-case low VDD_3V3 = 3.3 V x (1 - 0.03); start of the hold-up margin derivation WCCA-R-005",
+      "source": "analysis",
+      "citation_type": "wcca_analysis",
+      "citation": "docs/hw/wcca-derating.md WCCA-R-002"
+    },
+    {
+      "name": "theta_JA_allowance",
+      "value": 60.0,
+      "unit": "K/W",
+      "condition": "Allowance WCCA-A-002: junction-to-ambient thermal resistance upper bound covering the LQFP candidate packages on a 4-layer board; pinned by the DS12787 package thermal table once the package is selected",
+      "source": "budget",
+      "citation_type": "budget",
+      "citation": "docs/hw/wcca-derating.md WCCA-A-002; pinned by DS12787 thermal characteristics at H-02"
+    },
+    {
+      "name": "P_mcu_allowance",
+      "value": 0.2,
+      "unit": "W",
+      "condition": "Allowance WCCA-A-003: MCU dissipation upper bound in gateway mode (about 60 mA at 3.3 V incl. I/O); confirmed by the HW-NF-005 rail-by-rail power sum (T1 power model, sim-pending)",
+      "source": "budget",
+      "citation_type": "budget",
+      "citation": "docs/hw/wcca-derating.md WCCA-A-003; verified by the HW-NF-005 T1 power model"
+    },
+    {
+      "name": "TJ_mcu_worst_case",
+      "value": 97.0,
+      "unit": "degC",
+      "condition": "Steady-state worst-case junction temperature = T_ambient_max + theta_JA_allowance x P_mcu_allowance = 85 + 60 x 0.2 (HW-NF-002 closed form, T0)",
+      "source": "analysis",
+      "citation_type": "wcca_analysis",
+      "citation": "docs/hw/wcca-derating.md WCCA-R-003"
+    },
+    {
+      "name": "V_f_diode_allowance",
+      "value": 0.4,
+      "unit": "V",
+      "condition": "Allowance WCCA-A-004: charge-path diode forward drop upper bound at the retention current (17 uA) and 85 degC; covers Schottky (typ. 0.05-0.15 V) and silicon (typ. 0.35-0.40 V) candidates",
+      "source": "budget",
+      "citation_type": "budget",
+      "citation": "docs/hw/wcca-derating.md WCCA-A-004; pinned by the diode datasheet VF curve at H-02"
+    },
+    {
+      "name": "trace_length_max",
+      "value": 0.02,
+      "unit": "m",
+      "condition": "Allowance WCCA-A-005: maximum routed length of the VBAT_RTC charge-path conductor (rail -> diode -> hold-up capacitor -> VBAT pin)",
+      "source": "budget",
+      "citation_type": "budget",
+      "citation": "docs/hw/wcca-derating.md WCCA-A-005; verified by the KiCad netlist/layout query (OR-005)"
+    },
+    {
+      "name": "trace_width_min",
+      "value": 0.0003,
+      "unit": "m",
+      "condition": "Allowance WCCA-A-005: minimum width of the charge-path conductor (0.3 mm)",
+      "source": "budget",
+      "citation_type": "budget",
+      "citation": "docs/hw/wcca-derating.md WCCA-A-005"
+    },
+    {
+      "name": "copper_thickness_min",
+      "value": 3.5e-05,
+      "unit": "m",
+      "condition": "Allowance WCCA-A-005: minimum finished copper thickness of the charge-path layer (1 oz, 35 um)",
+      "source": "budget",
+      "citation_type": "budget",
+      "citation": "docs/hw/wcca-derating.md WCCA-A-005"
+    },
+    {
+      "name": "via_count_max",
+      "value": 2.0,
+      "unit": "1",
+      "condition": "Allowance WCCA-A-006: at most two vias in the charge path",
+      "source": "budget",
+      "citation_type": "budget",
+      "citation": "docs/hw/wcca-derating.md WCCA-A-006"
+    },
+    {
+      "name": "R_via_max",
+      "value": 0.0015,
+      "unit": "ohm",
+      "condition": "Allowance WCCA-A-006: resistance upper bound per plated via at 85 degC (0.3 mm drill, 25 um plating, 1.6 mm board: 1.2 mohm at 20 degC)",
+      "source": "budget",
+      "citation_type": "budget",
+      "citation": "docs/hw/wcca-derating.md WCCA-A-006"
+    },
+    {
+      "name": "R_trace_85C",
+      "value": 0.041229,
+      "unit": "ohm",
+      "condition": "Worst-case charge-path trace resistance at 85 degC: rho_Cu_20C x (1 + alpha_Cu_20C x 65 K) x trace_length_max / (trace_width_min x copper_thickness_min)",
+      "source": "analysis",
+      "citation_type": "wcca_analysis",
+      "citation": "docs/hw/wcca-derating.md WCCA-R-001 (constants from extract-copper-ipc2221.json)"
+    },
+    {
+      "name": "R_path_worst_case",
+      "value": 0.044229,
+      "unit": "ohm",
+      "condition": "Worst-case ohmic series resistance of the charge path = R_trace_85C + via_count_max x R_via_max; the diode forward characteristic is treated separately (WCCA-A-004 / WCCA-R-005), ESR is the separate ESR_budget parameter",
+      "source": "analysis",
+      "citation_type": "wcca_analysis",
+      "citation": "docs/hw/wcca-derating.md WCCA-R-001"
+    },
+    {
+      "name": "R_path_bound",
+      "value": 0.05,
+      "unit": "ohm",
+      "condition": "R_path model parameter (hw/bom/bom.json PRT-002, hw/tests/cases/holdup_001.simcase.json): WCCA upper bound with 11.5 % margin over R_path_worst_case; holds for any layout meeting WCCA-A-005/A-006",
+      "source": "analysis",
+      "citation_type": "wcca_analysis",
+      "citation": "docs/hw/wcca-derating.md WCCA-R-001"
+    },
+    {
+      "name": "I_charge_path_continuous",
+      "value": 1.7e-05,
+      "unit": "A",
+      "condition": "Continuous current in the charge-path conductor at steady state = I_VBAT_bound (12 uA) + I_leak_max (5 uA); charging inrush is a microsecond-class transient bounded by the current-limited charger (HAD section 3) and is not a thermal stress",
+      "source": "analysis",
+      "citation_type": "wcca_analysis",
+      "citation": "docs/hw/wcca-derating.md WCCA-R-004 (from extract-mcu-vbat.json I_VBAT_bound and extract-holdup-cap.json I_leak_max)"
+    },
+    {
+      "name": "C_eff_min_fraction",
+      "value": 0.5,
+      "unit": "1",
+      "condition": "Allowance WCCA-A-007: minimum effective capacitance fraction of the hold-up capacitor at 3.4 V DC bias, 85 degC, end of life (tolerance, DC-bias and ageing loss combined); the H-02 selection must show C_eff >= 0.5 x C_nominal or the margin table WCCA-R-005 is re-run",
+      "source": "budget",
+      "citation_type": "budget",
+      "citation": "docs/hw/wcca-derating.md WCCA-A-007; pinned by the capacitor datasheet DC-bias and ageing curves at H-02"
+    },
+    {
+      "name": "t_floor_worst_case",
+      "value": 0.3385,
+      "unit": "s",
+      "condition": "Worst-case time for VBAT to fall from V_main_min - V_f_diode_allowance (2.801 V) to V_VBAT_min (1.65 V) at 17 uA with C_eff = 0.5 x 10 uF: 5e-6 x 1.151 / 1.7e-5 = 0.3385 s (>= 0.15 s HW-SF-002 (ii)+(iii), margin 2.26x)",
+      "source": "analysis",
+      "citation_type": "wcca_analysis",
+      "citation": "docs/hw/wcca-derating.md WCCA-R-005"
+    },
+    {
+      "name": "V_cap_rating_min",
+      "value": 6.3,
+      "unit": "V",
+      "condition": "Selection constraint WCCA-C-001: minimum rated DC voltage of the hold-up capacitor = next standard rating above V_main_max / 0.80 = 4.249 V (HW-NF-003 capacitor rule)",
+      "source": "analysis",
+      "citation_type": "wcca_analysis",
+      "citation": "docs/hw/wcca-derating.md WCCA-C-001"
+    },
+    {
+      "name": "T_cap_rated_max",
+      "value": 125.0,
+      "unit": "degC",
+      "condition": "Upper category temperature of an AEC-Q200 Grade 1 passive (-40 to +125 degC), the grade required for PRT-002 by hw/bom/bom.json aec_q_status (HW-NF-004)",
+      "source": "standard",
+      "citation": "AEC-Q200 (Automotive Electronics Council, Stress Test Qualification for Passive Components), Table 1 operating temperature grades: Grade 1 = -40 to +125 degC; HW-NF-004"
+    }
+  ]
+}

@@ -14,6 +14,11 @@
 # renderer means the drift check could not run, and a check that could not run
 # is not a check that passed.
 #
+# The same container step runs the H-09 reliability-growth gate
+# (ci/check_hw_reliability_growth.py, issue #56): the FMEDA MTBF recomputed by
+# the qualified calculator must not drop more than 10 % against the last row
+# of hw/fmeda/mtbf-history.csv; a missing or corrupted history fails closed.
+#
 # The t2-virtual-bench job (issue #55, H-08) is the FIRST live Renode+FMU
 # co-simulation: the T2 toolchain image (ci/docker/Dockerfile.t2: the same
 # digest-pinned OpenModelica base plus Renode v1.16.1 and the ARM cross
@@ -36,7 +41,7 @@ on:
 
 jobs:
   hw-nightly:
-    name: renderer determinism (--rerender --strict)
+    name: renderer determinism (--rerender --strict) + reliability growth
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -82,6 +87,14 @@ jobs:
               echo "== Re-render every committed plot and require byte-identical output"
               python3 ci/check_hw_evidence.py --root . --rerender --strict || {
                 echo "::error::hw-nightly failed: a committed renderer no longer reproduces its committed artifact"
+                exit 1
+              }
+
+              echo "== Reliability growth: FMEDA MTBF vs hw/fmeda/mtbf-history.csv (H-09, HW-NF-004/HW-SF-005)"
+              # --no-append: the nightly runner never rewrites tracked files; a
+              # changed FMEDA prints the pending row for the PR author to commit.
+              python3 ci/check_hw_reliability_growth.py --root . --no-append || {
+                echo "::error::hw-nightly failed: MTBF regression (>10 %) or missing/corrupted reliability history"
                 exit 1
               }
             ' 2>&1 | tee /tmp/hw-nightly-output.log

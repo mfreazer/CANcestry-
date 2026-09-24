@@ -36,13 +36,13 @@
     },
     {
       "oracle_id": "OR-004",
-      "description": "ISO 26262-5 Annex D worked example (FMEDA tool gate)",
+      "description": "ISO 26262-5:2018 Annex C metric recomputation (FMEDA tool gate)",
       "class": "standard",
       "serves": [
         "HW-SF-005"
       ],
-      "source_citation": "ISO 26262-5:2018 Annex D worked example; calculator qualification pending.",
-      "validation_gap": "FMEDA calculator and independent Annex D regression not implemented."
+      "source_citation": "ISO 26262-5:2018 Annex C equations C.1..C.8; public fixtures TI SLYP685 (n = 1..4) and Chalmers 2023 via hw/bom/datasheets/extract-ti-slyp685-fmeda-example.json and extract-chalmers-2023-fmeda-example.json; tests/unit/tools/test_fmeda_calculator.py exact-fraction oracle (tool-qualification.md section 4.4, H-09 issue #56).",
+      "validation_gap": "ISO 26262-5:2018 Annex E Table E.1 worked example not reproduced (values not publicly available); T0 inputs are assumed failure-mode distributions and secondary-tabulated SN 29500 rates; FTA cut-set analysis for HW-SF-005 not implemented."
     },
     {
       "oracle_id": "OR-005",

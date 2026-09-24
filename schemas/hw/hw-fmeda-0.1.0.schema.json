@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cancestry.dev/schemas/hw/hw-fmeda-0.1.0.schema.json",
+  "title": "CANcestry FMEDA row (v0.1.0)",
+  "description": "Row contract for hw/fmeda/fmeda-analysis.csv (issue #56, H-09; HW-SF-005, HW-NF-004; ISO 26262-5:2018 Annex B fault classification, Annex C equations C.1..C.8). One row per (component, failure mode). Inputs: the component base failure rate (fit_total, from hw/bom/fit-database.json via fit_id), the failure-mode distribution fraction, whether the mode is safety-related, whether it can violate the safety goal in the absence of a safety mechanism, whether it is a multiple-point-fault candidate otherwise, the safety mechanism and its diagnostic coverage against single-point faults (dc_spf) and against latent faults (dc_latent). Derived columns (fit_mode, fit_safe, fit_spf_rf, fit_mpf_detected, fit_mpf_latent, classification) are carried for readability and are recomputed by tools/fmeda-calculator.py, which fails closed on any drift. Classification algebra (Annex B/C): not safety related -> excluded; violates_sg=N and mpf_relevant=N -> S (safe); violates_sg=N and mpf_relevant=Y -> MPF with latent share (1 - dc_latent); violates_sg=Y without SM -> SPF; violates_sg=Y with SM -> RF = fit_mode x (1 - dc_spf), the covered part fit_mode x dc_spf becomes MPF with latent share (1 - dc_latent).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fmeda_id",
+    "part_id",
+    "component",
+    "fit_id",
+    "fit_total",
+    "failure_mode",
+    "fmd_fraction",
+    "fmd_basis",
+    "fit_mode",
+    "safety_related",
+    "violates_sg",
+    "mpf_relevant",
+    "sm_spf",
+    "dc_spf",
+    "sm_latent",
+    "dc_latent",
+    "classification",
+    "fit_safe",
+    "fit_spf_rf",
+    "fit_mpf_detected",
+    "fit_mpf_latent",
+    "requirement_ids",
+    "note"
+  ],
+  "properties": {
+    "fmeda_id": {
+      "type": "string",
+      "pattern": "^FMEDA-\\d{3}$"
+    },
+    "part_id": {
+      "type": "string",
+      "pattern": "^PRT-\\d{3}$"
+    },
+    "component": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fit_id": {
+      "type": "string",
+      "pattern": "^FIT-\\d{3}$"
+    },
+    "fit_total": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Component base failure rate in FIT (must equal the fit-database entry)."
+    },
+    "failure_mode": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fmd_fraction": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 1,
+      "description": "Failure-mode distribution fraction; the fractions of one part_id sum to exactly 1."
+    },
+    "fmd_basis": {
+      "enum": [
+        "vendor-fmd",
+        "standard-table",
+        "assumption"
+      ],
+      "description": "Provenance of the fraction: vendor FMEDA/FMD data, a standard's table, or a documented analyst assumption (T0 placeholder)."
+    },
+    "fit_mode": {
+      "type": "number",
+      "minimum": 0,
+      "description": "fit_total x fmd_fraction."
+    },
+    "safety_related": {
+      "enum": [
+        "Y",
+        "N"
+      ]
+    },
+    "violates_sg": {
+      "enum": [
+        "Y",
+        "N"
+      ],
+      "description": "Can this failure mode violate the safety goal on its own, in the absence of any safety mechanism?"
+    },
+    "mpf_relevant": {
+      "enum": [
+        "Y",
+        "N"
+      ],
+      "description": "For violates_sg=N: can the mode contribute to a multiple-point failure (e.g. a fault of a safety mechanism or of the retention energy store)?"
+    },
+    "sm_spf": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Safety mechanism preventing the mode from violating the safety goal ('-' when none)."
+    },
+    "dc_spf": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "sm_latent": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Mechanism by which the (covered or MPF) fault is detected or perceived before a second fault ('-' when none)."
+    },
+    "dc_latent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "classification": {
+      "enum": [
+        "excluded",
+        "S",
+        "SPF",
+        "RF",
+        "MPF"
+      ]
+    },
+    "fit_safe": {
+      "type": "number",
+      "minimum": 0
+    },
+    "fit_spf_rf": {
+      "type": "number",
+      "minimum": 0
+    },
+    "fit_mpf_detected": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Detected or perceived multiple-point share (lambda_MPF,DP)."
+    },
+    "fit_mpf_latent": {
+      "type": "number",
+      "minimum": 0
+    },
+    "requirement_ids": {
+      "type": "string",
+      "pattern": "^HW-(SF|FR|NF)-\\d{3}(;HW-(SF|FR|NF)-\\d{3})*$"
+    },
+    "note": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

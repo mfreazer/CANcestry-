@@ -50,7 +50,7 @@ no new firmware transitions or passive-latch recovery path are introduced.
 
 ## 3. Safety analysis path
 
-FHA/FMEA/FTA in Capella safety viewpoints (ATICA optional, with documented fallback per HW-PLAN C4). Quantitative SPFM/LFM/PMHF by the Python FMEDA calculator fed by `hw/bom/bom.csv` + `fit-database.csv`; `docs/hw/fmeda.md` is a rendered view only (HW-PLAN §6.4). The calculator's oracle gate is the ISO 26262-5 Annex D worked example (OR-004), executed in CI.
+FHA/FMEA/FTA in Capella safety viewpoints (ATICA optional, with documented fallback per HW-PLAN C4). Quantitative SPFM/LFM/PMHF by the Python FMEDA calculator (`tools/fmeda-calculator.py`) fed by `hw/bom/bom.json` + `hw/bom/fit-database.json` through `hw/fmeda/fmeda-analysis.csv`; the generated blocks of `docs/hw/fmeda.md` are a rendered view only (HW-PLAN §6.4). The calculator's oracle gate is the ISO 26262-5:2018 Annex C metric recomputation with public fixtures (OR-004; the Annex E worked example is a declared gap, tool-qualification.md §4.4), executed in CI (hw-fast gate 1.7).
 
 ## 4. Bridge to Modelica
 

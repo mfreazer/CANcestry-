@@ -265,8 +265,8 @@ cancestry/
 │   │       ├── Thermal/
 │   │       └── Safety/
 │   ├── bom/
-│   │   ├── bom.csv                       Schema-validated
-│   │   └── fit-database.csv              Curated FIT rates
+│   │   ├── bom.json                      Schema-validated (authoritative; QA review 2026-09-22)
+│   │   └── fit-database.json             Curated FIT rates (H-09)
 │   ├── tests/
 │   │   ├── test_power_sim.py
 │   │   ├── test_bus_sim.py

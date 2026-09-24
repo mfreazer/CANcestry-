@@ -5,6 +5,7 @@
 # from ci/docker/ (OpenModelica + FMPy + Python):
 #
 #   1. schema validation        (software + hardware schema trees)
+#   1.6/1.7 WCCA + FMEDA gates  (H-09: ci/check_hw_wcca.py, tools/fmeda-calculator.py --check)
 #   2. HwRS parser + ledger     (unit tests, 100% coverage gate)
 #   3. Modelica compile -> FMU  (omc, headless)
 #   4. FMU oracle test          (FMPy vs OR-001, schema-declared tolerance)
@@ -30,7 +31,9 @@ on:
       - "docs/hw/**"
       - "schemas/hw/**"
       - "tests/unit/tools/test_check_hw_*.py"
+      - "tests/unit/tools/test_fmeda_calculator.py"
       - "tests/unit/tools/test_check_capella_model.py"
+      - "tools/fmeda-calculator.py"
       - "tests/unit/tools/fixtures/**"
       - "docs/system/mode-fault-state-machine.md"
       - "ci/**"
@@ -45,7 +48,9 @@ on:
       - "docs/hw/**"
       - "schemas/hw/**"
       - "tests/unit/tools/test_check_hw_*.py"
+      - "tests/unit/tools/test_fmeda_calculator.py"
       - "tests/unit/tools/test_check_capella_model.py"
+      - "tools/fmeda-calculator.py"
       - "tests/unit/tools/fixtures/**"
       - "docs/system/mode-fault-state-machine.md"
       - "ci/**"
@@ -153,10 +158,22 @@ jobs:
               # JSON is authoritative; emit the legacy CSV before the ledger gate.
               python3 ci/check_hw_contracts.py . --export
 
+              echo "== 1.6. WCCA / derating gate (HW-NF-002/HW-NF-003, H-09)"
+              python3 ci/check_hw_wcca.py --root . || {
+                echo "::error::hw-fast gate 1.6 failed: WCCA derating ratio above threshold, unregistered waiver or generated-table drift"
+                exit 1
+              }
+
+              echo "== 1.7. FMEDA calculator consistency gate (HW-SF-005/HW-NF-004, H-09)"
+              python3 tools/fmeda-calculator.py --root . --check || {
+                echo "::error::hw-fast gate 1.7 failed: FMEDA CSV derived columns or docs/hw/fmeda.md generated blocks drifted"
+                exit 1
+              }
+
               echo "== 2. Hardware checkers (unit tests, 95% branch coverage gate)"
               python3 -m coverage run --branch \
-                --include=ci/check_hw_traceability.py,ci/check_capella_model.py,ci/check_hw_contracts.py,ci/check_hw_evidence.py \
-                -m pytest tests/unit/tools/test_check_hw_traceability.py tests/unit/tools/test_check_capella_model.py tests/unit/tools/test_check_hw_contracts.py tests/unit/tools/test_check_hw_evidence.py -q || {
+                --include=ci/check_hw_traceability.py,ci/check_capella_model.py,ci/check_hw_contracts.py,ci/check_hw_evidence.py,ci/check_hw_wcca.py,tools/fmeda-calculator.py,ci/check_hw_reliability_growth.py \
+                -m pytest tests/unit/tools/test_check_hw_traceability.py tests/unit/tools/test_check_capella_model.py tests/unit/tools/test_check_hw_contracts.py tests/unit/tools/test_check_hw_evidence.py tests/unit/tools/test_check_hw_wcca.py tests/unit/tools/test_fmeda_calculator.py tests/unit/tools/test_check_hw_reliability_growth.py -q || {
                 echo "::error::hw-fast gate 2 failed: checker unit tests"
                 exit 1
               }

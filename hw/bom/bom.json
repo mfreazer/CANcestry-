@@ -1,7 +1,7 @@
 {
   "kind": "bom",
   "schema_version": "0.1.0",
-  "baseline": "H-Phase 1 candidate parameter baseline (H-01): requirement bounds and budgets for the retention domain, per HwRS v0.2.0. No vendor parts are selected yet; vendor part numbers, FIT data and lifecycle claims are finalized at H-02 (hw/bom/bom.csv, hw/bom/fit-database.csv).",
+  "baseline": "H-Phase 1 candidate parameter baseline (H-01): requirement bounds and budgets for the retention domain, per HwRS v0.2.0. No vendor parts are selected yet; vendor part numbers and lifecycle claims are finalized at H-02. This JSON file is the authoritative BOM record (QA review 2026-09-22, issue #56 memo): there is no bom.csv. H-09 (issue #56): R_path closed by the T0 WCCA (docs/hw/wcca-derating.md) and base FIT rates curated in hw/bom/fit-database.json.",
   "parts": [
     {
       "part_id": "PRT-001",
@@ -12,8 +12,11 @@
       "aec_q_status": "AEC-Q100 qualified automotive line (ST product data); re-verified at H-02 BOM curation",
       "lifecycle": "active",
       "fit_source": {
-        "status": "tbd",
-        "citation": "H-02: curated FIT database hw/bom/fit-database.csv; no FIT data at H-01 (HW-NF-004 still draft)"
+        "status": "curated",
+        "standard": "SN 29500",
+        "rate_per_1e9_hours": 150.0,
+        "database_entry": "FIT-001",
+        "citation": "hw/bom/fit-database.json FIT-001: SN 29500 base-failure-rate class as tabulated in TI SLYP685 (secondary tabulation; primary table row and vendor FIT data pending H-02); H-09 issue #56"
       },
       "datasheet_ref": {
         "manufacturer": "STMicroelectronics",
@@ -66,8 +69,11 @@
       "aec_q_status": "AEC-Q200 grade 1 required (HW-NF-004); candidate specification pending H-02 selection",
       "lifecycle": "candidate",
       "fit_source": {
-        "status": "tbd",
-        "citation": "H-02: curated FIT database hw/bom/fit-database.csv; no FIT data at H-01 (HW-NF-004 still draft)"
+        "status": "curated",
+        "standard": "SN 29500",
+        "rate_per_1e9_hours": 2.0,
+        "database_entry": "FIT-002",
+        "citation": "hw/bom/fit-database.json FIT-002: SN 29500 base-failure-rate class as tabulated in TI SLYP685 (secondary tabulation; primary table row and vendor FIT data pending H-02); H-09 issue #56"
       },
       "datasheet_ref": {
         "manufacturer": "TBD",
@@ -105,10 +111,10 @@
           "name": "R_path",
           "value": 0.05,
           "unit": "ohm",
-          "condition": "VBAT charge-path budget (idealized diode + trace); not exercised by holdup_001 (diode off); H-02 transient cases only",
-          "source": "budget",
-          "citation_type": "budget",
-          "citation": "HwAGENTS.md rule 2; WCCA due at H-02"
+          "condition": "WCCA upper bound of the ohmic charge-path series resistance (trace + vias at 85 degC, layout allowances WCCA-A-005/A-006; worst case 0.044229 ohm). Unexercised by holdup_001; re-pinned by the netlist/layout query (OR-005)",
+          "source": "analysis",
+          "citation_type": "wcca_analysis",
+          "citation": "docs/hw/wcca-derating.md WCCA-R-001 (H-09, issue #56); hw/bom/datasheets/extract-wcca-allowances.json R_path_bound"
         }
       ]
     }

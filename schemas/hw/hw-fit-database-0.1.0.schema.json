@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cancestry.dev/schemas/hw/hw-fit-database-0.1.0.schema.json",
+  "title": "CANcestry curated FIT database (v0.1.0)",
+  "description": "Contract for hw/bom/fit-database.json (issue #56, H-09; HW-NF-004, HW-SF-005; HwAGENTS.md rule 2). One entry per BOM part with the curated base failure rate in FIT (failures per 1e9 device-hours), the standard or data source it was taken from, the table/section, the reference conditions and an explicit confidence discriminator: 'primary-table' (read from the licensed standard table), 'secondary-tabulation' (a public document that tabulates the standard's class values), 'vendor-data' (manufacturer FIT/FMEDA data), 'engineering-estimate' (analyst estimate, never silent). Each standard used is declared once in standards[]; entries reference it by standard_id. Every entry cites a schema-validated extract under hw/bom/datasheets/. ci/check_hw_contracts.py cross-checks the BOM fit_source records against this file.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schema_version",
+    "baseline",
+    "standards",
+    "entries"
+  ],
+  "properties": {
+    "kind": {
+      "const": "fit_database"
+    },
+    "schema_version": {
+      "const": "0.1.0"
+    },
+    "baseline": {
+      "type": "string",
+      "minLength": 1
+    },
+    "standards": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "standard_id",
+          "title",
+          "access",
+          "citation"
+        ],
+        "properties": {
+          "standard_id": {
+            "type": "string",
+            "pattern": "^[A-Z0-9][A-Za-z0-9 ._/-]*$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "access": {
+            "enum": [
+              "licensed",
+              "public",
+              "public-secondary"
+            ],
+            "description": "licensed: the standard itself is not retained in the repository; public: freely available document; public-secondary: a public document that reproduces the standard's values (its URL is cited)."
+          },
+          "citation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_url": {
+            "type": "string",
+            "pattern": "^https?://[^\\s]+$"
+          }
+        }
+      }
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fit_id",
+          "part_id",
+          "category",
+          "component_class",
+          "fit_rate_per_1e9_hours",
+          "standard",
+          "table_or_section",
+          "reference_conditions",
+          "confidence",
+          "citation",
+          "source_extract",
+          "source_entry"
+        ],
+        "properties": {
+          "fit_id": {
+            "type": "string",
+            "pattern": "^FIT-\\d{3}$"
+          },
+          "part_id": {
+            "type": "string",
+            "pattern": "^PRT-\\d{3}$"
+          },
+          "category": {
+            "enum": [
+              "mcu",
+              "capacitor",
+              "resistor",
+              "inductor",
+              "diode",
+              "regulator",
+              "transceiver",
+              "watchdog",
+              "connector",
+              "crystal",
+              "passive",
+              "other"
+            ]
+          },
+          "component_class": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Component class of the standard's table row the rate was taken from (e.g. 'microcontroller, CMOS' or 'ceramic capacitor class 2')."
+          },
+          "fit_rate_per_1e9_hours": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "standard": {
+            "type": "string",
+            "minLength": 1,
+            "description": "standard_id of one of the declared standards[]."
+          },
+          "table_or_section": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reference_conditions": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Reference conditions of the curated rate (temperature, stress ratio, environment) and whether stress factors have been applied."
+          },
+          "confidence": {
+            "enum": [
+              "primary-table",
+              "secondary-tabulation",
+              "vendor-data",
+              "engineering-estimate"
+            ]
+          },
+          "citation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_extract": {
+            "type": "string",
+            "pattern": "^hw/bom/datasheets/extract-[a-z0-9-]+\\.json$"
+          },
+          "source_entry": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
