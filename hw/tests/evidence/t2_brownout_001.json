@@ -1,0 +1,78 @@
+{
+  "case_id": "t2_brownout_001",
+  "credibility_level": "CL0",
+  "evidence_of": "T2 virtual-bench brownout scenario for HW-SF-002 (H-11, issue #64): the H-11 plant CancestryLib.Power.BOR (hw/model/CancestryLib/Power/BOR.mo, compiled to an FMI 2.0 CoSimulation FMU by the pinned OpenModelica) collapses the 3V3 rail at t = 10 ms; its modelled BOR assertion drives the BOR reset injector (hw/virtual-bench/renode/bor_reset_injector.py), which pulls the active-low NRST line for 100 us, discards the main-SRAM marker word, sets RCC_CSR.BORRSTF and takes the BOR machine reset. The REAL v1.0.0 firmware (off-tree driver hw/virtual-bench/firmware/bor_brownout.c) then re-enters its reset handler, classifies the reset cause, recovers the retained terminal code through the real cancestry_watchdog_read_retention_register API and restores the safe state through the real cancestry_hardware_set_safe_state function. The artifact asserts the issue's ordering chain retention write < BOR detection < recovery, that the retained code survived the reset while main SRAM did not, and that the NRST pulse is exactly 100 us. This manifest records the PENDING disposition (pass=false, CL0): no executing run of this scenario backs an evidence artifact yet.",
+  "firmware": {
+    "elf": "built off-tree from tag v1.0.0 with the pinned T2 toolchain image (ci/docker/Dockerfile.t2) and CANCESTRY_T2_DRIVER=bor_brownout (hw/virtual-bench/firmware/build_firmware.sh); supplied at run time via CANCESTRY_T2_BOR_ELF or --elf; never committed; its sha256 is recorded at run time",
+    "modification": "none; the firmware is read-only (issue #64)"
+  },
+  "inherited_validation_gap": "openmodelica: Compiler semantics outside independently validated output remain unqualified; OR-001/OR-002 regressions do not cover all translation and solver behavior. | renode: Renode peripheral models (IWDG, GPIO, RTC_BKP, DWT) are scripted emulations, not vendor-validated silicon models: platform-model bugs can alter firmware-visible timing or register semantics, and this gap is inherited by every T2 evidence artifact; golden-trace correlation against vendor reference behavior and T4 bench correlation are required before any promotion.",
+  "not_covered": [
+    "No executed T2 run exists for this scenario: no event timestamps, no trace CSV and no ELF/FMU/bridge/injector artifact hashes are claimed by this manifest.",
+    "No independent oracle exists for the BOR threshold behaviour, the hysteresis release gate or the reset timing (issue #64: oracle none) - the modelled threshold and the reset line are the scenario's own stimulus. Credibility stays CL0 until a registered oracle or a golden bench capture exists; no oracle_id may be promoted into this row by rendering or prose. OR-001 witnesses only the retention-domain closed form of the T1 plant (hw/tests/test_bor_physics.py).",
+    "The BOR hysteresis value (V_bor_hyst) and the post-reset resumption latency (t_boot) are declared ENGINEERING FIXTURES in BOR.mo: DS12787 publishes no BOR hysteresis and the v1.0.0 post-reset startup latency is not characterised. Bench correlation pending (HwRS section 5).",
+    "The supply itself is not modelled beyond the BOR fixture's step collapse: real brownout shapes, the finite fall time of the rail, multiple/repeated brownouts and the vehicle harness impedance are out of H-11 scope (issue #64: no scope creep).",
+    "The production retention drain path (cancestry_watchdog_restore_retained_fault, which clears RTC_BKP0R after admission) is deliberately NOT exercised: the scenario keeps the retained code readable across the whole window so the preservation claim can be asserted from the register readback itself (documented deviation, firmware/bor_brownout.c).",
+    "The BOR cell behaviour on silicon (threshold spread over temperature, option-byte configuration, backup-domain switching) is not_simulated: the injector models the RESET LINE and its retention consequences, never the cell.",
+    "DWT CYCCNT accuracy is deliberately unexercised (bring-up finding F-27): events are captured from emulation virtual time and carry the renode TCL2 gap inherited above.",
+    "T4 physical correlation: bench-pending (HwRS section 5); CL3 requires bench data and no ledger promotion is performed here."
+  ],
+  "oracle_id": "none",
+  "pass": false,
+  "pending_reason": "The T2 brownout machinery (BOR plant model, BOR reset injector, brownout bring-up cancestry-hw-bor.resc, orchestration and the off-tree brownout driver) is delivered by https://github.com/mfreazer/CANcestry-/issues/64 (H-11), but no executed T2 run backs this artifact yet: like the H-07 retention and H-10 CAN fault foundations, the first executing run is produced by hw/virtual-bench/scenarios/t2_brownout_001.py on the T2 toolchain image (hw-nightly t2-virtual-bench job) and must reproduce this manifest's ledger chain deterministically - plus a second byte-identical run via --check - before any passing disposition may be claimed. Promotion beyond sim-pending / CL0 additionally stays gated on HS-01/HS-02 plus a human safety reviewer (issue #64: the BOR physics are safety-relevant, HwAGENTS.md rule 6).",
+  "provisional": true,
+  "requirement_id": "HW-SF-002",
+  "scenario": {
+    "duration_us": 50000,
+    "fmu_step_us": 1,
+    "inject_at_us": 10000,
+    "master_step_us": 100,
+    "method": "virtual_bench",
+    "nrst_pulse_us": 100,
+    "seed": "123456789"
+  },
+  "schema_version": "0.1.0",
+  "sim_case": "hw/tests/cases/bor_brownout_001.simcase.json",
+  "source_hashes": {
+    "ci/docker/Dockerfile.t2": "sha256:79b533163dc4919f4cd45f9581c0a119a150b15efde6061e5747160a2c09cf85",
+    "ci/docker/renode-1.16.1.pin": "sha256:091ef14d0677440408bc2436530442e4fea1690439b1827a7bd08d495c6b44f1",
+    "docs/hw/tool-qualification.md": "sha256:ae9c19571f123b3444b02015efb7e05fb67eb0813bb46775facca208f233ee96",
+    "docs/hw/virtual-bench-plan.md": "sha256:818a00bad332e853136e4cbc0ae1065b5dae8649531697a108ccf0a292457cfd",
+    "hw/model/CancestryLib/Power/BOR.mo": "sha256:16ac259cf8abb903f637cd8c32873cf489f3b74465e18de910f0764bda24c23d",
+    "hw/model/CancestryLib/Power/package.mo": "sha256:b764dcccf84d3660c855d2d9712ed63bf7ff3e617a7409fd72d4381a0d527c33",
+    "hw/model/CancestryLib/package.mo": "sha256:53662fe968facb4cc3ca5d6ccb0ec8a7b7382224c0122ab5af19b748694e2372",
+    "hw/model/bridge.json": "sha256:d6b8b7a18ff6c3cf9df531d89f3ded10ac17c6a0c2d6ffdec3b44804febe0748",
+    "hw/tests/cases/bor_brownout_001.simcase.json": "sha256:090502d38b7d190786a50fe7f807a4a773f44f63f82a2e637c73cf045d5d55e2",
+    "hw/tests/test_bor_physics.py": "sha256:8c7d5a8faf6dd9423c20810d8e19f2ae98a43b30b412a3a262aa2921a69e0218",
+    "hw/virtual-bench/firmware/bor_brownout.c": "sha256:0ccc67ad3f0e27f8c4b0967deb83bffbf47ff07f533485dd46217b0a04e83f46",
+    "hw/virtual-bench/firmware/build_firmware.sh": "sha256:68a96f7a3ea7b50574a399c57608c4199d437f90470e3a1a3729903e6264cbbc",
+    "hw/virtual-bench/firmware/startup.s": "sha256:8182c84a3c7028723006271fa0678f8c54bd0040d0476fc3ee2d93ca1e9e5606",
+    "hw/virtual-bench/fmi_bridge.py": "sha256:d1ddfeea57ab68df5ec1f0e4fcfc75faa3f9ef4a5bac5e9b93ae9bf138d0b13d",
+    "hw/virtual-bench/renode/bor_reset_injector.py": "sha256:526270849695b5852e6909976a92b4c80000cf92b6a43e6e128b096767d01bd5",
+    "hw/virtual-bench/renode/cancestry-hw-bor.resc": "sha256:db832d5a4c978005e8628db5f5efb3d199d341c8ef11d6624c3b52eb0cc4445a",
+    "hw/virtual-bench/renode/gpioa_model.py": "sha256:a05b2b47e3f08ba411ebdcc41689f19b934fe40e9746d0cfcdb3c55b75c5f37a",
+    "hw/virtual-bench/renode/iwdg_model.py": "sha256:91267b1ce23e020f5cf3fd1846b10a52702c8a999c4ac79e25be8bb0dbc0710f",
+    "hw/virtual-bench/renode/rcc_model.py": "sha256:3a95d26a649567d8e38685435d29c62549320d258235dbe18fe042c9c87ea9ce",
+    "hw/virtual-bench/renode/rtc_backup_model.py": "sha256:6527fe2ec7ebdfe715648846016eaf1728b4362c6aeaa7e6fe3c7c8b87d1adfe",
+    "hw/virtual-bench/renode/stm32g474-cancestry.repl": "sha256:de90b8171f8d7f6e668a68c1cda1007f713fb7b2976c2cf6576c27dd0278de7a",
+    "hw/virtual-bench/scenarios/t2_brownout_001.py": "sha256:bb6cf2e1e01a97dccec4dcdd555cca0f7377164513d040a2ecdbb118af8d018f",
+    "hw/virtual-bench/t2_bor_common.py": "sha256:463f2641d7d866964d7d9a7e0a472ca39f356338d1409473f68264e789576d43",
+    "hw/virtual-bench/test_t2_brownout.py": "sha256:dbd0a1e92e63f3e6090b1d4dff9de18671f029318bdcc384b7fd7c1513fe973a",
+    "schemas/hw/hw-sim-0.1.0.schema.json": "sha256:efa2591e203a56f9fe3792d0bbdd891ce3b3b01bab52e2976b11ad417bd35f6a",
+    "schemas/hw/hw-t2-brownout-evidence-0.1.0.schema.json": "sha256:734594fa564d530ae701d3a11c0d32c0f2f092d88e0c77a53e2d84cc94db9553",
+    "schemas/hw/hw-traceability-0.1.0.schema.json": "sha256:5d2e23704dd7b2125b534fd85f1930cca12df40b8d321e2cc8822aac0808afeb"
+  },
+  "status": "pending",
+  "tool_pins": {
+    "bor_reset_injector": "0.1.0",
+    "fmpy": "0.3.24",
+    "openmodelica": "1.24",
+    "python": ">=3.10",
+    "renode": "1.16"
+  },
+  "trace": {
+    "artifact": "build/hw/t2_brownout_001_trace.csv (per-run artifact, gitignored)",
+    "columns": "time_us,rail_mv,nrst,gpio_odr,alive_counter",
+    "hashing": "sha256 of the trace CSV, measured invariants and measured tool versions recorded in build/hw/t2_brownout_001.runlog.json"
+  }
+}
