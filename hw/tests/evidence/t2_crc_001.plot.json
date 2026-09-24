@@ -1,0 +1,92 @@
+{
+  "credibility_level": "CL0",
+  "generated_at": "2026-09-24T00:00:00Z",
+  "method": "virtual_bench",
+  "oracle_id": "none",
+  "plot_description": "Pending placeholder view per docs/hw/visual-evidence-plan.md section 5: no T2 run of the t2_crc_001 scenario has executed (issue #62, H-10), so no event markers from a run exist. The intended final view plots the captured timeline on this window - x: emulation time 0..0.050 s; y: fault-event markers (CRC fault injection at the scheduled 0.010 s, firmware detection, error-logging acknowledge, condition cleared) as labelled glyph series with their exact hook-stamped microsecond times from hw/tests/evidence/t2_crc_001.json. The 'x' marker of the scheduled_injection series at 0.010 s records the DETERMINISTIC injection boundary of the scenario (a scenario constant, not a measurement); the marker at the series origin is an artifact of the renderer's marker cadence and carries no claim. The zero-width hatched band over 0..0.050 s marks the PENDING disposition only; it is not a tolerance claim (HwAGENTS rule 14). Rendering creates no evidence and promotes nothing (HwAGENTS rule 13); the scenario stays sim-pending / CL0 with oracle_id 'none'.",
+  "plot_id": "t2_crc_001",
+  "plot_title": "HW-FR-003 T2 CRC error handling timeline - PENDING first run",
+  "plot_version": "0.1.0",
+  "provenance_notes": "H-10 (issue #62) pending placeholder: the picture is never the proof; the hash chain t2_crc_001.plot.json -> t2_crc_001.json -> pinned sources is. Status, provisional and credibility are inherited from the case manifest and never improved here. oracle_id stays 'none' (no OR-XXX exists for CRC error handling, issue #62); the visual is a view of the pending manifest, never closure evidence.",
+  "provisional": true,
+  "renderer_tool": "cancestry-render-modelica",
+  "renderer_tool_digest": "sha256:c50a6b0592117c081dc9c8dbc5cfcb69d50ef8e33b520c1a4d740e80ce4ac614",
+  "renderer_tool_version": "0.1.0",
+  "schema_version": "0.1.0",
+  "series": [
+    {
+      "description": "Deterministic scenario schedule: the CRC fault injection is issued at exactly 0.010 s of emulation time (issue #62). Points enumerate the injection boundary inside the visualization window; the 'x' marker lands on 0.010 s. Not a measured event.",
+      "name": "scheduled_injection",
+      "non_color_encoding": {
+        "line_style": "dashed",
+        "marker": "x"
+      },
+      "role": "model",
+      "x": [
+        0.0,
+        0.0025,
+        0.005,
+        0.01,
+        0.05
+      ],
+      "x_units": "s",
+      "y": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "y_units": "V"
+    },
+    {
+      "description": "Zero-width placeholder lower edge; no T2 run data is claimed.",
+      "name": "pending_band_lower",
+      "non_color_encoding": {
+        "line_style": "dotted",
+        "marker": "none"
+      },
+      "role": "tolerance_lower",
+      "x": [
+        0.0,
+        0.05
+      ],
+      "x_units": "s",
+      "y": [
+        0.0,
+        0.0
+      ],
+      "y_units": "V"
+    },
+    {
+      "description": "Zero-width placeholder upper edge; no T2 run data is claimed.",
+      "name": "pending_band_upper",
+      "non_color_encoding": {
+        "line_style": "dotted",
+        "marker": "none"
+      },
+      "role": "tolerance_upper",
+      "x": [
+        0.0,
+        0.05
+      ],
+      "x_units": "s",
+      "y": [
+        0.0,
+        0.0
+      ],
+      "y_units": "V"
+    }
+  ],
+  "source_evidence_hash": "sha256:bcfccb8d0bf58e6f12a7344d7cd24288f2528756fc08277004417342624acb86",
+  "source_evidence_path": "hw/tests/evidence/t2_crc_001.json",
+  "source_requirement": "HW-FR-003",
+  "status": "pending",
+  "tolerance_band": {
+    "description": "PENDING: no qualified tolerance band; the first executing T2 run replaces this placeholder with the captured fault-event timeline (zero-width placeholder, not a tolerance claim)",
+    "hatch": "xxx",
+    "lower_series": "pending_band_lower",
+    "units": "V",
+    "upper_series": "pending_band_upper"
+  }
+}

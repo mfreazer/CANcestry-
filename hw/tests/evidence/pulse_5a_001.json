@@ -39,7 +39,7 @@
     "ci/docker/Dockerfile": "sha256:49703d8b330e41c58e5411bdede3310aec55199e3fb77fc973189b9ee7358102",
     "ci/docker/base-image.digest": "sha256:fbe0594ac4ef88a211f86be44892d6d24efaefd22b747fe6aca41f512e38614f",
     "docs/hw/pulse-coverage.md": "sha256:510049ea2969667fee1c79f61cf02b4225e5974f1f9d412d212528d28daeab43",
-    "docs/hw/tool-qualification.md": "sha256:9db30c938716f108085df530325f400cc4630f5c18e524f3122aa4c7bf82204e",
+    "docs/hw/tool-qualification.md": "sha256:ae9c19571f123b3444b02015efb7e05fb67eb0813bb46775facca208f233ee96",
     "hw/bom/datasheets/extract-iso16750-2-2012.json": "sha256:10484dee40e91d6f75a458fdd34614b8434d3074cce5436e428b4f9fb4da7e6b",
     "hw/model/CancestryLib/Power/PulseISO7637_2.mo": "sha256:dfc42d3391515aaa160c670e42a45d6c775d373f7ade84a33daab93f5f2b624a",
     "hw/model/CancestryLib/Power/package.mo": "sha256:b764dcccf84d3660c855d2d9712ed63bf7ff3e617a7409fd72d4381a0d527c33",

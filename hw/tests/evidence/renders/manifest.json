@@ -4,9 +4,9 @@
       "expected_renderer_tool": "cancestry-render-modelica",
       "expected_renderer_tool_digest": "sha256:c50a6b0592117c081dc9c8dbc5cfcb69d50ef8e33b520c1a4d740e80ce4ac614",
       "expected_renderer_tool_version": "0.1.0",
-      "expected_svg_sha256": "sha256:7f4b05c994abe8c265475ad392c6355f562b218b1275b28ad2510662d36a0a4c",
+      "expected_svg_sha256": "sha256:0a95d30613639d98c250fe9220955e6fa700c56f4bb171f45fc6623b032a3ded",
       "last_updated": "2026-09-24T00:00:00Z",
-      "plot_data_sha256": "sha256:10e899d47bde69f57936c005347ffc739c2fdbcb7bb18d845721a433a6a61125",
+      "plot_data_sha256": "sha256:358ba37d47ad6b3ab2bad02d55a38e576db474b6d07a641e3698b698d0579802",
       "plot_id": "pulse_5a_001",
       "plot_version": "0.1.0"
     },
@@ -14,9 +14,29 @@
       "expected_renderer_tool": "cancestry-render-modelica",
       "expected_renderer_tool_digest": "sha256:c50a6b0592117c081dc9c8dbc5cfcb69d50ef8e33b520c1a4d740e80ce4ac614",
       "expected_renderer_tool_version": "0.1.0",
-      "expected_svg_sha256": "sha256:3ebaa9a7669a60f2c66093b2a71ce86bddf086737c73f936c604f9b05971073c",
+      "expected_svg_sha256": "sha256:77130c07cc870045d19f3cd04afb23994145644914b1d41205ed792af9502a0e",
       "last_updated": "2026-09-24T00:00:00Z",
-      "plot_data_sha256": "sha256:39e8bddc9213efe49a8081797011fa3538d7f293a160564f91c26f4b89a6edf8",
+      "plot_data_sha256": "sha256:62446ee9d74e3879fa8e6786cfc789cee13e3e4fe017a2fa77d235c6d57a63fa",
+      "plot_id": "t2_busoff_001",
+      "plot_version": "0.1.0"
+    },
+    {
+      "expected_renderer_tool": "cancestry-render-modelica",
+      "expected_renderer_tool_digest": "sha256:c50a6b0592117c081dc9c8dbc5cfcb69d50ef8e33b520c1a4d740e80ce4ac614",
+      "expected_renderer_tool_version": "0.1.0",
+      "expected_svg_sha256": "sha256:40aac309f51ef29d578885ed1a9d9accaa03b99dc38e5dc0c586b5926aea5d31",
+      "last_updated": "2026-09-24T00:00:00Z",
+      "plot_data_sha256": "sha256:0015a84efa08ce771c34494f3881efe81e26b5731a1c61dacc7db62b24b3ea4e",
+      "plot_id": "t2_crc_001",
+      "plot_version": "0.1.0"
+    },
+    {
+      "expected_renderer_tool": "cancestry-render-modelica",
+      "expected_renderer_tool_digest": "sha256:c50a6b0592117c081dc9c8dbc5cfcb69d50ef8e33b520c1a4d740e80ce4ac614",
+      "expected_renderer_tool_version": "0.1.0",
+      "expected_svg_sha256": "sha256:a46dc7ef63d81dbc0b1a59a56f7efa60d237a19a9fa0367227b95a935485a04b",
+      "last_updated": "2026-09-24T00:00:00Z",
+      "plot_data_sha256": "sha256:9a4212796a1fac7e93f35e426d38c474299c65bd9be094df8d660a8a8b8c58b4",
       "plot_id": "t2_retention_001",
       "plot_version": "0.1.0"
     }

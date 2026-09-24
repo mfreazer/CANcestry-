@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Virtual Bench Plan |
-| **Version** | 0.5.0 |
-| **Status** | Draft — H-07, pending QA approval |
+| **Version** | 0.6.0 |
+| **Status** | Draft — H-07/H-10, pending QA approval |
 | **Owner** | System Engineer |
 | **Co-author** | QA Lead (oracle rule, credibility scheme) |
 | **Approver** | Release Manager |
@@ -141,6 +141,35 @@ BOR/supervisor reset modeling, DWT accuracy, golden Renode-trace
 correlation for the renode TCL2 classification
 (`docs/hw/tool-qualification.md` §3/§4.3, v0.2.7).
 
+### 8.4 T2 CAN fault scenarios (H-10, issue #62)
+
+H-10 extends the T2 virtual bench — extending, not modifying (issue #62
+constraint 4): `stm32g474-cancestry.repl`, `cancestry-hw.resc` and every
+existing peripheral model are byte-level unchanged in their behavior, and
+the new machinery is additive.
+
+| Artifact | Content |
+|---|---|
+| `renode/can_fault_injector.py` | CAN bus fault injector (`python.PythonPeripheral`, TCL1): models the shared medium (a Bus-Off is one bus state visible in every controller window), projects PSR.BO / PSR.LEC / ECR / IR.ELO / CCCR.INIT, evaluates the ISO 11898-1 128 × 11 recovery sequence (704 µs at the HW-FR-003 nominal 2 Mbit/s) as a pure function of emulation virtual time. Monitor command interface `sysbus can_fault_injector ControlWrite 0x42/0x43` (InjectBusOff / InjectCRCError) plus a read-only register window. |
+| `renode/cancestry-hw-fault.resc` | Second bring-up script for the same (unmodified) platform: registers the injector at 0x40000000, installs the fault-event symbol hooks (`t2_can_busoff_detect`, `t2_can_busoff_recover`, `t2_can_crc_detect` — the firmware's detection/recovery functions; the issue's "CAN error interrupt handler" wording resolves to these, the v1.0.0 ELF has no CAN error ISR) and the CCCR/IR write hooks (recovery request / error-logging acknowledge stamps). |
+| `firmware/can_fault.c` + `build_firmware.sh` (`CANCESTRY_T2_DRIVER=can_fault`) | Off-tree driver through the REAL v1.0.0 fault path (`cancestry_hal_raise_fault`: BUS_OFF → `CANCESTRY_HAL_IF_STATE_BUS_OFF`; CRC error → `CANCESTRY_HAL_FAULT_MALFORMED_FRAME`); no IWDG arming, no DWT (F-27 carries); run/complete/alive counters expose crashes fail-closed. |
+| `t2_fault_common.py` + `scenarios/t2_busoff_001.py` + `scenarios/t2_crc_001.py` | Fail-closed orchestration: preflight, fixed 100 µs `RunFor` quanta, injection exactly at the 10 ms master-step boundary via the injector command interface, exactly-once slot capture, in-run invariants, `--check` determinism gate, `--emit-pending` pending manifests. The Bus-Off run asserts `recovery_us − detection_us < 704 µs`; the CRC run asserts the firmware counter increment and crash-free completion. No FMU: hash chain ELF + bridge + injector + trace. |
+| `schemas/hw/hw-t2-fault-evidence-0.1.0.schema.json` | Sibling of the retention evidence schema with the recorded deviations: `oracle_id: "none"`, no FMU in the chain, fixed injection boundary and window. |
+| `hw/tests/evidence/t2_busoff_001.json`, `t2_crc_001.json` (+ pending placeholder views) | Pending manifests (pass=false, CL0), rendered views under the same R13/R14 rules. |
+
+Honest status (HwAGENTS.md rule 4): **no executed T2 fault-scenario run
+exists yet.** Both artifacts are pending manifests; the ledger rows
+`(HW-FR-003, virtual_bench)` are `sim-pending` / CL0 with empty evidence
+fields (the pending manifests are committed as dispositions and checked by
+their schema contract, exactly like the retention pendings — the ledger
+carries evidence hashes only for passing rows, rule 4). The hw-nightly
+`t2-virtual-bench` job runs each scenario and its `--check` twin; a green
+pair still promotes nothing (promotion is gated on a registered oracle,
+HS-01/HS-02 and a human safety reviewer per issue #62). Brownout remains
+out of scope: it is H-11, gated on HS-01/HS-02, because it touches the
+`not_simulated` BOR physics. Scope is exactly Bus-Off + CRC: no thermal,
+no multi-channel, no CRC storm, no frame delivery.
+
 ## 9. Open questions for QA
 
 None outstanding as of v0.3.0.
@@ -149,6 +178,7 @@ None outstanding as of v0.3.0.
 
 | Version | Date | Change |
 |---|---|---|
+| 0.6.0 | 2026-09-24 | H-10 (#62): §8.4 T2 CAN fault scenarios recorded (can_fault_injector TCL1 peripheral, second bring-up script, off-tree CAN fault driver, scenario orchestration with in-run invariants, hw-t2-fault-evidence schema, pending manifests + views, sim-pending (HW-FR-003, virtual_bench) ledger rows). Extends the platform; no existing artifact modified by behavior. Both scenarios stay sim-pending / CL0; no executed run exists; brownout deferred to H-11 (HS-01/HS-02). |
 | 0.1.0 | 2026-09-19 | Initial draft |
 | 0.2.0 | 2026-09-19 | QA review applied: rebuild and retention policy added (VB-F1); sub-step discrete event injection clarified for HW-SF-004 (VB-Q1); OR-005b class (c) golden-measurement upgrade path added (VB-Q2); oracle registry expanded with OR-007, OR-008, OR-009 to serve HW-SF-003, HW-SF-004, HW-FR-010. |
 | 0.4.1 | 2026-09-19 | H-04 review: correct OR-002 source and withdraw aggregate pulse qualification to pending; track full Pulse 4/Test B qualification in #41. |

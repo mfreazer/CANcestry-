@@ -1,0 +1,185 @@
+:name: CANcestry T2 virtual bench - CAN fault scenarios
+:description: Bring-up of the STM32G474-class platform model plus the CAN bus fault injector for the H-10 Bus-Off / CRC scenarios (issue #62).
+
+# CANcestry T2 virtual bench - CAN fault scenario script (H-10, issue #62).
+#
+# Implements: HW-FR-003 (ISO 11898-2 CAN interfaces: the Bus-Off recovery
+# sequence and CRC error handling of the gateway node are exercised on the
+# virtual bench against the REAL v1.0.0 firmware). Governing documents:
+# docs/hw/virtual-bench-plan.md sections 1, 3 and 6;
+# docs/hw/tool-qualification.md section 3 (can_fault_injector, TCL1) and
+# section 4.5; HwAGENTS.md rules 1, 5 and 13.
+#
+# WHY A SECOND .resc (issue #62 constraint 4, "extend, don't modify"): the
+# H-07/H-08 retention bring-up script cancestry-hw.resc is left byte-identical.
+# It is the artifact 25 CI dispatches qualified, its QA-EV-01 symbol-hook
+# contract belongs to the retention scenario, and the fault scenarios need a
+# different ELF (the off-tree CAN fault driver) plus different hooks. This
+# script loads the SAME unmodified platform description
+# (stm32g474-cancestry.repl) and the SAME four scripted register models, and
+# ADDS the CAN fault injector plus the fault-event capture hooks.
+#
+# Driven by hw/virtual-bench/scenarios/t2_busoff_001.py and
+# hw/virtual-bench/scenarios/t2_crc_001.py (via hw/virtual-bench/
+# t2_fault_common.py):
+#
+#   $elf   path of the fault-scenario firmware ELF (mandatory; built off-tree
+#          from tag v1.0.0 by hw/virtual-bench/firmware/build_firmware.sh with
+#          CANCESTRY_T2_DRIVER=can_fault). Set by the runner as a QUOTED path
+#          with NO '@' marker (bring-up finding F-32: LoadELF validates the raw
+#          string with File.Exists); the guard below fails closed when it is
+#          missing.
+#   $t2_seed  fixed deterministic seed, unquoted (bring-up finding F-31:
+#          `emulation SetSeed` binds to SetSeed(int) and the monitor accepts
+#          only DecimalIntegerToken for int parameters). Must stay equal to
+#          fmi_bridge.FIXED_SEED.
+#
+# Determinism (HwAGENTS.md rule 5): the machine is left PAUSED and is advanced
+# exclusively by the orchestrator's fixed-size `emulation RunFor` quanta
+# (100 us master step, the H-07 bridge contract). No wall clock is consumed.
+
+using sysbus
+
+$t2_seed?=123456789
+
+# Fail-closed guard: T2 executes a REAL v1.0.0 ELF (HW-PLAN section 8.3); the
+# bench never falls back to a reimplementation of the firmware.
+python "assert variables['elf'] not in ('', None), 'cancestry-hw-fault.resc: no firmware ELF provided (set $elf before including this script)'"
+python "import Antmicro.Renode.Logging as _clog"
+python "_clog.Logger.Info('[cancestry-hw-fault] step0: python logger channel OK, elf=%s' % variables['elf'])"
+
+mach create "cancestry"
+python "_clog.Logger.Info('[cancestry-hw-fault] step2: machine created')"
+
+# Same platform description as the retention bring-up (unmodified file).
+# $ORIGIN-absolute path: bring-up finding F-24 (the process CWD of a headless
+# Renode is the install directory, never this script's directory).
+machine LoadPlatformDescription $ORIGIN/stm32g474-cancestry.repl
+python "_clog.Logger.Info('[cancestry-hw-fault] step3: platform loaded')"
+
+# The four scripted register models of the H-07 platform, registered with
+# $ORIGIN-absolute paths and QUOTED names (bring-up findings F-28 and F-30:
+# PythonPeripheral resolves a bare `filename:` against the process CWD, and
+# PyDevFromFile's `name` parameter is a string, which the monitor binds only
+# from a StringToken/PathToken). The fault driver arms the IWDG with the same
+# register sequence as the retention driver and reads the reset cause from
+# RCC_CSR, so all four stay registered - unchanged.
+machine PyDevFromFile $ORIGIN/iwdg_model.py 0x40003000 0x14 true "iwdg"
+machine PyDevFromFile $ORIGIN/rtc_backup_model.py 0x40002800 0x64 false "rtc_backup"
+machine PyDevFromFile $ORIGIN/gpioa_model.py 0x48000000 0x400 true "gpioa"
+machine PyDevFromFile $ORIGIN/rcc_model.py 0x40021000 0x98 true "rcc"
+python "_clog.Logger.Info('[cancestry-hw-fault] step3c: 4 register models registered')"
+
+# ---------------------------------------------------------------------
+# H-10 EXTENSION: the CAN bus fault injector (issue #62 deliverable 1).
+#
+# Registered HERE rather than declared in stm32g474-cancestry.repl for the
+# F-28 reason (a `filename:` attribute in a .repl is resolved CWD-relative
+# inside the PythonPeripheral constructor, which breaks headless CI) and to
+# keep the platform description file itself unchanged.
+#
+# Base 0x40000000 is the address the issue names. It is an APB1 address that
+# the v1.0.0 firmware never accesses (hal_stm32.c touches only DWT/DEMCR, the
+# FDCAN bases 0x40006400/0x40006800, and - through watchdog.c - IWDG, RTC/BKP
+# and RCC), and the platform model declares no peripheral there, so the
+# registration neither overlaps an existing model nor changes firmware-visible
+# behavior. Size 0x400 is one guest page (bring-up finding F-29).
+machine PyDevFromFile $ORIGIN/can_fault_injector.py 0x40000000 0x400 true "can_fault_injector"
+python "_clog.Logger.Info('[cancestry-hw-fault] step3d: can_fault_injector registered at 0x40000000')"
+
+# Deterministic execution: fixed global quantum (the 100 us master step of the
+# H-07 bridge contract) and the fixed seed for the only Renode randomness
+# source. `emulation RunFor` advances virtual time exactly.
+emulation SetGlobalQuantum "0.0001"
+emulation SetSeed $t2_seed
+python "_clog.Logger.Info('[cancestry-hw-fault] step4: quantum and seed set')"
+
+sysbus LoadELF $elf
+# Readback: the initial SP word of the vector table (0x20018000 per
+# firmware/startup.s) proves the ELF segments reached flash.
+python "bus = sysbus if 'sysbus' in dir() else (machine['sysbus'] if 'machine' in dir() else monitor.Machine['sysbus']); v = bus.ReadDoubleWord(0x08000000); _clog.Logger.Info('[cancestry-hw-fault] step5: vector SP=0x%08x (ELF loaded)' % v)"
+
+# Trace-area magic: the H-07 contract word (the orchestrator refuses to run
+# against a machine whose capture area was not initialized by a bring-up
+# script) plus the H-10 fault-capture area marker.
+sysbus WriteDoubleWord 0x60000000 0x54324353
+sysbus WriteDoubleWord 0x60000040 0x00000000
+python "bus = monitor.Machine['sysbus']; _clog.Logger.Info('[cancestry-hw-fault] step7: t2_trace readback=0x%08x (expected 0x54324353)' % bus.ReadDoubleWord(0x60000000))"
+
+# ---------------------------------------------------------------------
+# Fault-event capture (HwAGENTS.md rule 5: deterministic, hashed trace).
+#
+# Each symbol hook stamps the exact emulation virtual time (microseconds) of
+# the REAL firmware entering the named function - nothing in the firmware is
+# modified or reimplemented. The hooked names live in the OFF-TREE T2 driver
+# (hw/virtual-bench/firmware/can_fault.c); each one wraps a v1.0.0 call:
+#
+#   t2_can_busoff_detect   the poll pass that observed PSR.BO and entered
+#                          cancestry_hal_raise_fault(CANCESTRY_HAL_FAULT_BUS_OFF)
+#                          -> CANCESTRY_HAL_IF_STATE_BUS_OFF + FAULT_RAISED
+#   t2_can_busoff_recover  the recovery action that clears CCCR.INIT, the
+#                          ISO 11898-1 / RM0440 Bus-Off recovery request
+#   t2_can_crc_detect      the poll pass that observed PSR.LEC = CRC error and
+#                          raised the fault into the real queue
+#
+# The v1.0.0 ELF ships no CAN error interrupt handler (the platform HAL is
+# poll-driven and the T2 driver installs no device IRQ), so the issue's
+# "symbol hook on the CAN error interrupt handler" is realized as a hook on
+# the firmware's error-detection function - the documented deviation is
+# recorded in the scenario evidence and in tool-qualification.md section 4.5.
+# ---------------------------------------------------------------------
+cpu AddSymbolHook "t2_can_busoff_detect" """
+machine['sysbus'].WriteDoubleWord(0x60000058, int(round(machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1000000)))
+"""
+cpu AddSymbolHook "t2_can_busoff_recover" """
+machine['sysbus'].WriteDoubleWord(0x6000005c, int(round(machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1000000)))
+"""
+cpu AddSymbolHook "t2_can_crc_detect" """
+machine['sysbus'].WriteDoubleWord(0x60000060, int(round(machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1000000)))
+"""
+python "_clog.Logger.Info('[cancestry-hw-fault] step6: fault symbol hooks installed')"
+
+# ---------------------------------------------------------------------
+# Bus write hooks on the UNCHANGED fdcan1_scratch memory: they carry the
+# firmware's own register writes into the medium without the injector ever
+# having to guess them, and without modifying the existing peripheral
+# (issue #62 constraint 4).
+#
+#   CCCR (0x40006418, offset 0x018): the ISO 11898-1 / RM0440 Bus-Off recovery
+#     request is software clearing CCCR.INIT. The hook stamps the first such
+#     transition into 0x60000048 (recovery_request_us); the injector releases
+#     the medium 128 * 11 recessive bits later (704 us at the HW-FR-003
+#     nominal 2 Mbit/s).
+#   IR (0x40006450, offset 0x050): the error-logging acknowledge. The hook
+#     stamps the first write that clears IR.ELO into 0x60000054 (crc_ack_us).
+#
+# Hook scope (src/Emulator/Extensions/Hooks/
+# BusPeripheralsHooksPythonEngine.cs, v1.16.1): `self` (the hooked
+# peripheral), `sysbus`, `machine`, `value`, `offset`. A before-write hook
+# returns the script's final `value`, so these scripts leave it untouched -
+# they observe, they never alter what the firmware wrote.
+#
+# Both hooks are first-event-only (guarded on the slot still reading 0) and
+# touch only the plain t2_trace memory, so no hook ever re-enters a scripted
+# peripheral.
+# ---------------------------------------------------------------------
+sysbus SetHookBeforePeripheralWrite machine['fdcan1_scratch'] """
+if offset == 0x18 and (machine['sysbus'].ReadDoubleWord(0x60000048) == 0) and ((machine['sysbus'].ReadDoubleWord(0x40006418) & 1) == 1) and ((value & 1) == 0):
+    machine['sysbus'].WriteDoubleWord(0x60000048, int(round(machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1000000)))
+"""
+sysbus SetHookBeforePeripheralWrite machine['fdcan1_scratch'] """
+if offset == 0x50 and (machine['sysbus'].ReadDoubleWord(0x60000054) == 0) and ((machine['sysbus'].ReadDoubleWord(0x40006450) & 0x10000) != 0) and ((value & 0x10000) == 0):
+    machine['sysbus'].WriteDoubleWord(0x60000054, int(round(machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1000000)))
+"""
+python "_clog.Logger.Info('[cancestry-hw-fault] step6b: FDCAN1 CCCR/IR write hooks installed')"
+
+# Injector preflight readback (console-logged evidence that the peripheral
+# loaded and its command interface answers): magic 0x43464931 ("CFI1"), bus
+# state 0 (active), counters 0. The orchestrator asserts the same values over
+# the monitor and fails closed on any mismatch.
+python "bus = monitor.Machine['sysbus']; _clog.Logger.Info('[cancestry-hw-fault] step8: injector window magic=0x%08x (expected 0x43464931) state=%d (expected 0) busoff_count=%d crc_count=%d' % (bus.ReadDoubleWord(0x40000000), bus.ReadDoubleWord(0x40000010), bus.ReadDoubleWord(0x40000008), bus.ReadDoubleWord(0x4000000C)))"
+python "_clog.Logger.Info('[cancestry-hw-fault] step9: include complete, machine left paused')"
+
+# The machine is left PAUSED: the orchestrator alone advances emulation with
+# fixed-size `emulation RunFor` quanta. This configuration must NOT be started
+# with `start`.

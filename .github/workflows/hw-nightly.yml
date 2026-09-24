@@ -25,6 +25,9 @@
 # toolchain) builds the off-tree v1.0.0 firmware ELF, runs the full
 # run_t2_retention.py pipeline, and re-runs it with --check to prove the
 # evidence is byte-identical across independent runs (determinism gate).
+# The H-10 CAN fault scenarios (issue #62) build the second off-tree driver
+# (CANCESTRY_T2_DRIVER=can_fault) and run t2_busoff_001 and t2_crc_001,
+# each with its --check twin, through the SAME deterministic discipline.
 # It never sets CANCESTRY_HW_ALLOW_SKIP: a missing tool fails loudly.
 
 name: hw-nightly
@@ -204,6 +207,32 @@ jobs:
                 python3 hw/virtual-bench/run_t2_retention.py --check \
                   --fmu /work/build/hw/cancestry_t2_holdup.fmu
 
+              echo "== H-10 (issue #62): build the off-tree CAN fault ELF"
+              # Same tag v1.0.0 firmware sources, the can_fault driver,
+              # identical build discipline; the driver selection is
+              # recorded in the determinism header of the build log.
+              CANCESTRY_T2_DRIVER=can_fault \
+              CANCESTRY_T2_FW_TAG_DIR=/tmp/fw-tag \
+              CANCESTRY_T2_ELF_OUT=/work/build/hw/t2_firmware_v1.0.0_can_fault.elf \
+              CANCESTRY_T2_BUILD_LOG=/work/build/hw/t2_firmware_can_fault_build.log \
+                bash hw/virtual-bench/firmware/build_firmware.sh
+
+              echo "== BUSOFF RUN 1: inject at t=10 ms, capture + invariant"
+              CANCESTRY_T2_FAULT_ELF=/work/build/hw/t2_firmware_v1.0.0_can_fault.elf \
+                python3 hw/virtual-bench/scenarios/t2_busoff_001.py
+
+              echo "== BUSOFF RUN 2: --check requires byte-identical evidence"
+              CANCESTRY_T2_FAULT_ELF=/work/build/hw/t2_firmware_v1.0.0_can_fault.elf \
+                python3 hw/virtual-bench/scenarios/t2_busoff_001.py --check
+
+              echo "== CRC RUN 1: inject at t=10 ms, capture + invariant"
+              CANCESTRY_T2_FAULT_ELF=/work/build/hw/t2_firmware_v1.0.0_can_fault.elf \
+                python3 hw/virtual-bench/scenarios/t2_crc_001.py
+
+              echo "== CRC RUN 2: --check requires byte-identical evidence"
+              CANCESTRY_T2_FAULT_ELF=/work/build/hw/t2_firmware_v1.0.0_can_fault.elf \
+                python3 hw/virtual-bench/scenarios/t2_crc_001.py --check
+
               echo "== bridge/orchestrator test suite on the live toolchain"
               # F-36 (issue #60, dispatch 25): the e2e test fail-closes
               # without CANCESTRY_T2_ELF (H-07: no silent downgrade), and
@@ -214,7 +243,11 @@ jobs:
               # bash -lc - never put a raw apostrophe in it;
               # tests/unit/tools/test_check_hw_workflow_bash_syntax.py
               # enforces bash -n over every run block.
+              # H-10: CANCESTRY_T2_FAULT_ELF points the fault-scenario e2e
+              # tests at the can_fault ELF (they never fall back to the
+              # retention ELF silently - separate env var, explicit).
               CANCESTRY_T2_ELF=/work/build/hw/t2_firmware_v1.0.0.elf \
+              CANCESTRY_T2_FAULT_ELF=/work/build/hw/t2_firmware_v1.0.0_can_fault.elf \
                 python3 -m pytest hw/virtual-bench -q
             ' 2>&1 | tee /tmp/t2-output.log
           DOCKER_STATUS="${PIPESTATUS[0]}"

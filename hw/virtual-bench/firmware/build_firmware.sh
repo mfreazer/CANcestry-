@@ -22,6 +22,14 @@
 #   CANCESTRY_T2_BUILD_LOG=<build log path> \
 #   ./build_firmware.sh
 #
+# CANCESTRY_T2_DRIVER selects the off-tree driver linked with the unchanged
+# v1.0.0 firmware sources (H-10, issue #62):
+#   retention (default) - the QA-EV-01 retention escalation recipe (main.c)
+#   can_fault           - the CAN Bus-Off / CRC fault driver (can_fault.c),
+#                         executed by scenarios/t2_busoff_001.py and
+#                         scenarios/t2_crc_001.py against the fault injector
+# Anything else fails closed before any compile.
+#
 # The linker script comes from the tag v1.0.0 platform
 # (platform/cortex_m/cancestry_baremetal.ld), so the memory map and the
 # zero-allocation link-time assertions are the v1.0.0 ones.
@@ -86,10 +94,30 @@ mkdir -p "$(dirname "$ELF_OUT")"
         "$FW_TAG_DIR/platform/cortex_m/startup.c"
         "$FW_TAG_DIR/platform/cortex_m/alloc_stubs.c"
     )
-    DRIVER_SOURCES=(
-        "$DRIVER_DIR/startup.s"
-        "$DRIVER_DIR/main.c"
-    )
+    # Off-tree driver selection (H-10, issue #62). The driver choice changes
+    # the ELF contents, so it is recorded in the determinism header and a
+    # misspelled selection stops the build instead of producing the wrong
+    # image silently.
+    DRIVER="${CANCESTRY_T2_DRIVER:-retention}"
+    case "$DRIVER" in
+        retention)
+            DRIVER_SOURCES=(
+                "$DRIVER_DIR/startup.s"
+                "$DRIVER_DIR/main.c"
+            )
+            ;;
+        can_fault)
+            DRIVER_SOURCES=(
+                "$DRIVER_DIR/startup.s"
+                "$DRIVER_DIR/can_fault.c"
+            )
+            ;;
+        *)
+            echo "unknown CANCESTRY_T2_DRIVER '$DRIVER' (expected: retention|can_fault)" >&2
+            exit 1
+            ;;
+    esac
+    echo "driver: $DRIVER"
 
     echo "-- source list (tag v1.0.0 + T2 driver) --"
     for src in "${FIRMWARE_SOURCES[@]}" "${DRIVER_SOURCES[@]}"; do
