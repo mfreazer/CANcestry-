@@ -15,12 +15,16 @@
 //   Cortex-M4F + NVIC  | executes the real v1.0.0 firmware ELF (no reimplementation)
 //   FLASH/RAM/CCMRAM   | cancestry_baremetal.ld MEMORY map (512K/96K/32K)
 //   IWDG @0x40003000   | watchdog.c escalation path (HW-SF-002 (i)); KR 0x5555/
-//                      | 0xAAAA/0xCCCC protocol, PR/RLR, LSI/4^PR time base,
+//                      | 0xAAAA/0xCCCC protocol, PR/RLR, LSI/(4*2^PR) time base
+//                      | (RM0440: PR=3 -> /32 -> 1 ms ticks at 32 kHz LSI),
 //                      | expiry sets RCC_CSR.IWDGRSTF (bit 29) and requests reset
 //   RTC/BKP @0x40002800| watchdog.c retention register RTC_BKP0R (offset 0x50),
 //                      | value persists across machine reset (HW-SF-002)
 //   GPIOA @0x48000000  | watchdog.c safe-latch: BSRR reset of bits 8/9
-//   RCC @0x40021000    | reset-cause readback: CSR IWDGRSTF (bit 29), RMVF (bit 23)
+//   RCC @0x40021000    | reset-cause readback: CSR IWDGRSTF (bit 29), RMVF (bit 23);
+//                      | reset-cause flags persist across the scripted IWDG reset
+//                      | (trace-area shadow at 0x60000024, as on real STM32G4
+//                      | retention domain until RMVF) - H-08 bring-up fix F-5
 //   FDCAN1/2 @0x40006400/0x40006800 | register scratch for the HAL bases
 //   T2 trace @0x60000000 (virtual, unused FMC bank) | event-capture contract
 //                      | with the FMI bridge (see below)
@@ -32,7 +36,13 @@
 //     core debug block is owned by the Renode CPU model; the firmware's DWT
 //     timestamps are NOT load-bearing for the T2 retention ordering (events
 //     are captured from emulation virtual time), so DWT accuracy carries the
-//     renode TCL2 validation gap (docs/hw/tool-qualification.md section 3);
+//     renode TCL2 validation gap (docs/hw/tool-qualification.md section 3).
+//     F-27 (issue #55, per Lead SE decision 2026-09-22): verified that the
+//     T2 ELF call graph (hw/virtual-bench/firmware/main.c plus the v1.0.0
+//     cancestry_watchdog_* / cancestry_event_hard_fault_escalate paths it
+//     invokes) never touches DWT/DEMCR - the driver deliberately bypasses
+//     cancestry_watchdog_init and hal_stm32_clock_init - so NO DWT extension
+//     of this platform is required for T2;
 //   - BOR/power supervisor reset on brownout: the passive fail-safe topology
 //     is a requirement (HwAGENTS.md rule 6); modelling its reset behavior is
 //     safety-relevant and deferred to a Human-Reviewer-approved change. The
@@ -42,7 +52,7 @@
 //
 // Event-capture contract (consumed by hw/virtual-bench/fmi_bridge.py):
 //
-//   0x60000000  magic      0x54324353 ("T2CS"), written by cancestry-hw.resc
+//   0x60000000  magic      0x54324353 (T2CS), written by cancestry-hw.resc
 //   0x60000004  flags      reserved (0)
 //   0x60000008  retention_write_us   cpu symbol hook:
 //               cancestry_watchdog_write_retention_register
@@ -52,6 +62,10 @@
 //               cancestry_watchdog_escalate
 //   0x60000014  iwdg_fire_us         iwdg_model.py at expiry
 //   0x60000020  vbat_mv_in           written by the FMI bridge (plant -> MCU)
+//   0x60000024  rcc_csr_shadow       persistence store for RCC_CSR; the RCC
+//               reset-cause flags survive the scripted IWDG reset here (same
+//               trace-area pattern as the retention shadow), as on real
+//               STM32G4 until RMVF is written
 //   0x60000100  retention_shadow     persistence store for RTC_BKP0R; lives in
 //               the (non-volatile across machine reset) trace area so the
 //               retained fault code survives the scripted IWDG reset
@@ -64,17 +78,41 @@
 // Note for reviewers: the scripted peripherals (Python.PythonPeripheral,
 // IronPython 2) implement register semantics only. Peripheral-script API:
 // request.IsInit/IsRead/IsWrite/Value/Offset and self per Renode
-// documentation (renode.readthedocs.io, "Using Python in Renode"). The
+// documentation (renode.readthedocs.io, 'Using Python in Renode'). The
 // pinned Renode version is checked by the T2 runner before loading this
 // platform; on any scripted-peripheral API mismatch the platform fails to
 // load and the T2 run aborts (fail-closed).
 
-// CPU: Cortex-M4F at the 170 MHz issue-#53 clock (NVIC systick base).
+// CPU: Cortex-M4F. Virtual time is driven exclusively by the FMI bridge's
+// fixed `emulation RunFor` quanta. The instruction rate is pinned
+// EXPLICITLY at 100 MIPS (bring-up finding F-10; the T2 timing window in
+// hw/virtual-bench/firmware/main.c is designed against 100 MIPS).
+// DLR subtlety (v1.16.1, source-verified in F-27): a .repl attribute is a
+// property assignment IFF its name starts with an UPPERCASE letter - any
+// other case is treated as a constructor argument (ConstructorOrProperty
+// Attribute.IsPropertyAttribute). 'PerformanceInMips' is a property on
+// BaseCPU (the CPU base class; constructor default 100) - the official
+// platforms/cpus/stm32f746.repl declares 'PerformanceInMips: 462' in
+// uppercase property form. Dispatch 16 (run 35778907099) failed with DLR
+// error E25 ('Could not find suitable constructor for ...CortexM')
+// because the camelCase 'performanceInMips: 100' was classified as a
+// constructor argument with no matching parameter (unused attribute ->
+// constructor rejected); F-26 removed the line (harmless - the default is
+// 100 - but a misdiagnosis), and F-27 restores it in the property form
+// below. 'cpuType: "cortex-m4f"' (FPU enabled) is the official idiom for
+// M4F (platforms/cpus/stm32f412.repl, v1.16.1). 'systickFrequency' on the
+// NVIC is a genuine constructor argument (lowercase is correct there);
+// the 170 MHz systick base (STM32G474 main clock) is modeled but unused -
+// the T2 driver never enables systick. 'IRQ -> cpu@0' is the canonical
+// NVIC-to-CPU interrupt line (official stm32f4.repl / stm32f746.repl);
+// the T2 driver raises no interrupts, so it is inert here.
 nvic: IRQControllers.NVIC @ sysbus 0xE000E000
     systickFrequency: 170000000
+    IRQ -> cpu@0
 
 cpu: CPU.CortexM @ sysbus
     cpuType: "cortex-m4f"
+    PerformanceInMips: 100
     nvic: nvic
 
 // Memory per platform/cortex_m/cancestry_baremetal.ld (MEMORY block).
@@ -91,32 +129,23 @@ ccmram: Memory.MappedMemory @ sysbus 0x10000000
 // access; the co-simulation master polls after every RunFor quantum, which
 // bounds the fire-timestamp quantization by the master step while the hook
 // timestamps above stay exact.
-iwdg: Python.PythonPeripheral @ sysbus 0x40003000
-    size: 0x14
-    initable: true
-    filename: "iwdg_model.py"
-
-// RTC backup domain: only RTC_BKP0R (offset 0x50) is modeled; the value is
-// persisted in the T2 trace area so it survives the scripted IWDG reset
-// (that persistence IS the HW-SF-002 sub-event (i) behavior under test).
-rtc_backup: Python.PythonPeripheral @ sysbus 0x40002800
-    size: 0x64
-    initable: false
-    filename: "rtc_backup_model.py"
-
-// GPIOA: MODER/ODR/BSRR semantics for the safe-latch path (watchdog.c:
-// GPIOA_BSRR = (1 << 24) | (1 << 25) resets the CAN TX / contactor pins).
-gpioa: Python.PythonPeripheral @ sysbus 0x48000000
-    size: 0x400
-    initable: true
-    filename: "gpioa_model.py"
-
-// RCC: reset-cause readback (CSR at +0x94: IWDGRSTF bit 29 set by the IWDG
-// model, RMVF bit 23 clears it). Other RCC registers read as 0.
-rcc: Python.PythonPeripheral @ sysbus 0x40021000
-    size: 0x98
-    initable: true
-    filename: "rcc_model.py"
+//
+// F-28 (issue #55): the four scripted register models below (IWDG,
+// RTC/BKP, GPIOA, RCC) are NOT declared in this file - cancestry-hw.resc
+// creates them via `machine PyDevFromFile $ORIGIN/<file> ...`. Reason:
+// PythonPeripheral resolves a bare `filename:` CWD-relative IN ITS
+// CONSTRUCTOR (File.Exists, PythonPeripheral.cs, v1.16.1), and headless
+// CI's effective process CWD is not this script's directory (dispatch 17,
+// run 35805300102: 'Could not find source file for the script:
+// iwdg_model.py' at this file's iwdg line; dispatch 14, run 35773043927:
+// the same CWD behavior broke the .resc load until the $ORIGIN fix).
+// $ORIGIN-absolute paths remove the CWD dependence (Lead SE pre-authorized
+// absolute/$ORIGIN paths, 2026-09-22). Addresses/sizes/initable are
+// unchanged from the previous inline declarations:
+//   iwdg       0x40003000 size 0x14 initable
+//   rtc_backup 0x40002800 size 0x64
+//   gpioa      0x48000000 size 0x400 initable
+//   rcc        0x40021000 size 0x98 initable
 
 // FDCAN register scratch for the HAL bases (hal_stm32.c FDCAN1_BASE /
 // FDCAN2_BASE). Protocol engine not_simulated (see header).
@@ -127,11 +156,25 @@ fdcan2_scratch: Memory.MappedMemory @ sysbus 0x40006800
     size: 0x400
 
 // T2 event-capture area (virtual; unused FMC bank on this board).
+// F-29 (issue #55): size 0x400, NOT the previous 0x200. Dispatch 18
+// (run 35806027349) failed with 'Error E39: Could not register memory at
+// offset 0x60000000 and size 0x200 - the size has to be aligned to guest
+// page size 0x400' (MappedMemory registration, v1.16.1). The header
+// layout above ends at 0x60000104 (retention_shadow word at
+// 0x60000100), which one 0x400 guest page starting at 0x60000000 fully
+// covers (through 0x600003FF); nothing else is mapped in this virtual
+// FMC-bank region, so the extra half-page is unused address space only.
 t2_trace: Memory.MappedMemory @ sysbus 0x60000000
-    size: 0x100
+    size: 0x400
 
-sysbus:
-    init:
-        Tag <0x40006400,0x400067FF> "FDCAN1"
-        Tag <0x40006800,0x40006BFF> "FDCAN2"
-        Tag <0x60000000,0x600000FF> "T2_TRACE"
+// F-25 (issue #55): the previous 'sysbus: init: Tag <range> "name"' block
+// was removed. CORRECTION (F-27, source-verified against v1.16.1): the
+// block was NOT a syntax fault - 'sysbus: init: Tag' IS valid in v1.16.1
+// (the official platforms/cpus/stm32f412.repl uses exactly that form).
+// Dispatch 15 (run 35777946390) failed with the same E25 constructor
+// error on the 'cpu: CPU.CortexM @ sysbus' line that dispatch 16 did -
+// the camelCase 'performanceInMips' attribute, diagnosed in F-27 - which
+// the truncated diagnostics of the time misattributed to the Tag block.
+// The removal stands on its own merits: the range labels were decorative,
+// the ranges are documented in the header table above, and the FMI bridge
+// (the only consumer) addresses them directly.

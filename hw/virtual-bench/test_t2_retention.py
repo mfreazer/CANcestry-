@@ -14,7 +14,7 @@ Layers:
 Implementations under test: hw/virtual-bench/run_t2_retention.py,
 hw/virtual-bench/fmi_bridge.py.
 Requirements traced: HW-SF-002, HW-SF-004; HwAGENTS.md rules 4 and 5.
-Test ids: HW-T2-ORCH-001 .. HW-T2-ORCH-006, HW-T2-E2E-001.
+Test ids: HW-T2-ORCH-001 .. HW-T2-ORCH-007, HW-T2-E2E-001.
 """
 
 from __future__ import annotations
@@ -118,6 +118,51 @@ def test_pinned_sources_exist():
         assert (REPO_ROOT / relative).is_file(), relative
 
 
+def test_omc_build_script_is_fully_formatted():
+    """HW-T2-ORCH-007: the generated omc script has no bare ``%s``.
+
+    Regression for F-18 (issue #55): the buildModelFMU line left a bare
+    ``%s`` in the .mos file and omc's lexer rejected it at build time
+    (dispatch 6, run 35722295912). The script text is a pure function, so
+    this pins it without the toolchain.
+    """
+    text = runner.omc_build_script_text()
+    # No unformatted placeholder may leak into omc's input.
+    assert "%s" not in text, "unformatted placeholder in omc script:\n%s" % text
+    # The model name must be formatted into the buildModelFMU call.
+    assert ('buildModelFMU(CancestryLib.Power.Holdup, version="2.0", '
+            'fmuType="cs", fileNamePrefix="cancestry_t2_holdup");') in text
+    # The three pinned model files must be loaded.
+    for name in ("package.mo", "Power/package.mo", "Power/Holdup.mo"):
+        assert 'loadFile("%s")' % (runner.MODEL_ROOT / name) in text
+
+
+def test_f32_elf_variable_is_quoted_without_path_marker():
+    """F-32 (issue #60): ``$elf`` must be a quoted StringToken with NO ``@``.
+
+    Dispatch 20 (run 35851511484, the final cycle of the first budget)
+    died at ``sysbus LoadELF $elf`` with 'Parameters did not match the
+    signature': the runner's old ``$elf="@..."`` form stored the literal
+    '@' inside a StringToken (StringToken strips quotes; unlike PathToken
+    it never trims '@'), LoadELF's ReadFilePath validator then ran
+    ``File.Exists("@/...")`` -> false, and TryPrepareParameters swallows
+    the RecoverableException into a signature mismatch. The value must be
+    the clean absolute path so the validator sees a real file.
+    """
+    src = (REPO_ROOT / "hw/virtual-bench/run_t2_retention.py").read_text(
+        encoding="utf-8")
+    assert "'$elf=\"@%s\"'" not in src, (
+        "F-32 regression: '@' inside the quoted $elf value would fail "
+        "LoadELF's ReadFilePath validation")
+    assert "'$elf=\"%s\"'" in src, (
+        "F-32: expected the runner to set $elf as a clean quoted path")
+    # The .resc consumption point stays the plain variable form (the fix
+    # belongs to the runner, not to the platform script's LoadELF line).
+    resc = (REPO_ROOT / "hw/virtual-bench/renode/cancestry-hw.resc").read_text(
+        encoding="utf-8")
+    assert "sysbus LoadELF $elf" in resc
+
+
 # ---------------------------------------------------------------------------
 # HW-T2-E2E: full pipeline (Renode-equipped infrastructure only)
 # ---------------------------------------------------------------------------
@@ -159,7 +204,14 @@ def test_t2_retention_end_to_end():
             "test on Renode-equipped infrastructure (HW-PLAN C5) with the "
             "v1.0.0 firmware ELF; per H-07 it must not silently downgrade to "
             "a partial check.")
-    exit_code = runner.main(["run_t2_retention.py", "--check"])
+    argv = ["run_t2_retention.py", "--check"]
+    # Reuse the FMU artifact a prior run in this environment already built,
+    # so the check compares identical FMU bytes (same contract as the ELF).
+    # If none exists, the runner builds it (build_fmu) as it always has.
+    prebuilt = runner.BUILD_DIR / "cancestry_t2_holdup.fmu"
+    if prebuilt.is_file():
+        argv += ["--fmu", str(prebuilt)]
+    exit_code = runner.main(argv)
     assert exit_code == 0
 
 
@@ -168,9 +220,59 @@ def test_t2_retention_end_to_end():
 # land with commit 4, issue #53 deliverable 7)
 # ---------------------------------------------------------------------------
 
+def _assert_passing_t2_invariants(document):
+    """Toolchain-free invariants of a committed T2 bring-up artifact.
+
+    Cross-run byte-identity is proven by the hw-nightly ``--check``
+    determinism gate (issue #55); the invariants that any static check can
+    verify are asserted here: bring-up status, the QA-EV-01 ordering on the
+    real timestamps, source-hash drift detection against the pinned sources,
+    the scenario/tool contract constants and the artifact hash forms.
+    """
+    assert document["status"] == "passing"
+    assert document["pass"] is True
+    assert document["provisional"] is True
+    events = document["events"]
+    assert (events["retention_write_us"]
+            < events["safe_latch_us"]
+            < events["iwdg_fire_us"])
+    assert document["ordering"]["contract"] == (
+        "retention_write < safe_latch < iwdg_fire")
+    assert document["ordering"]["holds"] is True
+    # No event may land outside the 150 ms scenario.
+    assert 0 <= events["iwdg_fire_us"] < fmi_bridge.SCENARIO_DURATION_US
+    # Source-hash drift detection: the artifact was generated from exactly
+    # the pinned sources now in the tree.
+    assert document["source_hashes"] == runner._live_source_hashes()
+    scenario = document["scenario"]
+    assert scenario["duration_us"] == fmi_bridge.SCENARIO_DURATION_US
+    assert scenario["master_step_us"] == fmi_bridge.MASTER_STEP_US
+    assert scenario["fmu_step_us"] == fmi_bridge.FMU_STEP_US
+    assert scenario["method"] == "virtual_bench"
+    assert scenario["seed"] == fmi_bridge.FIXED_SEED
+    assert document["tool_pins"] == runner.TOOL_PINS
+    for key in ("elf", "fmu", "bridge", "trace"):
+        assert document["hashes"][key].startswith("sha256:")
+    assert document["retention"]["preserved_across_iwdg_reset"] is True
+    # 0x45565101 = CANCESTRY_FAULT_CODE_QUEUE_SATURATION (QA-EV-01).
+    assert document["retention"]["code"] == 0x45565101
+
+
 def test_committed_t2_evidence_matches_canonical_regeneration():
-    """HW-T2-EVID-001: the committed artifact IS the pending manifest."""
+    """HW-T2-EVID-001: the committed artifact is canonical and consistent.
+
+    Pending form: byte-identical to the canonical pending-manifest
+    regeneration. Passing form (post bring-up, issue #55): the bring-up run
+    evidence, canonically rendered, with the bring-up invariants held.
+    """
     committed = EVIDENCE_PATH.read_text(encoding="utf-8")
+    document = json.loads(committed)
+    if document["status"] == "passing":
+        assert committed == runner.render_evidence_bytes(document), \
+            "the passing artifact is not canonically rendered"
+        _assert_passing_t2_invariants(document)
+        return
+    assert document["status"] == "pending"
     regenerated = runner.render_evidence_bytes(
         runner.expected_pending_manifest())
     assert committed == regenerated
@@ -219,9 +321,20 @@ def test_schema_rejects_passing_artifact_with_pending_reason():
         "toolchain": {"pins": {"renode": "1.15"},
                       "measured": {"renode": "Renode 1.15.0.12345"}},
     })
+    # F-36 (issue #60, dispatch 25): the fixture assumed the on-disk
+    # artifact is PENDING (the only form that carries pending_reason).
+    # After RUN 1 succeeds the on-disk form is PASSING, so the first
+    # in-container suite run found nothing to reject. The rule under
+    # test is "passing + pending_reason = invalid" in EITHER form -
+    # inject the key explicitly instead of depending on repo state.
+    document["pending_reason"] = (
+        "issues/53 fixture injection (HW-T2-EVID-004 must reject me)")
     violations = sorted(_t2_schema().iter_errors(document),
                         key=lambda error: error.message)
     assert violations, "a passing artifact must not carry pending_reason"
+    assert any("pending_reason" in error.message for error in violations), (
+        "the rejection must name pending_reason: %s"
+        % [error.message for error in violations])
 
 
 def test_orchestrator_rejects_ordering_violation_before_evidence():
@@ -235,3 +348,201 @@ def test_orchestrator_rejects_ordering_violation_before_evidence():
     with pytest.raises(fmi_bridge.BridgeError, match="ordering contract"):
         raise fmi_bridge.BridgeError(
             "QA-EV-01 ordering contract failed: %s" % violation)
+
+def test_diagnostic_summary_compresses_failure_state(tmp_path, monkeypatch):
+    """F-23c: the final failure line carries the whole bring-up state.
+
+    GitHub's error annotation surfaces only the step's LAST log line, so
+    _diagnostic_summary must compress the console step markers (with
+    probe values), the first error-looking text of the reconstructed
+    monitor RX stream (the monitor delivers it in 1-5 byte chunks), and
+    the bridge error into one annotation-sized line.
+    """
+    console = tmp_path / "console.log"
+    console.write_text(
+        "12:00:00.000 [INFO] Including script(s): x.resc\n"
+        "12:00:00.100 [INFO] [cancestry-hw] step0: python logger channel OK, elf=@/work/x.elf\n"
+        "12:00:00.200 [INFO] [cancestry-hw] step2: machine created\n"
+        "12:00:00.300 [INFO] [cancestry-hw] step2b: repl path /work/y.repl isfile=True\n",
+        encoding="utf-8")
+    transcript = tmp_path / "transcript.log"
+    chunks = [b"Could no", b"t find file '", b"stm32g474-c",
+              b"ancestry", b".repl'\n"]
+    lines = ["line %d [1790104856.%03d] RX %r" % (i + 1, i, c)
+             for i, c in enumerate(chunks)]
+    transcript.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    monkeypatch.setattr(runner, "RENODE_CONSOLE_LOG", console)
+    monkeypatch.setattr(runner, "RENODE_TRANSCRIPT_LOG", transcript)
+    summary = runner._diagnostic_summary(
+        fmi_bridge.BridgeError("magic 0x0 != 0x54324353"))
+    assert summary.startswith("T2-DIAG ")
+    assert "step2b: repl path /work/y.repl isfile=True" in summary
+    assert "first-transcript-error=" in summary
+    assert "Could not find file" in summary
+    assert "magic 0x0" in summary
+    assert len(summary) <= 2400  # F-28: 2400-char T2-DIAG cap
+
+
+def test_diagnostic_summary_carries_exit_state_and_crash_tail(
+        tmp_path, monkeypatch):
+    """F-33: the annotation carries Renode's exit state + crash signature.
+
+    Dispatch 21 (run 35893814425) failed with a bare monitor EOF after a
+    complete include; the console tail and transcript never persisted
+    (the CI artifact zip fails since run 19), so the two discriminating
+    facts - did Renode exit on its own, and did an unhandled crash print
+    to the merged stderr - must live in the T2-DIAG line itself.
+    """
+    console = tmp_path / "console.log"
+    console.write_text(
+        "12:00:00.100 [INFO] [cancestry-hw] step8: include complete, "
+        "machine left paused\n"
+        "Fatal error:\n"
+        "System.InvalidOperationException: boom while stepping\n"
+        "   at Emulator.Run()\n",
+        encoding="utf-8")
+    state = tmp_path / "process_state.txt"
+    state.write_text("renode_exit=already-exited rc=0\n", encoding="utf-8")
+    missing = tmp_path / "no-such-transcript.log"
+    monkeypatch.setattr(runner, "RENODE_CONSOLE_LOG", console)
+    monkeypatch.setattr(runner, "RENODE_TRANSCRIPT_LOG", missing)
+    monkeypatch.setattr(runner, "RENODE_PROCESS_STATE_LOG", state)
+    eof_message = (
+        "Renode monitor closed the connection while awaiting response to "
+        "'emulation RunFor \"0.000100\"'")
+    summary = runner._diagnostic_summary(fmi_bridge.BridgeError(eof_message))
+    assert summary.startswith("T2-DIAG ")
+    assert "step8: include complete" in summary
+    assert "console-crash=" in summary
+    assert "Fatal error" in summary
+    assert "boom while stepping" in summary
+    assert "proc=already-exited rc=0" in summary
+    assert summary.rstrip().endswith("err=" + eof_message)
+    assert len(summary) <= 2400
+
+
+def test_diagnostic_summary_budget_never_truncates_err(tmp_path, monkeypatch):
+    """F-33: under a full 2400-char load the err= tail survives intact.
+
+    The pre-F-33 implementation head-truncated the assembled line, i.e.
+    the bridge error - the single most important segment - was the first
+    casualty of any long transcript. Budget pressure must squeeze the
+    console markers and the transcript context instead.
+    """
+    console = tmp_path / "console.log"
+    console.write_text(
+        "".join(
+            "12:00:%02d.000 [INFO] [cancestry-hw] step%d: marker payload "
+            "padding padding padding\n" % (i % 60, i)
+            for i in range(40)),
+        encoding="utf-8")
+    transcript = tmp_path / "transcript.log"
+    transcript.write_text(
+        "line 0 [1790104856.000] RX %r\n"
+        % (b"There was an error evaluating the request: "
+           + b"X" * 2000 + b"\n"),
+        encoding="utf-8")
+    state = tmp_path / "process_state.txt"
+    state.write_text("renode_exit=alive-at-failure (killed by runner)\n",
+                     encoding="utf-8")
+    monkeypatch.setattr(runner, "RENODE_CONSOLE_LOG", console)
+    monkeypatch.setattr(runner, "RENODE_TRANSCRIPT_LOG", transcript)
+    monkeypatch.setattr(runner, "RENODE_PROCESS_STATE_LOG", state)
+    tail = "the decisive closing sentence of the bridge error"
+    summary = runner._diagnostic_summary(
+        fmi_bridge.BridgeError(tail))
+    assert len(summary) <= 2400
+    assert summary.rstrip().endswith("err=" + tail)
+    assert "proc=alive-at-failure (killed by runner)" in summary
+    assert "first-transcript-error=" in summary
+
+
+def test_peripheral_models_reach_machine_via_monitor_scope():
+    """F-34: PythonPeripheral bodies must never use `self.Machine`.
+
+    Dispatch 23 (run 35928186369 @ fc3fc93) died on the first
+    `emulation RunFor` with ``Python runtime error: 'PythonPeripheral'
+    object has no attribute 'Machine'`` - a MissingMemberException from
+    the bus path, wrapped by PythonEngine.Execute into a
+    RecoverableException that escaped unhandled through TlibExecute and
+    killed Renode (the F-33 console-crash channel caught it). The
+    peripheral scope carries only request/self/size (+ base vars); the
+    machine is reached via ``monitor.Machine`` - registered by the CLI's
+    Monitor surrogate, runtime-proven as the resc step5/step7 fallback
+    and used by official scripts/single-node/segger-rtt.py.
+    """
+    models = sorted((runner.BRIDGE_DIR / "renode").glob("*_model.py"))
+    assert len(models) >= 4, "expected the four scripted peripheral models"
+
+    def _code_only(text):
+        # Strip comments: the F-34 provenance headers quote the banned
+        # token while explaining why it must not come back.
+        return "\n".join(line.split("#", 1)[0] for line in text.splitlines())
+
+    for model in models:
+        code = _code_only(model.read_text(encoding="utf-8"))
+        assert "self.Machine" not in code, (
+            "%s uses self.Machine - PythonPeripheral has no Machine "
+            "attribute; use monitor.Machine (F-34)" % model.name)
+    for name in ("iwdg_model.py", "rcc_model.py", "rtc_backup_model.py"):
+        code = _code_only((runner.BRIDGE_DIR / "renode" / name).read_text(
+            encoding="utf-8"))
+        assert "monitor.Machine" in code, (
+            "%s lost its monitor.Machine bus access (F-34)" % name)
+
+
+def test_scenario_passing_body_merges_real_run_shapes():
+    """F-35 (issue #60, dispatch 24): passing_document needs BOTH dicts.
+
+    run_scenario() returns (passed, runlog). Dispatch 24 (run
+    35932082726) reached passing_document for the first time - the
+    live co-sim and the OR-001 ordering invariant had just PASSED -
+    and died with KeyError 'bridge_sha256' because main() passed only
+    `passed` and discarded `runlog`. Pin both real dict shapes, the
+    original failure mode, the merge, and the schema-valid result.
+    """
+    pytest.importorskip("jsonschema")
+    runlog = {
+        "bridge_sha256": "sha256:" + "b" * 64,
+        "elf_sha256": "sha256:" + "e" * 64,
+        "fmu_sha256": "sha256:" + "f" * 64,
+        "trace_sha256": "sha256:" + "c" * 64,
+        "ordering_violation": None,
+        "measured_tools": {"omc": "omc 1.x", "renode": "Renode 1.16.1"},
+    }
+    passed = {
+        "events": {"retention_write_us": 1967, "safe_latch_us": 2100,
+                   "iwdg_fire_us": 3600},
+        "ordering": {"contract": "retention_write < safe_latch < iwdg_fire",
+                     "holds": True},
+        "plant": {"vbat_start_mv": 3299, "vbat_end_mv": 1650,
+                  "or001_max_abs_delta_mv": 0, "tolerance_mv": 1},
+        "retention": {"code": 1163284737,
+                      "preserved_across_iwdg_reset": True},
+    }
+    # The dispatch-24 state: `passed` alone reproduces the crash exactly.
+    with pytest.raises(KeyError, match="bridge_sha256"):
+        runner.passing_document(dict(passed))
+    body = runner.scenario_passing_body(passed, runlog)
+    document = runner.passing_document(body)
+    assert document["status"] == "passing"
+    assert document["pass"] is True
+    assert "pending_reason" not in document
+    assert document["hashes"] == {
+        "elf": runlog["elf_sha256"], "fmu": runlog["fmu_sha256"],
+        "bridge": runlog["bridge_sha256"], "trace": runlog["trace_sha256"]}
+    assert document["events"] == passed["events"]
+    assert document["retention"] == passed["retention"]
+    assert document["ordering"]["holds"] is True
+    assert document["toolchain"]["measured"]["renode"] == "Renode 1.16.1"
+    violations = sorted(_t2_schema().iter_errors(document),
+                        key=lambda error: error.message)
+    assert not violations, [error.message for error in violations]
+    rendered = runner.render_evidence_bytes(document)
+    assert json.loads(rendered) == document
+
+
+def test_scenario_passing_body_rejects_key_overlap():
+    """F-35: the passed/runlog key sets must stay disjoint (fail loud)."""
+    with pytest.raises(AssertionError, match="overlap"):
+        runner.scenario_passing_body({"events": 1}, {"events": 2})

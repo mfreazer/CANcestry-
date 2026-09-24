@@ -13,6 +13,14 @@
 # --strict is what makes a missing renderer a setup failure: an unavailable
 # renderer means the drift check could not run, and a check that could not run
 # is not a check that passed.
+#
+# The t2-virtual-bench job (issue #55, H-08) is the FIRST live Renode+FMU
+# co-simulation: the T2 toolchain image (ci/docker/Dockerfile.t2: the same
+# digest-pinned OpenModelica base plus Renode v1.16.1 and the ARM cross
+# toolchain) builds the off-tree v1.0.0 firmware ELF, runs the full
+# run_t2_retention.py pipeline, and re-runs it with --check to prove the
+# evidence is byte-identical across independent runs (determinism gate).
+# It never sets CANCESTRY_HW_ALLOW_SKIP: a missing tool fails loudly.
 
 name: hw-nightly
 
@@ -98,4 +106,171 @@ jobs:
           path: |
             /tmp/hw-nightly-output.log
             /tmp/hw-nightly-build.log
+          if-no-files-found: ignore
+
+  t2-virtual-bench:
+    name: T2 live co-simulation + determinism check (issue #55)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history + tags: the job archives tag v1.0.0 for the
+          # off-tree firmware ELF build (read-only firmware sources).
+          # (actions/checkout input name is fetch-tags; 'tags' is not a
+          # valid input and would be silently ignored.)
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Verify the base-image digest pin (ci/docker/base-image.digest)
+        id: pin
+        run: |
+          set -euo pipefail
+          PIN_LINES="$(grep -Ev '^[[:space:]]*(#|$)' ci/docker/base-image.digest)"
+          REF="$(printf '%s\n' "$PIN_LINES" | sed -n '1p' | tr -d '[:space:]')"
+          PINNED="$(printf '%s\n' "$PIN_LINES" | sed -n '2p' | tr -d '[:space:]')"
+          RESOLVED="$(docker buildx imagetools inspect \
+            --format '{{json .Manifest}}' "$REF" | jq -r '.digest')"
+          test -n "$RESOLVED" && test "$RESOLVED" != "null" || {
+            echo "::error::could not resolve a manifest digest for $REF"
+            exit 1
+          }
+          if [ "$PINNED" != "$RESOLVED" ]; then
+            echo "::error::${REF} no longer resolves to the pinned digest ${PINNED}; the registry now serves ${RESOLVED}. Re-pin ci/docker/base-image.digest through a documented, QA-visible change instead."
+            exit 1
+          fi
+          echo "image-digest=${RESOLVED}" >> "$GITHUB_OUTPUT"
+
+      - name: Build the T2 toolchain image (ci/docker/Dockerfile.t2)
+        run: |
+          set -euo pipefail
+          # The build log carries the MEASURED sha256 of the pinned Renode
+          # asset (the identity pin is ci/docker/renode-1.16.1.pin); the
+          # artifact upload below preserves it with the run evidence.
+          docker build \
+            -f ci/docker/Dockerfile.t2 \
+            -t "cancestry/t2:${GITHUB_SHA}" \
+            ci/docker/ 2>&1 | tee /tmp/t2-build.log
+
+      - name: Build the off-tree v1.0.0 ELF, run the T2 pipeline twice (--check)
+        run: |
+          set -euo pipefail
+          # Archive the tag v1.0.0 firmware sources on the host runner (the
+          # T2 image may not ship git); the container only extracts them.
+          git archive --format=tar v1.0.0 -o /tmp/fw-tag.tar
+          IMAGE="cancestry/t2:${GITHUB_SHA}"
+          set +e
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/work" -w /work \
+            -v /tmp/fw-tag.tar:/fw-tag.tar:ro \
+            "$IMAGE" bash -lc '
+              set -euo pipefail
+
+              echo "== tag v1.0.0 firmware sources (read-only; git archive on host)"
+              mkdir -p /tmp/fw-tag
+              tar -x -f /fw-tag.tar -C /tmp/fw-tag
+              test -f /tmp/fw-tag/platform/cortex_m/watchdog.c
+
+              echo "== build the off-tree T2 ELF (-O0, pinned cross toolchain)"
+              CANCESTRY_T2_FW_TAG_DIR=/tmp/fw-tag \
+              CANCESTRY_T2_ELF_OUT=/work/build/hw/t2_firmware_v1.0.0.elf \
+              CANCESTRY_T2_BUILD_LOG=/work/build/hw/t2_firmware_build.log \
+                bash hw/virtual-bench/firmware/build_firmware.sh
+
+              echo "== RUN 1: full T2 pipeline (live Renode + FMU, writes evidence)"
+              # RUN 1 builds the Holdup FMU (omc); its sha256 is recorded in
+              # the evidence. RUN 2 and the E2E test reuse that single FMU
+              # artifact (--fmu, same contract as the ELF) so the determinism
+              # comparison pairs identical FMU bytes - omc packaging is not
+              # itself the determinism claim under test.
+              CANCESTRY_T2_ELF=/work/build/hw/t2_firmware_v1.0.0.elf \
+                python3 hw/virtual-bench/run_t2_retention.py
+
+              echo "== RUN 2: independent re-run; --check requires byte-identical evidence"
+              CANCESTRY_T2_ELF=/work/build/hw/t2_firmware_v1.0.0.elf \
+                python3 hw/virtual-bench/run_t2_retention.py --check \
+                  --fmu /work/build/hw/cancestry_t2_holdup.fmu
+
+              echo "== bridge/orchestrator test suite on the live toolchain"
+              # F-36 (issue #60, dispatch 25): the e2e test fail-closes
+              # without CANCESTRY_T2_ELF (H-07: no silent downgrade), and
+              # RUN 1/RUN 2 each received it inline - the pytest line did
+              # not, so the first run of this suite went red on
+              # "T2 toolchain not found". Same env, same contract.
+              # F-37: this block is one single-quoted string passed to
+              # bash -lc - never put a raw apostrophe in it;
+              # tests/unit/tools/test_check_hw_workflow_bash_syntax.py
+              # enforces bash -n over every run block.
+              CANCESTRY_T2_ELF=/work/build/hw/t2_firmware_v1.0.0.elf \
+                python3 -m pytest hw/virtual-bench -q
+            ' 2>&1 | tee /tmp/t2-output.log
+          DOCKER_STATUS="${PIPESTATUS[0]}"
+          if [ "$DOCKER_STATUS" -ne 0 ]; then
+            {
+              echo "## t2-virtual-bench output tail"
+              echo '```text'
+              tail -160 /tmp/t2-output.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            # F-25 (issue #55): the runner's T2-DIAG line (the failure
+            # output's final line, <=1000 chars) carries the whole
+            # bring-up state; prefer it for the error annotation instead
+            # of a space-joined tail that GitHub truncates at 1000 chars
+            # before the diagnostic line is reached (dispatch 15, run
+            # 35777946390).
+            DIAG_LINE="$(grep '^T2-DIAG ' /tmp/t2-output.log | tail -1 || true)"
+            if [ -n "$DIAG_LINE" ]; then
+              echo "::error::${DIAG_LINE}"
+            else
+              echo "::error::$(tail -5 /tmp/t2-output.log | tr '\n' ' ' | tr -d '\r')"
+            fi
+          fi
+          exit "$DOCKER_STATUS"
+
+      # F-35 (issue #60, dispatch 24): Dockerfile.t2 has no USER
+      # directive, so RUN 1/RUN 2 write root-owned files into build/hw/
+      # (ELF, runlog, trace) and hw/tests/evidence/ (the written JSON)
+      # on the host runner. upload-artifact runs as the runner user and
+      # could not read them - "error while creating the zip file" on
+      # runs 19/20/21 for build/hw/, still failing at dispatch 24 -
+      # while host-owned /tmp logs always uploaded. Re-label the trees
+      # readable so a PASSING run's evidence persists. sudo is required:
+      # the runner user cannot chmod files it does not own.
+      - name: Make container-written artifacts readable (F-35)
+        if: always()
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          sudo chmod -R a+rX build/hw hw/tests/evidence 2>/dev/null || true
+
+      # F-33 (issue #60, dispatch 21): the combined zip failed on runs
+      # 19/20/21 ("error while creating the zip file"), which killed the
+      # only persistent copy of the failure output (console tail +
+      # full transcript printed by the runner). The /tmp logs upload is
+      # the same /tmp-only shape the renderer job's artifact (which has
+      # always succeeded) uses - land it FIRST so a poisoned build/hw/
+      # (Dockerfile.t2 has no USER directive: files are root-owned on the
+      # runner) can no longer take the diagnostic logs down with it.
+      - name: Upload T2 CI logs
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: t2-ci-logs-${{ github.sha }}
+          path: |
+            /tmp/t2-output.log
+            /tmp/t2-build.log
+          if-no-files-found: ignore
+
+      - name: Upload T2 run artifacts
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: t2-virtual-bench-${{ github.sha }}
+          path: |
+            build/hw/
+            hw/tests/evidence/
+            /tmp/t2-output.log
+            /tmp/t2-build.log
           if-no-files-found: ignore

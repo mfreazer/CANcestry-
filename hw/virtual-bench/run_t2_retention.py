@@ -2,10 +2,11 @@
 """T2 orchestration: HW-SF-002 retention verification on the virtual bench.
 
 Implements the H-07 (issue #53) T2 pipeline over the platform model
-(``renode/``) and the deterministic FMI 3.0 bridge (``fmi_bridge.py``):
+(``renode/``) and the deterministic FMI 2.0 bridge (``fmi_bridge.py``):
 
     1. preflight: locate the pinned toolchain (omc, renode, firmware ELF)
-    2. build the Holdup FMU (FMI 3.0 CoSimulation) headless via omc
+    2. build the Holdup FMU (FMI 2.0 CoSimulation; bring-up finding F-2 -
+       the pinned OpenModelica 1.24.0 cannot export FMI 3.0) headless via omc
     3. launch Renode headless with cancestry-hw.resc and the v1.0.0 ELF
     4. run the FMI bridge for 150 ms (100 us master / 1 us FMU steps)
     5. capture the QA-EV-01 events (retention write, safe latch, IWDG fire),
@@ -41,6 +42,7 @@ Environment:
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -49,6 +51,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -71,6 +74,23 @@ EVIDENCE_PATH = REPO_ROOT / "hw" / "tests" / "evidence" / "t2_retention_001.json
 SIM_CASE_PATH = REPO_ROOT / "hw" / "tests" / "cases" / "holdup_001.simcase.json"
 MODEL_ROOT = REPO_ROOT / "hw" / "model" / "CancestryLib"
 BUILD_DIR = REPO_ROOT / "build" / "hw"
+# F-20 (issue #55): Renode's console transcript (per-run, gitignored).
+# Renode's monitor protocol rides the TCP port; its console log goes to
+# stdout, which used to sit in a PIPE nobody read - a full 64 KB pipe would
+# block Renode's own shell thread on write(2) (the monitor then goes silent)
+# and every include-script diagnostic (errors, IronPython exceptions, crash
+# dumps) was lost, which is exactly the undiagnosable monitor timeout of
+# dispatch 8 (run 35724334649). The drain thread below removes the
+# backpressure and preserves the transcript; the runner attaches its tail
+# to every failure.
+RENODE_CONSOLE_LOG = BUILD_DIR / "t2_retention_001_renode_console.log"
+# F-22 (issue #55): raw monitor-socket transcript (diagnostics only).
+RENODE_TRANSCRIPT_LOG = BUILD_DIR / "t2_retention_001_monitor_transcript.log"
+# F-33 (issue #60, dispatch 21): Renode self-exit state, written by
+# run_scenario() BEFORE the runner reaps the process. Distinguishes a
+# Renode that exited on its own (clean rc=0 shell exit vs signal/crash)
+# from a socket closed while the process was still alive.
+RENODE_PROCESS_STATE_LOG = BUILD_DIR / "t2_renode_process_state.txt"
 SCHEMA_PATH = REPO_ROOT / "schemas" / "hw" / "hw-t2-evidence-0.1.0.schema.json"
 
 MODEL = "CancestryLib.Power.Holdup"
@@ -84,11 +104,13 @@ TOOL_PINS = {
     "fmpy": "0.3.24",
     "openmodelica": "1.24",
     "python": ">=3.10",
-    "renode": "1.15",
+    "renode": "1.16",
 }
-# Runner-side Renode policy pin: the platform's scripted peripherals target
-# the documented Renode 1.15.x PythonPeripheral/machine APIs.
-RENODE_VERSION_PIN = (1, 15)
+# Runner-side Renode policy pin: the platform's scripted peripherals and the
+# T2 event-capture hooks (``cpu AddSymbolHook``) require Renode >= 1.16
+# (bring-up finding F-1: AddSymbolHook does not exist in 1.15.x). 1.16.1 is
+# the pinned release; the runner accepts any 1.16.x.
+RENODE_VERSION_PIN = (1, 16)
 
 # The retention-domain load scenario: OR-001 parameters of the committed
 # holdup_001 sim case (single source of truth for the plant physics).
@@ -101,7 +123,9 @@ TOLERANCE_VBAT_MV = 1  # holdup_001 sim-case tolerance (0.001 V), in mV
 # so regeneration stays deterministic; hashes are computed live.
 PINNED_SOURCES = (
     "ci/docker/Dockerfile",
+    "ci/docker/Dockerfile.t2",
     "ci/docker/base-image.digest",
+    "ci/docker/renode-1.16.1.pin",
     "docs/hw/tool-qualification.md",
     "docs/hw/virtual-bench-plan.md",
     "hw/model/CancestryLib/Power/Holdup.mo",
@@ -111,6 +135,11 @@ PINNED_SOURCES = (
     "hw/tests/oracles/or_001_holdup.py",
     "hw/tests/oracles/registry.csv",
     "hw/tests/oracles/registry.json",
+    "hw/virtual-bench/firmware/build_firmware.sh",
+    "hw/virtual-bench/firmware/main.c",
+    "hw/virtual-bench/firmware/startup.s",
+    "hw/virtual-bench/firmware/t2_target_compat.h",
+    "hw/virtual-bench/fmi2_smoke_slave.c",
     "hw/virtual-bench/fmi_bridge.py",
     "hw/virtual-bench/fmi_bridge_test.py",
     "hw/virtual-bench/renode/cancestry-hw.resc",
@@ -169,7 +198,7 @@ def expected_pending_manifest():
         "evidence_of": (
             "T2 virtual-bench foundation for HW-SF-002 (H-07, issue #53): "
             "Renode platform model (hw/virtual-bench/renode/), deterministic "
-            "FMI 3.0 co-simulation bridge (hw/virtual-bench/fmi_bridge.py) "
+            "FMI 2.0 co-simulation bridge (hw/virtual-bench/fmi_bridge.py) "
             "and orchestration (this file). No T2 run has been executed: "
             "this manifest records the pending disposition of the retention "
             "sequence (retention write < safe latch < IWDG fire) pending the "
@@ -207,15 +236,16 @@ def expected_pending_manifest():
         "oracle_id": ORACLE_ID,
         "pass": False,
         "pending_reason": (
-            "The T2 toolchain (Renode binary plus the v1.0.0 firmware ELF "
-            "built from tag v1.0.0) is not available to the hosted CI "
-            "image (HW-PLAN C5 places heavy simulation on self-hosted "
-            "infrastructure), so no executed run backs this artifact yet. "
-            "Foundation delivered by https://github.com/mfreazer/CANcestry-/"
+            "The T2 toolchain (pinned Renode 1.16 + the off-tree v1.0.0 "
+            "firmware ELF) is now provisioned by the hw-nightly "
+            "t2-virtual-bench job (issue #55, H-08), but no executed T2 run "
+            "backs this artifact yet, so the retention sequence (retention "
+            "write < safe latch < IWDG fire) remains sim-pending. Foundation "
+            "delivered by https://github.com/mfreazer/CANcestry-/"
             "issues/53; the first executing run is produced by "
-            "hw/virtual-bench/run_t2_retention.py on Renode-equipped "
-            "infrastructure and must reproduce this ledger chain "
-            "deterministically before any passing claim."),
+            "hw/virtual-bench/run_t2_retention.py on the T2 toolchain image "
+            "and must reproduce this ledger chain deterministically before "
+            "any passing claim."),
         "provisional": True,
         "requirement_id": REQUIREMENT_ID,
         "schema_version": "0.1.0",
@@ -274,11 +304,25 @@ def check_renode_version(renode_bin):
         [str(renode_bin), "--version"], stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT, timeout=60)
     text = result.stdout.decode("utf-8", "replace")
-    match = re.search(r"Renode\s+(\d+)\.(\d+)", text)
+    # `renode --version` prints, e.g.:
+    #   renode v1.0.0.0
+    #     build: 1.16.1
+    #     build type: Release
+    #     runtime: .NET 8.x
+    # The release version is the "build:" line (the assembly version is a
+    # constant 1.0.0.0 and carries no release information). The legacy
+    # "Renode X.Y" form is kept as a fallback. (Bring-up finding F-11:
+    # the H-07 regex matched neither form of the real 1.16 output.)
+    match = re.search(r"build:\s*(\d+)\.(\d+)\.(\d+)", text)
     if not match:
-        raise T2SetupError("cannot parse `renode --version` output: %r"
-                           % text.strip()[:200])
-    version = (int(match.group(1)), int(match.group(2)))
+        match = re.search(r"[Rr]enode\s+v?(\d+)\.(\d+)", text)
+        if match:
+            version = (int(match.group(1)), int(match.group(2)))
+        else:
+            raise T2SetupError("cannot parse `renode --version` output: %r"
+                               % text.strip()[:200])
+    else:
+        version = (int(match.group(1)), int(match.group(2)))
     if version != RENODE_VERSION_PIN:
         raise T2SetupError(
             "renode %d.%d does not match the runner policy pin %d.%d; the "
@@ -300,11 +344,17 @@ def locate_omc():
 # Pipeline stages
 # ---------------------------------------------------------------------------
 
-def build_fmu(omc, build_dir=BUILD_DIR):
-    """Build the Holdup FMU (FMI 3.0, CoSimulation) headless; return path."""
-    build_dir.mkdir(parents=True, exist_ok=True)
-    script = build_dir / "omc_build_t2.mos"
-    script.write_text(
+def omc_build_script_text():
+    """Text of the omc script that builds the Holdup FMU (pure, pinned).
+
+    F-18 (issue #55): the buildModelFMU line must format the model name
+    into the script. An early draft left a bare ``%s`` in the generated
+    .mos file and omc's lexer rejected it at build time ("Lexer failed to
+    recognize '%s, version'", dispatch 6, run 35722295912). The text is a
+    pure function of the pinned model layout so the unit test
+    HW-T2-ORCH-007 can pin it without the toolchain.
+    """
+    return (
         "loadModel(Modelica);\n"
         "getErrorString();\n"
         'loadFile("%s");\n' % (MODEL_ROOT / "package.mo") +
@@ -313,10 +363,24 @@ def build_fmu(omc, build_dir=BUILD_DIR):
         "getErrorString();\n"
         'loadFile("%s");\n' % (MODEL_ROOT / "Power" / "Holdup.mo") +
         "getErrorString();\n"
-        'buildModelFMU(%s, version="3.0", fmuType="cs", '
-        'fileNamePrefix="cancestry_t2_holdup");\n'
-        "getErrorString();\n",
-        encoding="utf-8")
+        'buildModelFMU(%s, version="2.0", fmuType="cs", '
+        'fileNamePrefix="cancestry_t2_holdup");\n' % (MODEL,) +
+        "getErrorString();\n"
+    )
+
+
+def build_fmu(omc, build_dir=BUILD_DIR):
+    """Build the Holdup FMU (FMI 2.0, CoSimulation) headless; return path.
+
+    FMI 2.0, not the plan's FMI 3.0 wording: bring-up finding F-2 - the
+    pinned OpenModelica 1.24.0 cannot export FMI 3.0 (its FMI.mo
+    checkFMIVersion accepts only 1.0/2.0), while the FMI 2.0 CS FMU is the
+    exact configuration the T1 holdup_001 evidence was built with on this
+    same toolchain (docs/hw/t2-bringup-report.md).
+    """
+    build_dir.mkdir(parents=True, exist_ok=True)
+    script = build_dir / "omc_build_t2.mos"
+    script.write_text(omc_build_script_text(), encoding="utf-8")
     result = subprocess.run(
         [omc, "--showErrorMessages", str(script)],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -341,26 +405,191 @@ def _free_port():
     return port
 
 
-def launch_renode(renode_bin, elf_path, port):
+def launch_renode(renode_bin, elf_path, port,
+                  console_log_path=RENODE_CONSOLE_LOG):
     """Start Renode headless with the platform script; return the process."""
     command = [
         str(renode_bin), "--disable-xwt", "--port", str(port),
-        "-e", '$elf="@%s"' % elf_path.resolve(),
+        # F-32 (issue #60): the quoted $elf value must NOT carry the '@'
+        # path marker. A StringToken strips the quotes but never trims '@'
+        # (unlike PathToken), and `sysbus LoadELF $elf` converts the value
+        # to ReadFilePath, whose validator runs File.Exists on it raw -
+        # '@/work/...' does not exist, the RecoverableException is swallowed
+        # by TryPrepareParameters, and the include dies with 'Parameters did
+        # not match the signature' (dispatch 20, run 35851511484).
+        "-e", '$elf="%s"' % elf_path.resolve(),
         "-e", "include @cancestry-hw.resc",
     ]
-    return subprocess.Popen(
+    process = subprocess.Popen(
         command, cwd=str(BRIDGE_DIR / "renode"),
         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT)
+    if console_log_path is not None:
+        console_log_path.parent.mkdir(parents=True, exist_ok=True)
+
+        def _drain_console():
+            with open(console_log_path, "wb") as log:
+                while True:
+                    chunk = process.stdout.read(65536)
+                    if not chunk:
+                        break
+                    log.write(chunk)
+                    log.flush()
+
+        # F-20: keep draining until the pipe closes (process exit).
+        process._t2_console_thread = threading.Thread(
+            target=_drain_console, name="renode-console-drain",
+            daemon=True)
+        process._t2_console_thread.start()
+    return process
 
 
-def connect_monitor(port, deadline_s=60.0):
+def _console_tail(path, lines=120):
+    """Last ``lines`` of the Renode console transcript ('' when absent)."""
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    tail = text.splitlines()[-lines:]
+    return "\n".join(tail)
+
+
+def _diagnostic_summary(error):
+    """One compact line with the whole bring-up state (F-23c, issue #55).
+
+    Printed LAST in the failure output: GitHub Actions records the step's
+    final line as its error annotation, so this line - and only this line
+    - is what shows up in the run's Annotations view and in the log
+    summary. It compresses the console step markers (with their probe
+    values), the first error-looking span of the monitor transcript
+    (command errors go to the client terminal, never to the console), and
+    the bridge error - into a single annotation line.
+
+    The transcript context is 1400 chars (F-28, issue #55): a DLR E25
+    'Constructor selection report' spans ~15 lines (per-parameter details
+    plus the rejection reason), and dispatches 15/16 (runs 35777946390,
+    35778907099) proved a 280-char capture truncates exactly before the
+    decisive lines. The overall line cap is 2400 chars; under pressure
+    the console markers and the transcript context shrink (F-33) so the
+    err= tail - never the first casualty - stays intact.
+    """
+    console_part = ""
+    try:
+        console = RENODE_CONSOLE_LOG.read_text(encoding="utf-8",
+                                               errors="replace")
+        payloads = re.findall(r"\[cancestry-hw\] ([^\n]+)", console)
+        if payloads:
+            console_part = "console=" + " | ".join(
+                payload.strip()[:70] for payload in payloads)
+        # F-33 (issue #60, dispatch 21): surface an unhandled-crash
+        # signature from the merged console stream (CrashHandler writes
+        # "Fatal error:" + the stack to stderr, which the runner merges
+        # into stdout). None of this is visible to the old [cancestry-hw]
+        # scan, and the CI artifact zip that would carry the full console
+        # log has failed since run 19 - so the annotation must carry it.
+        crash_part = ""
+        crash = re.search(
+            r"^(.*(?:Fatal error|Traceback \(most recent call last\)|"
+            r"Unhandled exception|StackOverflow|OutOfMemory)[^\n]*)\n"
+            r"([^\n]*)", console, re.M)
+        if crash:
+            snippet = re.sub(r"\s+", " ", " ".join(
+                group.strip() for group in crash.groups()
+                if group and group.strip()))
+            crash_part = "console-crash=%s" % snippet[:230]
+    except OSError:
+        console = ""
+        crash_part = ""
+    trans_part = ""
+    try:
+        trans = RENODE_TRANSCRIPT_LOG.read_text(encoding="utf-8",
+                                                errors="replace")
+        # The monitor delivers text in 1-5 byte chunks, so an error
+        # message spans many transcript lines; reconstruct the raw RX
+        # stream before searching (the repr is parseable via literal_eval).
+        rx_stream = ""
+        for line in trans.splitlines():
+            if " RX " in line:
+                try:
+                    rx_stream += ast.literal_eval(
+                        line.split(" RX ", 1)[1]).decode(
+                            "utf-8", "replace")
+                except (ValueError, SyntaxError):
+                    pass
+        rx_stream = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", rx_stream)
+        for keyword in ("Could not find", "There was an error",
+                        "Exception", "failed"):
+            idx = rx_stream.lower().find(keyword.lower())
+            if idx >= 0:
+                snippet = re.sub(r"\s+", " ",
+                                 rx_stream[max(0, idx - 40):idx + 1400])
+                trans_part = "first-transcript-error=%s" % snippet
+                break
+    except OSError:
+        pass
+    # F-33: Renode's pre-reap exit state (self-exit rc/signal vs still
+    # alive) - written by run_scenario()'s finally block.
+    proc_part = ""
+    try:
+        state = RENODE_PROCESS_STATE_LOG.read_text(
+            encoding="utf-8").strip()
+        if state:
+            proc_part = "proc=%s" % state.split("=", 1)[-1][:90]
+    except OSError:
+        pass
+    # err is assembled FIRST at its full cap and the variable parts are
+    # fitted around it: the old head-truncation (summary[:2400]) cut the
+    # TAIL, i.e. exactly the error line, whenever the transcript context
+    # was long - the worst possible failure mode for the annotation.
+    err_part = "err=%s" % str(error).strip()[:200]
+    sep = " | "
+    head = "T2-DIAG "
+
+    def _assemble(console_text, trans_text):
+        seq = [p for p in (console_text, trans_text,
+                           crash_part, proc_part, err_part) if p]
+        return head + sep.join(seq)
+
+    summary = _assemble(console_part, trans_part)
+    # Priority under pressure: the console step markers shrink first
+    # (keeping the TAIL - the last executed steps are the failure
+    # frontier; reaching step N proves steps 0..N-1), then the transcript
+    # context shrinks from the back (the error keyword sits at its head).
+    # err/proc/crash are never shrunk, so no measured overflow can reach
+    # them even before the final belt-and-braces slice.
+    if len(summary) > 2400 and console_part:
+        excess = len(summary) - 2400
+        if excess >= len(console_part):
+            console_part, excess = "", excess - len(console_part)
+        else:
+            payload = console_part[len("console="):]
+            # new = "console=" + "…" + payload[cut:]  =>  cut = excess + 1
+            keep = payload[excess + 1:]
+            console_part = ("console=…" + keep) if keep else ""
+        summary = _assemble(console_part, trans_part)
+    if len(summary) > 2400 and trans_part:
+        excess = len(summary) - 2400
+        trans_part = trans_part[:max(0, len(trans_part) - excess)]
+        summary = _assemble(console_part, trans_part)
+    if len(summary) > 2400:
+        summary = summary[:2400]
+        if not summary.rstrip().endswith(err_part.rstrip()):
+            # Safety slice must never eat err: rebuild from the fixed
+            # parts alone (their caps guarantee they fit).
+            summary = _assemble("", "")[:2400]
+    return summary
+
+
+def connect_monitor(port, deadline_s=60.0, transcript_path=None,
+                    clock=None):
     """Connect to the Renode monitor, retrying until the deadline."""
     deadline = time.monotonic() + deadline_s
     last = None
     while time.monotonic() < deadline:
         try:
-            return RenodeMonitorEndpoint("127.0.0.1", port, timeout=30.0)
+            return RenodeMonitorEndpoint("127.0.0.1", port, timeout=30.0,
+                                         transcript_path=transcript_path,
+                                         clock=clock)
         except OSError as error:
             last = error
             time.sleep(0.2)
@@ -401,11 +630,22 @@ def run_scenario(renode_bin, elf_path, fmu_path, build_dir=BUILD_DIR):
     """Execute the full T2 retention scenario; return the evidence body."""
     from fmi_bridge import FmpyFmuSlave
 
+    # F-33: never let a previous run's exit state leak into this run's
+    # diagnostic summary (build/hw may persist across local runs).
+    try:
+        RENODE_PROCESS_STATE_LOG.unlink()
+    except OSError:
+        pass
     port = _free_port()
     process = launch_renode(renode_bin, elf_path, port)
     endpoint = None
     try:
-        endpoint = connect_monitor(port)
+        # The runner (orchestration layer, not the evidence path) supplies
+        # the wall clock that stamps the diagnostic monitor transcript; the
+        # bridge module itself stays wall-clock-free (HW-T2-BRIDGE-013).
+        endpoint = connect_monitor(port,
+                                   transcript_path=RENODE_TRANSCRIPT_LOG,
+                                   clock=time.time)
         fmu = FmpyFmuSlave(fmu_path)
         bridge = RetentionBridge(endpoint, fmu)
         timeline = bridge.run()
@@ -477,9 +717,55 @@ def run_scenario(renode_bin, elf_path, fmu_path, build_dir=BUILD_DIR):
     finally:
         if endpoint is not None:
             endpoint.close()
+        # F-33: capture Renode's exit state BEFORE the runner reaps it.
+        # poll() here reports a genuine self-exit (the shell-quit path is
+        # `shell.Quitted -> Emulator.Exit`, and an unhandled crash ends
+        # the process after CrashHandler's stderr dump); None means the
+        # process outlived the failure and the EOF came from the socket
+        # layer alone. Recorded for _diagnostic_summary + the CI log.
+        pre_exit = process.poll()
+        try:
+            build_dir.mkdir(parents=True, exist_ok=True)
+            if pre_exit is None:
+                state = "alive-at-failure (killed by runner)"
+            elif pre_exit < 0:
+                state = "already-exited signal=%d" % (-pre_exit)
+            else:
+                state = "already-exited rc=%d" % pre_exit
+            (build_dir / RENODE_PROCESS_STATE_LOG.name).write_text(
+                "renode_exit=%s\n" % state, encoding="utf-8")
+        except OSError:
+            pass
         if process.poll() is None:
             process.kill()
         process.wait(timeout=30)
+        # F-20: let the console drain finish so the post-mortem tail below
+        # is complete (the pipe is at EOF once the process is reaped).
+        drain = getattr(process, "_t2_console_thread", None)
+        if drain is not None:
+            drain.join(timeout=10)
+
+
+def scenario_passing_body(passed, runlog):
+    """Merge run_scenario()'s (passed, runlog) returns for passing_document.
+
+    passing_document() needs the in-run assertions from `passed` (events,
+    ordering, plant, retention) AND the toolchain/hash keys from `runlog`
+    (bridge/elf/fmu/trace_sha256, measured_tools). F-35 (issue #60):
+    dispatch 24 (run 35932082726) reached passing_document for the first
+    time - after the live co-sim and the OR-001 ordering invariant had
+    PASSED - and raised KeyError 'bridge_sha256' because main() passed
+    only the first return value. The two key sets must stay disjoint;
+    fail loud if a future change makes the merge ambiguous.
+    """
+    overlap = set(passed) & set(runlog)
+    if overlap:
+        raise AssertionError(
+            "run_scenario returns overlap, merge ambiguous: %s"
+            % sorted(overlap))
+    body = dict(runlog)
+    body.update(passed)
+    return body
 
 
 def passing_document(run_body):
@@ -552,6 +838,12 @@ def main(argv=None):
                         help="firmware ELF (default: CANCESTRY_T2_ELF)")
     parser.add_argument("--renode", default=None,
                         help="renode binary (default: CANCESTRY_RENODE/$PATH)")
+    parser.add_argument("--fmu", default=None,
+                        help="prebuilt Holdup FMU (default: build it via omc; "
+                             "reuse a single FMU artifact across the "
+                             "determinism pair so the evidence's fmu hash "
+                             "compares identical bytes - same contract as "
+                             "the ELF)")
     args = parser.parse_args(argv[1:] if argv is None else argv[1:])
 
     if args.emit_pending:
@@ -562,13 +854,50 @@ def main(argv=None):
         renode_bin = locate_renode(args.renode)
         check_renode_version(renode_bin)
         elf_path = locate_elf(args.elf)
-        fmu_path = build_fmu(omc)
-        run_body, _ = run_scenario(renode_bin, elf_path, fmu_path)
+        if args.fmu:
+            fmu_path = Path(args.fmu)
+            if not fmu_path.is_file():
+                raise T2SetupError("prebuilt FMU not found: %s" % fmu_path)
+        else:
+            fmu_path = build_fmu(omc)
+        # F-35 (issue #60): run_scenario returns (passed, runlog);
+        # passing_document needs BOTH dicts merged (scenario_passing_body).
+        # Dispatch 24 (run 35932082726) discarded `runlog` here and hit
+        # KeyError 'bridge_sha256' on the success path.
+        passed, runlog = run_scenario(renode_bin, elf_path, fmu_path)
     except (T2SetupError, BridgeError) as error:
         print("T2 FAILED (fail-closed, no evidence written): %s" % error)
+        # F-20: attach the captured Renode console transcript so a
+        # silent-monitor failure is diagnosable from the CI log.
+        tail = _console_tail(RENODE_CONSOLE_LOG)
+        if tail:
+            print("== renode console tail (last %d lines) =="
+                  % len(tail.splitlines()))
+            print(tail)
+        # F-22/F-23: the raw monitor-socket transcript (what the monitor
+        # actually sent, including command errors that never reach the
+        # console) - dispatch 11 proved the decisive lines (the platform
+        # load error) sit at the HEAD, so print the whole file while it
+        # stays small; head+tail once it outgrows that.
+        try:
+            t_text = RENODE_TRANSCRIPT_LOG.read_text(
+                encoding="utf-8", errors="replace")
+        except OSError:
+            t_text = ""
+        if t_text:
+            t_lines = t_text.splitlines()
+            shown = t_lines if len(t_lines) <= 200 else (
+                t_lines[:60] + ["... (transcript truncated) ..."]
+                + t_lines[-80:])
+            print("== monitor transcript (%d of %d lines) =="
+                  % (len(shown), len(t_lines)))
+            print("\n".join(shown))
+        # F-23c: the final line is the compact diagnostic - it is the one
+        # line GitHub's error annotation surfaces for the failed step.
+        print(_diagnostic_summary(error))
         return 2
 
-    document = passing_document(run_body)
+    document = passing_document(scenario_passing_body(passed, runlog))
     output = Path(args.output)
     fresh = render_evidence_bytes(document)
     if args.check:

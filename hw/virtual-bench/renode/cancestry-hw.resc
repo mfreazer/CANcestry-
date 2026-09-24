@@ -4,8 +4,8 @@
 # CANcestry T2 virtual bench bring-up script (H-07, issue #53).
 #
 # Renode platform script (.resc) for the platform described by
-# stm32g474-cancestry.repl. The issue text names "cancestry-hw.cs (or
-# equivalent Renode script)"; .resc is Renode's script format and this file
+# stm32g474-cancestry.repl. The issue text names 'cancestry-hw.cs (or
+# equivalent Renode script)'; .resc is Renode's script format and this file
 # is that equivalent - no C# peripheral code exists in this repository.
 #
 # Implements: HW-FR-001 (the v1.0.0 firmware ELF boots and executes on the
@@ -15,9 +15,15 @@
 #
 # The script is driven by the T2 runner (hw/virtual-bench/run_t2_retention.py):
 #
-#   $elf   path of the v1.0.0 firmware ELF (mandatory; set with
-#          `set $elf "@..."` before including this script - the runner always
-#          sets it, and the guard below fails closed when it is missing)
+#   $elf   path of the v1.0.0 firmware ELF (mandatory; the runner sets it
+#          before including this script via `-e '$elf="<abs path>"'` -
+#          quoted, with NO '@' path marker. F-32 (issue #60): a StringToken
+#          strips the quotes but never trims '@' (only PathToken does), and
+#          `sysbus LoadELF $elf` converts the value to ReadFilePath whose
+#          validator runs File.Exists on the raw value - so '@/...' fails
+#          binding with 'Parameters did not match the signature'. The
+#          runner always sets it, and the guard below fails closed when it
+#          is missing)
 #   $seed  optional deterministic seed (fixed default below; overriding it
 #          is a reviewable, evidence-affecting change)
 #
@@ -28,15 +34,82 @@
 using sysbus
 
 # Fixed deterministic seed (HwAGENTS.md rule 5).
-$t2_seed?="123456789"
+# F-31 (issue #55): the value is UNQUOTED on purpose. The monitor stores the
+# `?=` value's token as-is and later substitutes it verbatim (Monitor.cs
+# Parse/ExpandVariables, v1.16.1 pin add012af), and `emulation SetSeed` binds
+# to `Emulation.SetSeed(int)` - the monitor's acceptable-token-type table
+# accepts only DecimalIntegerToken for int parameters, so a quoted
+# "123456789" (StringToken) would fail with 'Parameters did not match the
+# signature' at step4 (same failure class as F-30). Unquoted, the tokenizer
+# produces a DecimalIntegerToken and the binding succeeds. The seed VALUE is
+# unchanged and must stay equal to FIXED_SEED in fmi_bridge.py
+# (asserted by test_fixed_seed_is_pinned).
+$t2_seed?=123456789
 
 # Fail-closed guard: T2 executes the REAL v1.0.0 ELF (HW-PLAN section 8.3);
 # the bench never falls back to a reimplementation of the firmware.
 python "assert variables['elf'] not in ('', None), 'cancestry-hw.resc: no firmware ELF provided (set $elf before including this script)'"
+# F-21/F-22 (issue #55): step markers. Dispatch 9 (run 35726064092) showed
+# the t2_trace region (0x60000000) never mapped with no error logged.
+# F-22 finding: python print() inside a monitor python command goes to the
+# TELNET CLIENT, not to Renode's stdout (MonitorPythonEngine.ConfigureOutput
+# redirects stdout to the command interaction writer), so the dispatch 10
+# markers were invisible in the console log; Logger.Info goes to the
+# console-logged logger instead. The markers (deterministic, console-logged)
+# identify the exact step the include reaches; the value-carrying readbacks
+# turn the platform state into log evidence. They stay in the script as the
+# bring-up audit trail.
+python "import Antmicro.Renode.Logging as _clog"
+python "_clog.Logger.Info('[cancestry-hw] step0: python logger channel OK, elf=%s' % variables['elf'])"
+python "_clog.Logger.Info('[cancestry-hw] scope: sysbus=%s machine=%s variables=%s' % ('sysbus' in dir() and 'yes' or 'NO', 'machine' in dir() and 'yes' or 'NO', 'variables' in dir() and 'yes' or 'NO'))"
 
 mach create "cancestry"
+python "_clog.Logger.Info('[cancestry-hw] step2: machine created')"
 
-machine LoadPlatformDescription @$ORIGIN/stm32g474-cancestry.repl
+# F-24 (issue #55): load the platform file via $ORIGIN - the standard
+# Renode idiom. Dispatch 14 (run 35773043927) proved the process CWD is
+# /opt/renode (the Renode install dir, step2b probe), so bare names do
+# NOT resolve against this script's directory, and the monitor's
+# file-not-found path degrades into a URI 'download' attempt and a
+# 'Parameters did not match the signature' error (there is no public
+# 'Could not find file' line for command path arguments). $ORIGIN is set
+# by the include loader (Monitor.TryExecuteScript) to THIS script's
+# directory before its lines run, and PathToken trims the '@' prefix -
+# so '$ORIGIN/<file>' expands to the clean absolute path of the .repl
+# next to this .resc, from any CWD. The original H-07 form
+# '@$ORIGIN/<file>' - an EXTRA leading @ on top of the variable's own
+# '@' (dispatches 7-11) - and the F-23 bare name (dispatch 14) both
+# failed for the reasons above.
+python "import os; _o = variables['global.ORIGIN']; _p = (_o.Value if hasattr(_o, 'Value') else str(_o)) + '/stm32g474-cancestry.repl'; _clog.Logger.Info('[cancestry-hw] step2b: repl isfile=%s (%s)' % (os.path.isfile(_p), _p))"
+machine LoadPlatformDescription $ORIGIN/stm32g474-cancestry.repl
+python "_clog.Logger.Info('[cancestry-hw] step3: platform loaded')"
+python "_clog.Logger.Info('[cancestry-hw] step3b: scope after load: sysbus=%s machine=%s monitor.Machine=%s' % ('sysbus' in dir() and 'yes' or 'NO', 'machine' in dir() and 'yes' or 'NO', 'yes' if monitor.Machine is not None else 'NO'))"
+
+# F-28 (issue #55): register the four scripted register models HERE, with
+# $ORIGIN-absolute paths (see the F-28 note in stm32g474-cancestry.repl).
+# `machine PyDevFromFile <path> <address> <size> [initable] [name]` is the
+# public Machine extension (PythonPeripheralExtensions, v1.16.1) that
+# constructs a PythonPeripheral and registers it on the machine's sysbus -
+# the same object the previous inline .repl declarations created, minus
+# the CWD-relative `filename:` resolution that broke dispatch 17
+# (run 35805300102).
+#
+# F-30 (issue #55): the NAME argument must be QUOTED. Dispatch 19
+# (run on c185cee) failed at the first line with
+# 'Parameters did not match the signature': PyDevFromFile's name parameter
+# is `string`, and the monitor's acceptable-token-type table
+# (MonitorCommands.cs, v1.16.1 pin add012af) accepts only StringToken or
+# PathToken for string parameters - a bare `iwdg` tokenizes as a
+# LiteralToken and is rejected during binding (the path itself was fine:
+# $ORIGIN expands to a PathToken whose trimmed value exists, HexToken
+# derives from DecimalIntegerToken so the hex size binds to int, and ulong
+# address has no token-type restriction). Quoting yields StringTokens and
+# the binding succeeds.
+machine PyDevFromFile $ORIGIN/iwdg_model.py 0x40003000 0x14 true "iwdg"
+machine PyDevFromFile $ORIGIN/rtc_backup_model.py 0x40002800 0x64 false "rtc_backup"
+machine PyDevFromFile $ORIGIN/gpioa_model.py 0x48000000 0x400 true "gpioa"
+machine PyDevFromFile $ORIGIN/rcc_model.py 0x40021000 0x98 true "rcc"
+python "import os; _clog.Logger.Info('[cancestry-hw] step3c: 4 pydev registered, cwd=%s' % os.getcwd())"
 
 # Deterministic execution (virtual-bench-plan section 6): fixed global
 # quantum (100 us master step) and a fixed seed for the only Renode
@@ -44,8 +117,15 @@ machine LoadPlatformDescription @$ORIGIN/stm32g474-cancestry.repl
 # wall clock is consumed.
 emulation SetGlobalQuantum "0.0001"
 emulation SetSeed $t2_seed
+python "_clog.Logger.Info('[cancestry-hw] step4: quantum and seed set')"
 
 sysbus LoadELF $elf
+# Readback: the initial SP word of the vector table (0x20018000 per
+# startup.s) proves the ELF segments reached flash; an unmapped access
+# logs a 'non existing peripheral' warning in the console. The bus
+# accessor picks whichever scope name the monitor bound (F-23: the
+# step3b probe logs which one that is).
+python "bus = sysbus if 'sysbus' in dir() else (machine['sysbus'] if 'machine' in dir() else monitor.Machine['sysbus']); v = bus.ReadDoubleWord(0x08000000); _clog.Logger.Info('[cancestry-hw] step5: vector SP=0x%08x (ELF loaded)' % v)"
 
 # ---------------------------------------------------------------------
 # T2 event-capture hooks (HwAGENTS.md rule 5: deterministic, hashed trace).
@@ -67,10 +147,15 @@ machine['sysbus'].WriteDoubleWord(0x6000000C, int(round(machine.ElapsedVirtualTi
 cpu AddSymbolHook "cancestry_watchdog_escalate" """
 machine['sysbus'].WriteDoubleWord(0x60000010, int(round(machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1000000)))
 """
+python "_clog.Logger.Info('[cancestry-hw] step6: symbol hooks installed')"
 
 # Trace-area magic: the runner and the FMI bridge refuse to run against a
 # machine whose capture area was not initialized by this script.
 sysbus WriteDoubleWord 0x60000000 0x54324353
+# Readback: 0x54324353 proves the t2_trace region is mapped and writable;
+# an unmapped access logs a 'non existing peripheral' warning instead.
+python "bus = sysbus if 'sysbus' in dir() else (machine['sysbus'] if 'machine' in dir() else monitor.Machine['sysbus']); v = bus.ReadDoubleWord(0x60000000); _clog.Logger.Info('[cancestry-hw] step7: t2_trace readback=0x%08x (expected 0x54324353)' % v)"
+python "_clog.Logger.Info('[cancestry-hw] step8: include complete, machine left paused')"
 
 # The machine is left PAUSED: the FMI bridge alone advances emulation with
 # fixed-size `emulation RunFor` quanta (deterministic co-simulation, no

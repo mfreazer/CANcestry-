@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
-"""Deterministic FMI 3.0 co-simulation bridge for the CANcestry T2 virtual bench.
+"""Deterministic FMI 2.0 co-simulation bridge for the CANcestry T2 virtual bench.
 
 Implements the H-07 (issue #53) bridge contract over the platform model in
 ``hw/virtual-bench/renode/``:
+
+FMI version (H-08 bring-up finding F-2, docs/hw/t2-bringup-report.md): the
+plant is an FMI 2.0 CoSimulation FMU. The plan's "FMI 3.0" wording is a
+planning detail, not a requirement; the pinned OpenModelica 1.24.0 cannot
+export FMI 3.0 (its FMI.mo checkFMIVersion accepts only 1.0/2.0), while the
+same toolchain is proven to produce the FMI 2.0 CS FMU the T1 holdup_001
+evidence was built with. FMPy's bounded doStep/readout role is unchanged.
 
     OpenModelica plant (Holdup FMU, OR-001)  <->  Renode (v1.0.0 firmware ELF)
 
@@ -155,43 +162,165 @@ class RenodeMonitorEndpoint(RenodeEndpoint):
     deterministic (HwAGENTS.md rule 5).
     """
 
-    _PROMPT = re.compile(rb"\((?:monitor|machine-[A-Za-z0-9_.:-]+)\)[ \t]*\r?$")
+    # F-23 (issue #55): the real monitor prompt after a machine is
+    # selected is the machine name in parentheses with a trailing space,
+    # ANSI-colored - e.g. b"\x1b[33;1m(cancestry) \x1b[0m" (dispatch 11,
+    # run 35730854679 transcript); before any machine exists it is the
+    # plain monitor prompt. The F-3 form only matched "(monitor)>" /
+    # "(machine-<name>)>" and therefore never recognized the
+    # machine-prompt form: every response after machine selection sat in
+    # the buffer unrecognized until the 30 s timeout (dispatches 8-11 -
+    # the transcript shows the preflight response arriving at +0.2 s,
+    # then 30 s of silence, then our own 'quit'). Two changes: ANSI
+    # escape sequences are stripped from the buffer (partial trailing
+    # sequences are left for the next chunk), and the prompt matcher
+    # accepts any "(name)" form.
+    _ANSI_ESCAPE = re.compile(rb"\x1b\[[0-9;]*[A-Za-z]")
+    _PROMPT = re.compile(rb"\([A-Za-z0-9_.:-]+\)>?[ \t]*\r?$")
 
-    def __init__(self, host, port, timeout=30.0):
-        self._socket = socket.create_connection((host, int(port)),
-                                                timeout=float(timeout))
-        self._socket.settimeout(float(timeout))
+    def __init__(self, host, port, timeout=30.0, transcript_path=None,
+                 clock=None):
+        self._timeout = float(timeout)
+        self._last_command = None
         self._buffer = b""
-        self._read_prompt()  # banner + initial prompt
+        # F-22 (issue #55): raw monitor transcript - every byte in both
+        # directions. Diagnostics only (never evidence): dispatches 8-10
+        # (runs 35724334649 / 35726064092 / 35727339896) show the preflight
+        # read executing (console warning logged) yet no response ever
+        # reaching this client, and the console alone cannot say which side
+        # dropped it. The bridge stays wall-clock-free (HW-T2-BRIDGE-013):
+        # lines are numbered by a deterministic sequence; the caller may
+        # inject a ``clock`` callable (the runner passes its wall clock)
+        # to stamp the diagnostic file.
+        self._transcript = None
+        self._transcript_clock = clock
+        self._transcript_line = 0
+        if transcript_path is not None:
+            self._transcript = open(transcript_path, "wb")
+        try:
+            self._socket = socket.create_connection((host, int(port)),
+                                                    timeout=self._timeout)
+            self._socket.settimeout(self._timeout)
+            self._read_prompt()  # banner + initial prompt
+        except Exception:
+            # F-22: a failed connect must not leak a live socket - the
+            # runner's retry loop (connect_monitor) would otherwise stack
+            # multiple clients on Renode's socket server.
+            try:
+                self._socket.close()
+            except (AttributeError, OSError):
+                pass
+            if self._transcript is not None:
+                self._transcript.close()
+                self._transcript = None
+            raise
+
+    def _record(self, direction, data):
+        """Append one line of the raw monitor transcript (F-22)."""
+        if self._transcript is None:
+            return
+        stamp = "line %d" % self._transcript_line
+        if self._transcript_clock is not None:
+            stamp = "line %d [%.3f]" % (self._transcript_line,
+                                        self._transcript_clock())
+        line = "%s %s %r\n" % (stamp, direction, data)
+        self._transcript.write(line.encode("utf-8", "replace"))
+        self._transcript.flush()
+        self._transcript_line += 1
 
     # -- low-level line protocol ------------------------------------------
     def _read_prompt(self):
         while True:
+            # F-23: drop ANSI escapes so the colored prompt
+            # ("\x1b[33;1m(cancestry) \x1b[0m") matches _PROMPT. A partial
+            # escape at the buffer tail (no terminating letter) is left in
+            # place and completes on the next chunk.
+            self._buffer = self._ANSI_ESCAPE.sub(b"", self._buffer)
             match = self._PROMPT.search(self._buffer)
             if match:
                 tail = self._buffer[:match.start()]
                 self._buffer = self._buffer[match.end():]
                 return tail
-            chunk = self._socket.recv(4096)
+            try:
+                chunk = self._socket.recv(4096)
+            except socket.timeout as error:
+                if self._last_command is None:
+                    # Startup banner read: re-raise as OSError so
+                    # connect_monitor() can retry the connection.
+                    raise
+                # F-20 (issue #55): a silent monitor must fail closed with
+                # context, not as a bare TimeoutError traceback. Dispatch 8
+                # (run 35724334649) hung here on the first command; the
+                # runner now attaches the captured Renode console tail.
+                raise BridgeError(
+                    "Renode monitor did not respond within %.0f s to %r; "
+                    "the startup script may still be executing or the "
+                    "monitor thread may be blocked (check the renode "
+                    "console tail)" % (self._timeout, self._last_command)) \
+                    from error
             if not chunk:
-                raise BridgeError("Renode monitor closed the connection")
+                # F-33 (issue #60, dispatch 21): an EOF must say WHERE it
+                # happened - banner handshake vs a named in-flight command -
+                # the way the timeout path already does (F-20). Dispatch 21
+                # (run 35893814425) died with a bare "closed the connection"
+                # right after the first complete include, leaving the EOF
+                # point unknown; without it the annotation cannot classify
+                # the fault (connect vs preflight vs the first RunFor).
+                if self._last_command is None:
+                    raise BridgeError(
+                        "Renode monitor closed the connection during the "
+                        "startup banner read")
+                raise BridgeError(
+                    "Renode monitor closed the connection while awaiting "
+                    "response to %r" % (self._last_command,))
+            self._record("RX", chunk)
             self._buffer += chunk
 
-    def command(self, text):
-        self._socket.sendall((text.rstrip("\n") + "\n").encode("utf-8"))
-        return self._read_prompt().decode("utf-8", "replace")
+    def command(self, text, echo_fragment=None):
+        self._last_command = text
+        payload = (text.rstrip("\n") + "\n").encode("utf-8")
+        try:
+            self._socket.sendall(payload)
+        except OSError as error:
+            raise BridgeError("Renode monitor socket send failed for %r: %s"
+                              % (text, error)) from error
+        self._record("TX", payload)
+        decoded = self._read_prompt().decode("utf-8", "replace")
+        if echo_fragment is None:
+            return decoded
+        # F-24 (issue #55): the startup include is injected as queued
+        # shell input (-e). While it is still draining, the prompt we
+        # match belongs to ITS output (the -e echo, command errors and
+        # help text - dispatch 14, run 35773043927: the preflight
+        # 'response' was exactly that, and its real response only
+        # arrived after our own 'quit'), not to our command. Our command
+        # is echoed by the terminal before its result, so the response
+        # we want carries our command's echo; keep reading prompts until
+        # it does (bounded - a silent monitor still fails closed via
+        # _read_prompt's timeout).
+        for _ in range(5):
+            if echo_fragment in decoded:
+                return decoded
+            decoded = self._read_prompt().decode("utf-8", "replace")
+        raise BridgeError(
+            "Renode monitor response to %r never carried its command echo "
+            "within 5 prompts (startup input may still be draining): %r"
+            % (text, decoded[:200]))
 
     # -- endpoint interface -------------------------------------------------
     def run_for_us(self, us):
-        self.command('emulation RunFor "%s"' % format_seconds(us))
+        self.command('emulation RunFor "%s"' % format_seconds(us),
+                     echo_fragment="RunFor")
 
     def read_u32(self, addr):
         return parse_u32(self.command("sysbus ReadDoubleWord %s"
-                                      % format_address(addr)))
+                                      % format_address(addr),
+                                      echo_fragment="ReadDoubleWord"))
 
     def write_u32(self, addr, value):
         self.command("sysbus WriteDoubleWord %s 0x%08x"
-                     % (format_address(addr), int(value) & 0xFFFFFFFF))
+                     % (format_address(addr), int(value) & 0xFFFFFFFF),
+                     echo_fragment="WriteDoubleWord")
 
     def close(self):
         try:
@@ -199,10 +328,13 @@ class RenodeMonitorEndpoint(RenodeEndpoint):
         except (OSError, BridgeError):
             pass
         self._socket.close()
+        if self._transcript is not None:
+            self._transcript.close()
+            self._transcript = None
 
 
 class FmiSlave(object):
-    """Abstract FMI 3.0 slave (CoSimulation) side of the bridge."""
+    """Abstract FMI 2.0 slave (CoSimulation) side of the bridge."""
 
     def read_real(self, name):
         raise NotImplementedError
@@ -212,48 +344,57 @@ class FmiSlave(object):
 
 
 class FmpyFmuSlave(FmiSlave):
-    """FMPy-driven FMI 3.0 CoSimulation slave (guarded import).
+    """FMPy-driven FMI 2.0 CoSimulation slave (guarded import).
 
     FMPy is TCL1 for the bounded doStep/readout role
     (docs/hw/tool-qualification.md section 3); the OpenModelica compiler gap
-    is inherited by the evidence, not by this module.
+    is inherited by the evidence, not by this module. The FMI 2.0 state
+    sequence is instantiate -> setupExperiment -> enterInitializationMode ->
+    exitInitializationMode -> doStep*, as in the T1 holdup_001 pipeline.
     """
 
     def __init__(self, fmu_path):
         try:
-            from fmpy.fmi3 import FMU3Slave
+            import fmpy
             from fmpy.model_description import read_model_description
-            from fmpy.util import extract
         except ImportError as error:
             raise BridgeError(
                 "FMPy is not installed; the T2 bridge refuses to run without "
                 "the pinned FMU executor (fail-closed): %s" % error)
-        description = read_model_description(extract(str(fmu_path)))
-        if not str(description.fmiVersion).startswith("3.0"):
+        # F-19 (issue #55): fmpy 0.3.24 - the TCL1 pin - exposes extract()
+        # at the package TOP LEVEL (not in fmpy.util; that name does not
+        # exist in this version), and FMU2Slave's constructor takes
+        # guid/modelIdentifier/unzipDirectory keyword arguments, so the
+        # canonical construction path is fmpy.instantiate_fmu(), the same
+        # helper the T1 simulate_fmu pipeline drives. Dispatch 7 (run
+        # 35723022901) failed with "cannot import name 'extract' from
+        # 'fmpy.util'" before the FMU was ever touched.
+        unzipdir = fmpy.extract(str(fmu_path))
+        description = read_model_description(unzipdir)
+        if not str(description.fmiVersion).startswith("2.0"):
             raise BridgeError(
-                "T2 requires an FMI 3.0 FMU (virtual-bench-plan section 1); "
-                "%s declares fmiVersion %r (build with omc version=\"3.0\")"
+                "T2 requires an FMI 2.0 CoSimulation FMU (bring-up finding "
+                "F-2: the pinned OpenModelica 1.24.0 cannot export FMI 3.0); "
+                "%s declares fmiVersion %r"
                 % (fmu_path, description.fmiVersion))
         if description.coSimulation is None:
             raise BridgeError("%s has no CoSimulation interface" % fmu_path)
         self._description = description
-        self._fmu = FMU3Slave(extract(str(fmu_path)))
-        self._fmu.instantiate()
+        self._fmu = fmpy.instantiate_fmu(
+            unzipdir, description, fmi_type="CoSimulation")
+        self._fmu.setupExperiment(startTime=0.0)
         self._fmu.enterInitializationMode()
         self._fmu.exitInitializationMode()
-        self._refs = {
-            name: description.variableByName[name].valueReference
-            for name in self.output_names()
-        }
-
-    def output_names(self):
-        return [variable.name for variable in self._description.modelVariables
-                if variable.causality == "output"]
+        # FMPy 0.3.24 exposes no variableByName helper; build the name map
+        # from the (complete) modelVariables list instead. (Bring-up finding
+        # F-4.)
+        self._refs = {variable.name: variable.valueReference
+                      for variable in description.modelVariables}
 
     def read_real(self, name):
         if name not in self._refs:
-            raise BridgeError("unknown FMU output %r" % name)
-        values = self._fmu.getFloat64([self._refs[name]], 1)
+            raise BridgeError("unknown FMU variable %r" % name)
+        values = self._fmu.getReal([self._refs[name]])
         return float(values[0])
 
     def do_step_us(self, current_us, step_us):
