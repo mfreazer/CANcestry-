@@ -31,7 +31,16 @@
 //
 // NOT_SIMULATED (with rationale, per virtual-bench-plan section 3):
 //   - bxCAN/FDCAN protocol engine, bit timing and bus arbitration: CAN
-//     protocol simulation is out of H-07 scope (issue #53, constraint 5);
+//     protocol simulation is out of H-07 scope (issue #53, constraint 5) and
+//     REMAINS out of scope at H-10 (issue #62). The H-10 fault scenarios do
+//     not add a protocol engine to this file: the CAN bus fault injector
+//     (renode/can_fault_injector.py) is an EXTENSION registered by
+//     renode/cancestry-hw-fault.resc at 0x40000000, and it projects the
+//     fault CONDITION (PSR.BO / PSR.LEC / ECR / IR.ELO / CCCR.INIT) onto the
+//     FDCAN register scratch declared below. Frame delivery, arbitration and
+//     the physical layer stay not_simulated, and the fault scenarios derive
+//     no claim from them (see can_fault_injector.py header for the explicit
+//     modeled / not-modeled split);
 //   - DWT CYCCNT (0xE0001000) and CoreDebug DEMCR (0xE000EDFC): the Cortex-M
 //     core debug block is owned by the Renode CPU model; the firmware's DWT
 //     timestamps are NOT load-bearing for the T2 retention ordering (events
@@ -69,6 +78,32 @@
 //   0x60000100  retention_shadow     persistence store for RTC_BKP0R; lives in
 //               the (non-volatile across machine reset) trace area so the
 //               retained fault code survives the scripted IWDG reset
+//
+// H-10 CAN fault-capture contract (issue #62, HW-FR-003; installed by
+// renode/cancestry-hw-fault.resc only - the retention scenario never touches
+// these slots and their writers are declared here so the one-writer-per-slot
+// rule is reviewable). All values are integer microseconds of emulation
+// virtual time; 0 means "did not occur":
+//
+//   0x60000040  bus_off_inject_us    can_fault_injector.py: InjectBusOff accepted
+//   0x60000044  crc_inject_us        can_fault_injector.py: InjectCRCError accepted
+//   0x60000048  recovery_request_us  cancestry-hw-fault.resc CCCR write hook
+//               (firmware cleared CCCR.INIT while the medium was Bus-Off: the
+//               ISO 11898-1 / RM0440 Bus-Off recovery request)
+//   0x6000004c  bus_active_us        can_fault_injector.py: medium released
+//               after the 128 x 11 recessive-bit sequence (704 us at 2 Mbit/s)
+//   0x60000050  crc_cleared_us       can_fault_injector.py: CRC condition left
+//               the medium after the acknowledge at 0x60000054
+//   0x60000054  crc_ack_us           cancestry-hw-fault.resc IR write hook
+//               (firmware acknowledged the error-logging interrupt, IR.ELO)
+//   0x60000058  busoff_detect_us     cpu symbol hook: t2_can_busoff_detect
+//   0x6000005c  busoff_recover_us    cpu symbol hook: t2_can_busoff_recover
+//   0x60000060  crc_detect_us        cpu symbol hook: t2_can_crc_detect
+//   0x60000064  crc_error_count      firmware (off-tree CAN fault driver)
+//   0x60000068  run_complete         firmware: 1 when the scenario loop ended
+//               normally (no crash, no park)
+//   0x6000006c  alive_counter        firmware: increments every poll pass, so a
+//               hung firmware is visible as a stopped counter
 //
 // Determinism (HwAGENTS.md rule 5): this platform is deterministic by
 // construction. The FMI bridge drives emulation with fixed-size
