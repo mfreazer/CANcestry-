@@ -1,0 +1,500 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cancestry.dev/schemas/hw/hw-t2-fault-evidence-0.1.0.schema.json",
+  "title": "CANcestry T2 Virtual Bench CAN Fault Evidence (v0.1.0)",
+  "description": "Schema for the H-10 (issue #62) T2 CAN fault-scenario evidence artifacts t2_busoff_001.json and t2_crc_001.json, produced by hw/virtual-bench/t2_fault_common.py and its scenario clients. Sibling of hw-t2-evidence-0.1.0 (retention) with the DELIBERATE differences recorded here: (1) oracle_id is the literal 'none' - issue #62 assigns no OR-XXX to Bus-Off recovery timing or CRC error handling, and HwAGENTS.md rule 3's oracle rule is satisfied by the honest disposition: the traceability ledger rows stay sim-pending / CL0 and the artifact alone cannot promote them (the ledger checker alone permits passing rows, and only with a registered oracle); (2) the evidence hash chain is ELF + bridge (monitor client) + injector + trace - these scenarios use no FMU: the CAN bus medium is the fault injector, so OpenModelica/FMPy are not producers, are not pinned and contribute no inherited gap (renode stays TCL2 and its gap is inherited verbatim); (3) the pending disposition fixes a fixed injection boundary (t = 10 ms) and a fixed 50 ms window with a 100 us master step. Kept in lockstep with the retention schema's pending/pairing discipline.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "case_id",
+    "requirement_id",
+    "oracle_id",
+    "status",
+    "pass",
+    "provisional",
+    "credibility_level",
+    "evidence_of",
+    "not_covered",
+    "scenario",
+    "firmware",
+    "source_hashes",
+    "tool_pins",
+    "inherited_validation_gap",
+    "trace"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0"
+    },
+    "case_id": {
+      "enum": [
+        "t2_busoff_001",
+        "t2_crc_001"
+      ],
+      "description": "The two H-10 CAN fault scenarios (issue #62): Bus-Off recovery (t2_busoff_001) and CRC error handling (t2_crc_001)."
+    },
+    "requirement_id": {
+      "const": "HW-FR-003",
+      "description": "ISO 11898-2 CAN interface conformance; the Bus-Off and CRC handling of the gateway node is exercised on the virtual bench."
+    },
+    "oracle_id": {
+      "const": "none",
+      "description": "Documented H-10 deviation: no registered oracle covers Bus-Off timing or CRC handling (issue #62: 'Oracle: none'). The ledger rows stay sim-pending / CL0 regardless of an executed run; this artifact never promotes a requirement."
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "passing"
+      ],
+      "description": "pending: no executed T2 run for this scenario (foundation). passing: a deterministic executed run backs every claim. 'failing' does not exist: a failed run aborts before evidence is written (fail-closed, t2_fault_common.py)."
+    },
+    "pass": {
+      "type": "boolean"
+    },
+    "provisional": {
+      "type": "boolean",
+      "description": "True: the claim is never final without T4 bench correlation and, per issue #62, the rows stay sim-pending / CL0 for H-Phase 2 regardless."
+    },
+    "credibility_level": {
+      "enum": [
+        "CL0",
+        "CL1",
+        "CL2"
+      ],
+      "description": "Pending artifacts are CL0. An executed run may record its achieved credibility but cannot exceed CL1 in H-10 (no independent oracle; CL2 requires one and CL3 is bench-only per HwAGENTS.md rule 4)."
+    },
+    "evidence_of": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "not_covered": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "pending_reason": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S",
+      "description": "Mandatory while pending and forbidden when passing; must name the exact deferral (the first executing run of this very scenario, issue #62)."
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "duration_us",
+        "fault",
+        "inject_at_us",
+        "master_step_us",
+        "method",
+        "seed"
+      ],
+      "properties": {
+        "duration_us": {
+          "const": 50000,
+          "description": "50 ms scenario window (issue #62: the T2 timeline visualizes 0..50 ms; 704 us of Bus-Off recovery from a 10 ms injection fits with wide margin)."
+        },
+        "fault": {
+          "enum": [
+            "bus_off",
+            "crc_error"
+          ],
+          "description": "Which fault the injector applies at inject_at_us. Brownout is OUT of H-10 scope by constraint (H-11, HS-01/HS-02)."
+        },
+        "inject_at_us": {
+          "const": 10000,
+          "description": "Issue #62: the fault is injected at t = 10 ms."
+        },
+        "master_step_us": {
+          "const": 100,
+          "description": "The H-07 bridge contract master step; the injection lands exactly on a master-step boundary (10 ms)."
+        },
+        "method": {
+          "const": "virtual_bench"
+        },
+        "seed": {
+          "const": "123456789",
+          "description": "Fixed Renode seed (HwAGENTS.md rule 5), equal to fmi_bridge.FIXED_SEED."
+        }
+      }
+    },
+    "firmware": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elf",
+        "modification"
+      ],
+      "properties": {
+        "elf": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "modification": {
+          "const": "none; the firmware is read-only (issue #62)",
+          "description": "T2 executes the v1.0.0 ELF as-is (issue #62 constraint 1)."
+        }
+      }
+    },
+    "source_hashes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^sha256:[0-9a-f]{64}$"
+      }
+    },
+    "tool_pins": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "inherited_validation_gap": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S",
+      "description": "The renode TCL2 gap is ALWAYS inherited (renode is a producer of every form of this artifact); can_fault_injector is TCL1 and carries no gap; OpenModelica/FMPy are not producers of these scenarios and contribute nothing."
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact",
+        "columns",
+        "hashing"
+      ],
+      "properties": {
+        "artifact": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "columns": {
+          "enum": [
+            "time_us,bus_state,fdcan1_psr,alive_counter",
+            "time_us,bus_state,fdcan1_psr,crc_error_count"
+          ],
+          "description": "Bus-Off scenario traces the alive counter; the CRC scenario traces the firmware CRC error counter."
+        },
+        "hashing": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      }
+    },
+    "events": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "detection_us",
+        "injection_us"
+      ],
+      "properties": {
+        "injection_us": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Injector-stamped acceptance time of the fault command (exact emulation time; the injection boundary is a master-step multiple)."
+        },
+        "detection_us": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Symbol-hook stamp of the firmware's fault-detection function entry (t2_can_busoff_detect / t2_can_crc_detect)."
+        },
+        "recovery_request_us": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Bus-Off only: .resc CCCR write hook stamp of the firmware clearing CCCR.INIT (the ISO 11898-1 recovery request)."
+        },
+        "recovery_us": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Bus-Off only: symbol-hook stamp of t2_can_busoff_recover (the firmware recovery action)."
+        },
+        "bus_active_us": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Bus-Off only: injector stamp of the medium release, exactly 128 * 11 recessive bits (704 us at 2 Mbit/s) after the recovery request."
+        },
+        "crc_ack_us": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "CRC only: .resc IR write hook stamp of the firmware acknowledging the error-logging interrupt (IR.ELO W1C)."
+        },
+        "crc_cleared_us": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "CRC only: injector stamp of the CRC condition leaving the medium (equals the acknowledge time by the injector's single-writer semantics)."
+        }
+      }
+    },
+    "hashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elf",
+        "bridge",
+        "injector",
+        "trace"
+      ],
+      "properties": {
+        "elf": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "bridge": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "injector": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "trace": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "description": "Evidence hash chain (issue #62 deliverable 10, adapted): ELF hash + bridge hash + injector hash + trace hash. No FMU: the CAN bus medium is the injector."
+    },
+    "invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The scenario's asserted invariants, checked in-run by t2_fault_common.py; the schema enforces the structural contract only."
+    },
+    "toolchain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pins",
+        "measured"
+      ],
+      "properties": {
+        "pins": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          }
+        },
+        "measured": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "passing"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "pass": {
+            "const": true
+          },
+          "provisional": {
+            "const": true
+          },
+          "credibility_level": {
+            "enum": [
+              "CL0",
+              "CL1"
+            ],
+            "description": "An executed run without a registered oracle cannot record more than CL1 in H-10; the traceability row stays sim-pending / CL0 regardless (issue #62: no ledger promotion)."
+          }
+        },
+        "required": [
+          "events",
+          "hashes",
+          "invariants",
+          "toolchain"
+        ],
+        "not": {
+          "required": [
+            "pending_reason"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "pending"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "pass": {
+            "const": false
+          },
+          "provisional": {
+            "const": true
+          },
+          "credibility_level": {
+            "const": "CL0"
+          }
+        },
+        "required": [
+          "pending_reason"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "events"
+              ]
+            },
+            {
+              "required": [
+                "hashes"
+              ]
+            },
+            {
+              "required": [
+                "toolchain"
+              ]
+            },
+            {
+              "required": [
+                "invariants"
+              ]
+            }
+          ]
+        },
+        "properties": {
+          "pending_reason": {
+            "pattern": "issues/62",
+            "description": "The deferral must name the H-10 issue (first executing run of this scenario)."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "case_id": {
+            "const": "t2_busoff_001"
+          },
+          "status": {
+            "const": "passing"
+          }
+        },
+        "required": [
+          "case_id",
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "events": {
+            "required": [
+              "bus_active_us",
+              "recovery_request_us",
+              "recovery_us"
+            ]
+          },
+          "invariants": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "bus_recovery_sequence_us",
+              "recovery_action_delta_us",
+              "recovery_action_limit_us",
+              "recovery_action_within_limit"
+            ],
+            "properties": {
+              "bus_recovery_sequence_us": {
+                "const": 704,
+                "description": "128 * 11 recessive bits at the HW-FR-003 nominal 2 Mbit/s."
+              },
+              "recovery_action_delta_us": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "recovery_us - detection_us of THIS executed run."
+              },
+              "recovery_action_limit_us": {
+                "const": 704,
+                "description": "Issue #62 timing limit: 128 * 11 bit times (704 us at 2 Mbit/s)."
+              },
+              "recovery_action_within_limit": {
+                "const": true,
+                "description": "The issue invariant: recovery action strictly inside the 128 * 11 bit-times bound; a violated bound aborts the run before evidence is written, so a committed artifact can only record true."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "case_id": {
+            "const": "t2_crc_001"
+          },
+          "status": {
+            "const": "passing"
+          }
+        },
+        "required": [
+          "case_id",
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "events": {
+            "required": [
+              "crc_ack_us",
+              "crc_cleared_us"
+            ]
+          },
+          "invariants": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "crc_error_counter_at_end",
+              "firmware_crashed"
+            ],
+            "properties": {
+              "crc_error_counter_at_end": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Issue #62: the firmware's CRC error counter incremented at least once; zero would be a firmware defect and the run fails closed instead of writing evidence."
+              },
+              "firmware_crashed": {
+                "const": false,
+                "description": "Issue #62: the firmware handled the CRC error without crashing (run_complete = 1 and the alive counter advanced); a crash fails the run before any artifact is written."
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

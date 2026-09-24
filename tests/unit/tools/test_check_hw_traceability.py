@@ -893,8 +893,9 @@ def test_pending_pulse_manifest_is_still_checked(pulse_repo):
     assert result.returncode == 0, result.stdout
     # H-07 (issue #53) adds the pending (HW-SF-002, virtual_bench) row;
     # H-09 (issue #56) adds the analysis-pending HW-NF-003 (WCCA) and
-    # HW-SF-005 (FMEDA) rows: passing 1, pending 6.
-    assert 'passing 1, pending 6' in result.stdout
+    # HW-SF-005 (FMEDA) rows; H-10 (issue #62) adds the sim-pending
+    # (HW-FR-003, virtual_bench) row: passing 1, pending 7.
+    assert 'passing 1, pending 7' in result.stdout
 
 
 @pytest.mark.parametrize('pulse', ['pulse4', 'pulse5b'])

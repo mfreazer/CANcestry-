@@ -1,0 +1,61 @@
+{
+  "case_id": "t2_busoff_001",
+  "credibility_level": "CL0",
+  "evidence_of": "T2 virtual-bench Bus-Off recovery scenario for HW-FR-003 (H-10, issue #62): the CAN bus fault injector (hw/virtual-bench/renode/can_fault_injector.py) puts the shared medium into the Bus-Off condition at t = 10 ms; the real v1.0.0 firmware (off-tree driver hw/virtual-bench/firmware/can_fault.c) detects it, enters the real cancestry_hal_raise_fault path (CANCESTRY_HAL_FAULT_BUS_OFF -> CANCESTRY_HAL_IF_STATE_BUS_OFF plus the FAULT_RAISED event) and requests recovery by clearing CCCR.INIT; the medium releases the bus exactly 128 * 11 recessive bits later (704 us at the HW-FR-003 nominal 2 Mbit/s) and the recovery-action interval is asserted strictly below that bound. This manifest records the PENDING disposition (pass=false, CL0): no executing run of this scenario backs an evidence artifact yet.",
+  "firmware": {
+    "elf": "built off-tree from tag v1.0.0 with the pinned T2 toolchain image (ci/docker/Dockerfile.t2) and CANCESTRY_T2_DRIVER=can_fault (hw/virtual-bench/firmware/build_firmware.sh); supplied at run time via CANCESTRY_T2_FAULT_ELF or --elf; never committed; its sha256 is recorded at run time",
+    "modification": "none; the firmware is read-only (issue #62)"
+  },
+  "inherited_validation_gap": "renode: Renode peripheral models (IWDG, GPIO, RTC_BKP, DWT) are scripted emulations, not vendor-validated silicon models: platform-model bugs can alter firmware-visible timing or register semantics, and this gap is inherited by every T2 evidence artifact; golden-trace correlation against vendor reference behavior and T4 bench correlation are required before any promotion.",
+  "not_covered": [
+    "No executed T2 run exists for this scenario: no event timestamps, no trace CSV and no ELF/bridge/injector artifact hashes are claimed by this manifest.",
+    "No independent oracle exists for Bus-Off recovery timing (issue #62: oracle none): the 128 * 11 recessive-bit limit is the ISO 11898-1 recovery sequence MODELLED by the fault injector itself. Credibility stays CL0 until a registered oracle or a golden bench capture exists; no oracle_id may be promoted into this row by rendering or prose.",
+    "The FDCAN protocol engine, bit timing, arbitration, bit stuffing and the physical layer are not_simulated (stm32g474-cancestry.repl header): the medium projects the fault CONDITION (PSR.BO / CCCR.INIT) only; no frame-level claim is made.",
+    "Brownout / BOR physics: deferred to H-11, gated on HS-01/HS-02 and a human safety reviewer (issue #62 constraint; HwAGENTS.md rule 6).",
+    "DWT CYCCNT accuracy is deliberately unexercised (bring-up finding F-27): events are captured from emulation virtual time and carry the renode TCL2 gap inherited above.",
+    "T4 physical correlation: bench-pending (HwRS section 5); CL3 requires bench data and no ledger promotion is performed here."
+  ],
+  "oracle_id": "none",
+  "pass": false,
+  "pending_reason": "The T2 fault-scenario machinery (CAN fault injector, scenario bring-up cancestry-hw-fault.resc, orchestration and the off-tree CAN fault driver) is delivered by https://github.com/mfreazer/CANcestry-/issues/62 (H-10), but no executed T2 run backs this artifact yet: like the H-07 retention foundation, the first executing run is produced by hw/virtual-bench/scenarios/t2_busoff_001.py on the T2 toolchain image (hw-nightly t2-virtual-bench job) and must reproduce this manifest's ledger chain deterministically - plus a second byte-identical run via --check - before any passing disposition may be claimed.",
+  "provisional": true,
+  "requirement_id": "HW-FR-003",
+  "scenario": {
+    "duration_us": 50000,
+    "fault": "bus_off",
+    "inject_at_us": 10000,
+    "master_step_us": 100,
+    "method": "virtual_bench",
+    "seed": "123456789"
+  },
+  "schema_version": "0.1.0",
+  "source_hashes": {
+    "ci/docker/Dockerfile.t2": "sha256:79b533163dc4919f4cd45f9581c0a119a150b15efde6061e5747160a2c09cf85",
+    "ci/docker/renode-1.16.1.pin": "sha256:091ef14d0677440408bc2436530442e4fea1690439b1827a7bd08d495c6b44f1",
+    "docs/hw/tool-qualification.md": "sha256:ae9c19571f123b3444b02015efb7e05fb67eb0813bb46775facca208f233ee96",
+    "docs/hw/virtual-bench-plan.md": "sha256:818a00bad332e853136e4cbc0ae1065b5dae8649531697a108ccf0a292457cfd",
+    "hw/virtual-bench/firmware/build_firmware.sh": "sha256:569ef7ffa5c70db96165b7da86cba2e8aac407ebb650244c189552aac903fb6c",
+    "hw/virtual-bench/firmware/can_fault.c": "sha256:3d2258044d6a9dbe727dc95da8c097559beaef4f9c09818e699cfb46c1d3508d",
+    "hw/virtual-bench/firmware/startup.s": "sha256:8182c84a3c7028723006271fa0678f8c54bd0040d0476fc3ee2d93ca1e9e5606",
+    "hw/virtual-bench/fmi_bridge.py": "sha256:d1ddfeea57ab68df5ec1f0e4fcfc75faa3f9ef4a5bac5e9b93ae9bf138d0b13d",
+    "hw/virtual-bench/renode/can_fault_injector.py": "sha256:c7fa605720a52f696878a27ce8a7a660c8ca0146cd0374c37069ec74978090d2",
+    "hw/virtual-bench/renode/cancestry-hw-fault.resc": "sha256:812a8bbc37332ed90d7fb320cc17d863ce34c828038087b85529bca56631f2be",
+    "hw/virtual-bench/renode/stm32g474-cancestry.repl": "sha256:ac2cf1bf1cc1e6a1f5c7bfee3d21e54a7f1954db78c31b974b69143382ea970d",
+    "hw/virtual-bench/scenarios/t2_busoff_001.py": "sha256:b8947125f0e19584a1aceab5db978ff17cc1c871df1e24794758d086b33fa0b7",
+    "hw/virtual-bench/t2_fault_common.py": "sha256:8f6e11604632dfb95fc69a151bff4744d255f52accf845a1129c38276bcb27c4",
+    "hw/virtual-bench/test_t2_busoff.py": "sha256:01a46ed4af99470cc3550f656018bac51e65a5201cd4607d36f8d42a7f8fc448",
+    "schemas/hw/hw-t2-fault-evidence-0.1.0.schema.json": "sha256:bad738ede32c3173ed81f73f7614f90ffdfc9600e5b92901a6822044c03329d5",
+    "schemas/hw/hw-traceability-0.1.0.schema.json": "sha256:5d2e23704dd7b2125b534fd85f1930cca12df40b8d321e2cc8822aac0808afeb"
+  },
+  "status": "pending",
+  "tool_pins": {
+    "can_fault_injector": "0.1.0",
+    "python": ">=3.10",
+    "renode": "1.16"
+  },
+  "trace": {
+    "artifact": "build/hw/t2_busoff_001_trace.csv (per-run artifact, gitignored)",
+    "columns": "time_us,bus_state,fdcan1_psr,alive_counter",
+    "hashing": "sha256 of the trace CSV, measured invariants and measured tool versions recorded in build/hw/t2_busoff_001.runlog.json"
+  }
+}
