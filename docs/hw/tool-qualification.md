@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Tool Qualification Plan and Evidence |
-| **Version** | 0.2.9 |
-| **Status** | Draft — H-09/H-10, pending QA and Human Reviewer approval |
+| **Version** | 0.2.10 |
+| **Status** | Draft — H-11, pending QA and Human Reviewer approval |
 | **Owner** | System Engineer |
 | **Approver** | QA Lead |
 | **Last Review** | 2026-09-24 |
@@ -46,6 +46,7 @@ gap fails closed. `-` represents an empty tool gap for TCL1 only.
 | fmeda | `tools/fmeda-calculator.py` (H-09, issue #56): ISO 26262-5:2018 Annex C metric calculator (SPFM, LFM, PMHF, MTBF) over `hw/fmeda/fmeda-analysis.csv` and `hw/bom/fit-database.json`. A defect can silently misstate a hardware architectural metric in `docs/hw/fmeda.md` and the reliability figures of `docs/hw/rams-summary.md`, so it can introduce an error into a safety-related work product (TI2). Detection (§4.4): exact rational arithmetic with fixed half-up rendering, an independent Annex C oracle, the public TI SLYP685 n = 1..4 teaching example and the Chalmers 2023 aggregate example reproduced to publication precision, byte-identical output across runs, and the `--check` drift gate on the CSV's derived columns and the generated document blocks (TD2, not TD1: the ISO 26262-5:2018 Annex E worked example is not publicly available and is not reproduced). | TI2 | TD2 | TCL2 | ISO 26262-5:2018 Annex E Table E.1 worked example not reproduced (values not publicly available); qualification rests on the Annex C equations, the exact-arithmetic oracle and two public fixtures (TI SLYP685, Chalmers 2023); the T0 inputs (assumed failure-mode distributions, secondary-tabulated SN 29500 rates) are outside the tool's qualification scope and no evidence artifact may claim ASIL-B metrics from them. |
 | renode | Renode executes the real v1.0.0 firmware ELF on the T2 virtual bench (H-07, issue #53). A platform-model defect (scripted IWDG/RTC_BKP/GPIO/RCC peripheral models, DWT accuracy) can silently alter firmware-visible register or timing semantics, introducing errors into T2 evidence — the ELF cannot be re-derived independently, so detection rests on golden-trace/vendor-reference correlation which does not exist yet. | TI2 | TD2 | TCL2 | Renode peripheral models (IWDG, GPIO, RTC_BKP, DWT) are scripted emulations, not vendor-validated silicon models: platform-model bugs can alter firmware-visible timing or register semantics, and this gap is inherited by every T2 evidence artifact; golden-trace correlation against vendor reference behavior and T4 bench correlation are required before any promotion. |
 | can_fault_injector | CAN bus fault injector peripheral (H-10, issue #62): `hw/virtual-bench/renode/can_fault_injector.py`, a scripted `Python.PythonPeripheral` that projects the Bus-Off / CRC fault CONDITION of a shared CAN medium into the FDCAN register scratch and evaluates the ISO 11898-1 128 × 11 recovery sequence as a pure function of emulation virtual time. It cannot inject a passing result into the firmware under test: a defect can at worst mis-project the condition, which either fails to produce the scenario events (the runners abort fail-closed before evidence) or is caught by the per-step readback, the injector error register, the injection counters and the HW-T2-BUSOFF-001 contract-lockstep tests — it never fabricates a detection/recovery that the firmware did not perform, so the tool only fails to detect, and misfires are detected (§4.5). | TI1 | TD1 | TCL1 | - |
+| bor_reset_injector | BOR reset injector peripheral (H-11, issue #64): `hw/virtual-bench/renode/bor_reset_injector.py`, a scripted `Python.PythonPeripheral` that models the ACTIVE-LOW NRST reset line (asserted when the brownout is injected, released exactly 100 us later), discards the T2 main-SRAM marker word, sets RCC_CSR.BORRSTF through the bus so the scripted RCC model keeps the reset cause in its retention shadow, and requests the BOR machine reset so the REAL firmware re-enters its reset handler. It cannot inject a passing result into the firmware under test: it never writes the firmware's own slots (main-SRAM observation, recovered code, run-complete, alive counter) and it never fabricates a detection or a recovery. A defect can at worst fail to produce the scenario events (the runners abort fail-closed before evidence) or be caught by the per-access readback, the injector error register, the exactly-one-injection rule and the HW-T2-BROWNOUT-001..011 contract-lockstep tests - it only fails to detect, and misfires are detected (section 4.6). | TI1 | TD1 | TCL1 | - |
 <!-- END TOOL CLASSIFICATION -->
 
 ### 3.1 FMPy reclassification precondition (F1, normative)
@@ -84,6 +85,43 @@ evidence**:
 
 This is a precondition on reuse, not retrospective tool qualification or a
 promotion of the currently pending pulse evidence. OpenModelica remains TCL2.
+
+**H-11 disposition (issue #64, v0.2.10): brownout/BOR configuration.** The
+brownout scenario steps a SECOND FMU (the BOR plant, `CancestryLib.Power.BOR`)
+with the same pinned FMPy 0.3.24 CoSimulation path, and its outputs are **not**
+oracle-checked: no registered oracle covers the BOR threshold behaviour, the
+hysteresis release gate or the reset timing (issue #64: oracle none), and the
+retention-domain branch is the only part OR-001 witnesses (analytically, at
+T1). Per this section's precondition the bounded TD1 argument therefore does
+**not** extend to the BOR configuration: BOR FMU output may be consumed only
+inside the pending / CL0 disposition, and a future passing claim built on it
+requires (i) a registered oracle validating that output, or an explicit
+FMPy TCL2/TCL3 reclassification for this configuration, (ii) this section and
+the controlled table updated, and (iii) re-issued hashes and gaps per item 3
+below. The scenario's own invariants are ordering, liveness and register-state
+checks over emulation virtual time (the injector stamps and the platform
+hooks): none of them is an FMPy output claim.
+
+**FMI lifecycle observation (H-11, v0.2.10).** The OpenModelica FMU runtime
+accepts `fmi2Terminate` only in `modelEventMode`/`modelContinuousTimeMode`
+(`SimulationRuntime/fmi/export/openmodelica/fmu2_model_interface.c.inc`:
+`fmi2Terminate` -> `invalidState(..., modelEventMode|modelContinuousTimeMode,
+~0)`) and returns `fmi2Error` otherwise: the terminate status is decided by
+the runtime's internal state machine, not by the simulated values. The T1
+brownout check (`hw/tests/test_bor_physics.py`) and the brownout runner
+therefore treat it as **non-value-carrying**: the FMU's outputs are read and
+asserted first (every recorded microsecond is compared against the reference
+implementation) and the terminate outcome is recorded and printed rather than
+allowed to invalidate a verified trajectory. The pinned runtime emits its
+failure-level log only when debug logging is switched on, and in dispatch
+36036288651 enabling `loggingOn` changed the runtime's **status reporting**
+for the collapse-boundary step (the identical `doStep` call reported
+`fmi2Error` with logging on and `OK` with logging off, while the FMU's values
+stayed correct at every sampled instant). The value guarantee is therefore the
+sample-by-sample comparison, not the log; this is a documented tool behaviour,
+not a modelling deviation, and it is inherited by any future FMU that reuses
+this lifecycle code. Re-verify both observations if the OpenModelica pin or
+the FMU build shape changes.
 
 **H-06 disposition (issue #49, v0.2.6): pulse 5a configuration.** The H-06
 selector-8 branch recompiles the `PulseISO7637_2` FMU (new equation branch and
@@ -409,6 +447,71 @@ FMU/configuration/version, or a future use. Those uses remain subject to the
   accuracy (deliberately unexercised), multi-channel / CRC-storm / thermal
   scenarios (issue #62: no scope creep), and all T4 physical correlation.
 
+### 4.6 BOR plant + reset injector: brownout scenario, qualification pending
+
+- Requirement: HW-SF-002 (sub-events (ii) main-rail brownout to BOR level 3
+  and (iii) main-rail removal from BOR to 0 V - the reset side), HW-SF-004
+  (retention write before the rail reaches the BOR level). Oracle: **none**
+  (issue #64; HwAGENTS.md rule 3 is satisfied by the honest sim-pending / CL0
+  disposition, never by an invented oracle id).
+- Configuration (H-11, issue #64): Renode executes the real v1.0.0 firmware
+  ELF (off-tree driver `hw/virtual-bench/firmware/bor_brownout.c`, built with
+  `CANCESTRY_T2_DRIVER=bor_brownout`) on the UNCHANGED H-07 platform plus the
+  `bor_reset_injector` scripted peripheral at the issue-pinned 0x40001000
+  (NRST active-low with a 100 us pulse, main-SRAM marker discard,
+  RCC_CSR.BORRSTF, BOR machine reset), brought up by
+  `cancestry-hw-bor.resc`. The plant is the BOR FMU - FMI 2.0 CoSimulation,
+  built headless by the pinned OpenModelica 1.24 from
+  `hw/model/CancestryLib/Power/BOR.mo` under
+  `hw/tests/cases/bor_brownout_001.simcase.json` - stepped by
+  `t2_bor_common.py` over the H-07 100 us master / 1 us FMU contract; the
+  MODELLED BOR assertion drives the injector command, so the injection is a
+  plant-driven event and not a scenario constant that happens to be 10 ms.
+- The BOR Modelica model as a TCL2-governed artifact (issue #64 deliverable
+  13: "BOR Modelica model as TCL2"). The model is not a tool, so it is not a
+  controlled-table row: its PRODUCER (`openmodelica`, TCL2) is, and the
+  producer gap is inherited verbatim by every artifact that pins the BOR FMU
+  (the pending manifest carries the exact sorted string of
+  `ci/check_hw_traceability.py` rule 8). The model-level hazard the issue
+  names - a physics-modelling bug producing a plausible brownout trajectory -
+  is recorded as this section's validation gap: no independent oracle
+  witnesses the BOR threshold behaviour, the hysteresis release gate or the
+  reset timing, and the hysteresis value and the resumption latency are
+  declared engineering fixtures. The model may therefore only ever be consumed
+  pending / CL0; the T1 regressions (`hw/tests/test_bor_physics.py`
+  HW-PHYS-BOR-001..008 plus the toolchain FMU check HW-SIM-BOR-001) bound the
+  behaviour without qualifying it.
+- Documented deviations from the issue's wording: (a) the evidence hash chain
+  is FMU + ELF + bridge + injector + trace (the reset line is a platform
+  extension, so its hash joins the chain); (b) the issue's "symbol hook on the
+  reset handler" is realized on the firmware's post-reset BOR detection entry
+  (`t2_bor_detect`) because the v1.0.0 ELF ships no BOR classification in its
+  reset handler; (c) the production retention drain
+  (`cancestry_watchdog_restore_retained_fault`) is deliberately NOT exercised,
+  so the preservation claim is asserted from the RTC_BKP0R readback itself;
+  (d) the NRST release stamp is the MODELLED instant (assertion + 100 us) that
+  the lazy evaluation applies at the first access at or after it, never the
+  detecting poll time.
+- Status: **no executed T2 brownout run exists.** The committed artifact is a
+  pending manifest (pass=false, CL0, `oracle_id` "none"); the ledger row
+  `(HW-SF-002, virtual_bench)` stays `sim-pending`. The scenario machinery is
+  host-tested offline (HW-T2-BROWNOUT-001..011), which is not T2 evidence.
+- Acceptance for a future executed run: the hw-nightly T2 job runs the
+  scenario twice (`--check`) against the committed artifact; a passing run
+  captures `retention_write < bor_detect < recovery`, NRST asserted for
+  exactly 100 us, the modelled assertion equal to the injection stamp, the
+  retained code preserved with main SRAM discarded, RCC_CSR.BORRSTF set with
+  IWDGRSTF clear, and `run_complete = 1` - plus the section 3.1 disposition
+  above. Even a green pair stays **sim-pending / CL0**: promotion is gated on
+  HS-01/HS-02 plus a human safety reviewer (HwAGENTS.md rule 6), which H-11
+  does not touch.
+- Not covered: the BOR cell behaviour on silicon (threshold spread over
+  temperature, option-byte configuration, backup-domain switching), real
+  brownout shapes / finite rail fall time / repeated brownouts, the
+  retention-drain path, DWT accuracy (deliberately unexercised), the CAN and
+  thermal scenarios (issue #64: no scope creep), and all T4 physical
+  correlation.
+
 ## 5. Validation-gap inheritance (normative)
 
 The hardware ledger `hw/tests/traceability.csv` adds
@@ -445,6 +548,7 @@ OR-002 has no qualified passing claim. Oracle/model gaps remain in
 
 | Version | Date | Change |
 |---|---|---|
+| 0.2.10 | 2026-09-24 | H-11 #64: `bor_reset_injector` classified TCL1 (TI1/TD1) for the bounded reset-line role; the BOR Modelica model recorded as a TCL2-governed artifact (openmodelica gap inherited verbatim, plus the model-level no-oracle gap in the new §4.6); §3.1 disposition for the new T2 brownout configuration (BOR FMU output is NOT inside the bounded FMPy TD1 argument - no passing claim may be consumed from it). Hash cascade re-issued for every evidence artifact and visual pinning this document. No qualification promotion; the brownout row stays sim-pending / CL0. |
 | 0.2.9 | 2026-09-24 | H-10 #62: `can_fault_injector` classified TCL1 (TI1/TD1) for the bounded shared-medium fault-projection role; §3.1 disposition for the new T2 CAN fault scenarios (no FMPy/FMU — precondition not triggered; renode gap inherited verbatim; pending-only consumption at CL0); §4.5 qualification-pending record incl. the documented deviations (ELF+bridge+injector+trace hash chain, detection/recovery function hooks, MALFORMED_FRAME mapping). Hash cascade re-issued for every evidence artifact pinning this document. No qualification promotion; Bus-Off/CRC rows stay sim-pending / CL0. |
 | 0.2.8 | 2026-09-24 | H-09 #56: fmeda classified TCL2 (TI2/TD2) for `tools/fmeda-calculator.py` with the declared Annex E Table E.1 gap; §4.4 qualification record (exact-arithmetic Annex C oracle, TI SLYP685 n = 1..4 and Chalmers 2023 public fixtures reproduced to publication precision, byte-identical output, `--check` drift gate). Hash cascade re-issued for every evidence artifact pinning this document. No qualification promotion of any other tool; no ASIL-B metric claim. |
 | 0.2.7 | 2026-09-22 | H-07 #53: renode classified TCL2 (TI2/TD2) with the scripted-peripheral validation gap inherited by every T2 artifact; fmi_bridge added as TCL1 (TI1/TD1) for the bounded deterministic-master role; §3.1 disposition for the T2 configuration (FMI 3.0 Holdup build, coupled co-simulation) recorded — pending-only consumption in this PR; §4.3 T2 foundation record added. No executed T2 run exists; no qualification promotion. |

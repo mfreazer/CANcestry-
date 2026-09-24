@@ -1,5 +1,5 @@
 requirement_id,method,capella_element_id,credibility_level,oracle_id,required_cl,status,evidence,evidence_sha256,inherited_validation_gap
-HW-SF-002,sim,la-comp-retentiondomain,CL2,OR-001,CL3,"passing(sim,CL2,provisional)",hw/tests/evidence/holdup_001.json,sha256:4a9fff0f14474c2ea2d3e4fc50944ab7a2cdd794039c4c1859f7a91e87f1f2f7,openmodelica: Compiler semantics outside independently validated output remain unqualified; OR-001/OR-002 regressions do not cover all translation and solver behavior.
+HW-SF-002,sim,la-comp-retentiondomain,CL2,OR-001,CL3,"passing(sim,CL2,provisional)",hw/tests/evidence/holdup_001.json,sha256:4d65525f81766e63910a139053b5a4ce7766cb802274ff6444e2af2d0d9af783,openmodelica: Compiler semantics outside independently validated output remain unqualified; OR-001/OR-002 regressions do not cover all translation and solver behavior.
 HW-SF-002,virtual_bench,la-comp-retentiondomain,CL0,OR-001,CL3,sim-pending,,,
 HW-SF-002,bench,la-comp-retentiondomain,CL0,,CL3,bench-pending,,,
 HW-FR-004,virtual_bench,la-comp-powersupervisor,CL0,OR-002,CL3,sim-pending,,,

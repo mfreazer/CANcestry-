@@ -95,6 +95,12 @@
 #                                        0 asserted) - STATE word, not an event
 #       0x60000108  sram_canary_lost     injector: 1 once the main-SRAM marker
 #                                        word was discarded by the reset
+#       0x6000010C  injector_error       injector: persistent command status
+#                                        (0 accepted; 1 unknown command;
+#                                        2 second-injection rejection) - a
+#                                        command status must outlive the access
+#                                        that produced it, so the orchestrator
+#                                        can read it back fail-closed
 #
 #     One writer per slot (reviewable): the injector owns the two stamps, the
 #     level and the SRAM-lost flag; the .resc symbol hooks own the two event
@@ -184,6 +190,7 @@ BOR_SLOT_INJECT_US = 0x60000070
 BOR_SLOT_NRST_RELEASE_US = 0x60000074
 BOR_SLOT_NRST_LEVEL = 0x60000104
 BOR_SLOT_SRAM_LOST = 0x60000108
+BOR_SLOT_ERROR = 0x6000010C
 
 
 # ---------------------------------------------------------------------------
@@ -194,14 +201,16 @@ BOR_SLOT_SRAM_LOST = 0x60000108
 # instant (assertion + 100 us) - the pulse is a scenario contract, not a
 # poll-loop artifact.
 # ---------------------------------------------------------------------------
-bor_error = BOR_ERR_NONE
-
 if not request.IsInit:
     bor_now_us = int(round(monitor.Machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1000000.0))
     bor_sysbus = monitor.Machine['sysbus']
 
     bor_inject_us = bor_sysbus.ReadDoubleWord(BOR_SLOT_INJECT_US)
     bor_release_us = bor_sysbus.ReadDoubleWord(BOR_SLOT_NRST_RELEASE_US)
+    # Persistent command status (0 = accepted): kept in the trace area so it
+    # outlives the access that produced it and the orchestrator can read it
+    # back over the window whatever the outcome was.
+    bor_error = bor_sysbus.ReadDoubleWord(BOR_SLOT_ERROR)
 
     # --- command acceptance (USER requests and window writes) ---------------
     # A USER request carries the command in request.Value (ControlWrite /
@@ -218,6 +227,7 @@ if not request.IsInit:
             if bor_inject_us != 0:
                 # Fail-closed: exactly one brownout per scenario.
                 bor_error = BOR_ERR_ALREADY_INJECTED
+                bor_sysbus.WriteDoubleWord(BOR_SLOT_ERROR, bor_error)
                 self.NoisyLog("bor_reset_injector: brownout already injected at %d us - second injection rejected (fail-closed)" % bor_inject_us)
             else:
                 bor_inject_us = bor_now_us
@@ -246,6 +256,8 @@ if not request.IsInit:
             bor_sysbus.WriteDoubleWord(BOR_SLOT_NRST_RELEASE_US, 0)
             bor_sysbus.WriteDoubleWord(BOR_SLOT_NRST_LEVEL, NRST_RELEASED)
             bor_sysbus.WriteDoubleWord(BOR_SLOT_SRAM_LOST, 0)
+            bor_error = BOR_ERR_NONE
+            bor_sysbus.WriteDoubleWord(BOR_SLOT_ERROR, bor_error)
             bor_inject_us = 0
             bor_release_us = 0
             self.NoisyLog("bor_reset_injector: re-armed (preflight state)")
@@ -255,6 +267,7 @@ if not request.IsInit:
             pass  # readouts: nothing to change
         else:
             bor_error = BOR_ERR_UNKNOWN_COMMAND
+            bor_sysbus.WriteDoubleWord(BOR_SLOT_ERROR, bor_error)
             self.NoisyLog("bor_reset_injector: unknown command 0x%x (fail-closed, reset state unchanged)" % bor_command)
 
     # --- NRST pulse release (lazy, pure function of emulation time) --------

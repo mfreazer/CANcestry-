@@ -26,6 +26,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -135,6 +136,11 @@ def test_contract_constants_match_all_sources():
     assert "NRST_RELEASED = 0x1" in injector
     assert "NRST_ASSERTED = 0x0" in injector
     assert t2bc.NRST_RELEASED == 0x1 and t2bc.NRST_ASSERTED == 0x0
+    # The command status is PERSISTENT (trace-area state word), so the
+    # orchestrator can read it back over the window fail-closed whatever the
+    # outcome of the command was: every status branch must store it.
+    assert injector.count("WriteDoubleWord(BOR_SLOT_ERROR") >= 3
+    assert "BOR_SLOT_ERROR = 0x6000010C" in injector
 
     # Trace-area slots (commons vs injector vs .resc vs the .repl contract).
     for injector_name, commons_name, address in (
@@ -145,9 +151,10 @@ def test_contract_constants_match_all_sources():
         assert getattr(t2bc, commons_name) == address, commons_name
         assert ("%s = 0x%08X" % (injector_name, address)) in injector, \
             injector_name
+    assert t2bc.SLOT_BOR_INJECTOR_ERROR == 0x6000010C
     for slot in ("0x60000070", "0x60000074", "0x60000078", "0x6000007C",
                  "0x60000080", "0x60000084", "0x60000088", "0x6000008C",
-                 "0x60000104", "0x60000108"):
+                 "0x60000104", "0x60000108", "0x6000010C"):
         assert slot in resc, "the .resc must initialize %s" % slot
         assert slot.lower() in platform.lower(), (
             "the platform contract must document %s" % slot)
@@ -369,7 +376,17 @@ def test_omc_build_script_targets_the_bor_model_as_fmi2_cs():
     script = t2bc.omc_build_script_text()
     assert "CancestryLib.Power.BOR" in script
     assert 'version="2.0"' in script and 'fmuType="cs"' in script
+    assert 'fileNamePrefix="cancestry_t2_bor"' in script, (
+        "the prebuilt FMU path passed by the --check twin follows "
+        "fileNamePrefix; it must stay pinned")
     assert "BOR.mo" in script
+    # The proven retention build shape: package chain loaded explicitly, and
+    # every loaded path must exist (the hw-fast dispatch of the sibling T1
+    # check failed once on a wrong package path - assert it offline here).
+    assert script.count("loadFile(") == 3
+    assert "loadModel(Modelica)" in script
+    for path in re.findall(r'loadFile\("([^"]+)"\)', script):
+        assert Path(path).is_file(), path
     assert t2bc.MODEL_PATH.is_file()
     assert t2bc.SIM_CASE_PATH.is_file()
     case = json.loads(t2bc.SIM_CASE_PATH.read_text(encoding="utf-8"))
@@ -426,7 +443,7 @@ def test_passing_form_carries_the_issue_hash_chain_and_invariants():
                                      _bor_summary(), runlog)
     validator.validate(document)
     assert document["status"] == "passing" and document["pass"] is True
-    assert document["credibility_level"] == "CL1"
+    assert document["credibility_level"] == "CL0"  # issue #64: no oracle
     assert set(document["hashes"]) == {"bridge", "elf", "fmu", "injector",
                                        "trace"}
     assert document["invariants"]["retention_before_brownout"] is True

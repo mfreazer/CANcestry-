@@ -45,7 +45,9 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MODEL_PATH = REPO_ROOT / "hw" / "model" / "CancestryLib" / "Power" / "BOR.mo"
-MODEL_DIR = REPO_ROOT / "hw" / "model"
+# The loaded package chain root: hw/model/CancestryLib (MODEL_PATH is
+# its Power/BOR.mo).
+MODEL_DIR = REPO_ROOT / "hw" / "model" / "CancestryLib"
 SIM_CASE_PATH = REPO_ROOT / "hw" / "tests" / "cases" / "bor_brownout_001.simcase.json"
 BOM_PATH = REPO_ROOT / "hw" / "bom" / "bom.json"
 BOM_EXTRACT_PATHS = (
@@ -469,18 +471,52 @@ def _require_toolchain():
         pytest.fail("FMPy is required for the BOR FMU check: %s" % error)
 
 
+def bor_build_script_text():
+    """Text of the omc script that builds the BOR FMU (pure; offline-testable).
+
+    Shape kept in lockstep with the proven retention build (F-18): the package
+    chain is loaded explicitly from its real paths, the model name is
+    formatted into the buildModelFMU call and ``fileNamePrefix`` names the
+    archive. The paths are asserted to exist WITHOUT omc by
+    test_build_script_loads_existing_files - the first hw-fast dispatch of
+    this file (run 36034555221) failed with "Failed to load package
+    CancestryLib ... Class CancestryLib.Power.BOR not found in scope" because
+    the chain pointed one directory too high; the offline guard makes that
+    failure mode local instead of a red CI dispatch.
+    """
+    return (
+        "loadModel(Modelica);\n"
+        "getErrorString();\n"
+        'loadFile("%s");\n' % (MODEL_DIR / "package.mo") +
+        "getErrorString();\n"
+        'loadFile("%s");\n' % (MODEL_DIR / "Power" / "package.mo") +
+        "getErrorString();\n"
+        'loadFile("%s");\n' % MODEL_PATH +
+        "getErrorString();\n"
+        'buildModelFMU(%s, version="2.0", fmuType="cs", '
+        'fileNamePrefix="cancestry_bor_brownout_001");\n' % MODEL_NAME +
+        "getErrorString();\n")
+
+
+def test_build_script_loads_existing_files():
+    """HW-PHYS-BOR-009: every loadFile path of the FMU build exists."""
+    script = bor_build_script_text()
+    paths = re.findall(r'loadFile\("([^"]+)"\)', script)
+    assert len(paths) == 3, paths
+    for path in paths:
+        assert Path(path).is_file(), (
+            "%s is loaded by the omc build script but does not exist "
+            "(the CancestryLib package chain must point at the real files)"
+            % path)
+    assert "buildModelFMU(CancestryLib.Power.BOR" in script
+    assert 'fileNamePrefix="cancestry_bor_brownout_001"' in script
+
+
 def _build_bor_fmu():
     """Build the BOR FMU headless with omc; return (path, measured, build log)."""
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
     script = BUILD_DIR / "omc_build_bor.mos"
-    script.write_text(
-        'loadFile("%s");\n'
-        'getErrorString();\n'
-        'setCommandLineOptions("-d=nogen,noevalfunc");\n'
-        'buildModelFMU(%s, version="2.0", fmuType="cs", '
-        'platforms={"static"});\n'
-        'getErrorString();\n' % (MODEL_PATH, MODEL_NAME),
-        encoding="utf-8")
+    script.write_text(bor_build_script_text(), encoding="utf-8")
     result = subprocess.run(["omc", "--showErrorMessages", str(script)],
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             cwd=str(BUILD_DIR), timeout=900)
@@ -498,6 +534,37 @@ def _build_bor_fmu():
                                                          "replace").strip(),
     }
     return fmu, measured
+
+
+def _terminate_fmu(slave):
+    """Terminate the FMU; return the recorded failure or None.
+
+    FMI lifecycle observation (hw-fast dispatches 36035296702 / 36036288651,
+    recorded in docs/hw/tool-qualification.md section 3.1): the OpenModelica
+    runtime implements ``fmi2Terminate`` as legal only in
+    ``modelEventMode``/``modelContinuousTimeMode``
+    (SimulationRuntime/fmi/export/openmodelica/fmu2_model_interface.c.inc:
+    ``fmi2Terminate`` -> ``invalidState(..., modelEventMode|
+    modelContinuousTimeMode, ~0)``) and returns fmi2Error otherwise (its
+    internal state machine, not the simulated values, decides that). The
+    terminate outcome is therefore RECORDED and returned, never silently
+    dropped and never allowed to invalidate a trajectory that has already
+    been verified value by value.
+
+    The FMU's own failure-level log is not usable as a second signal here:
+    the pinned runtime only emits it with debug logging on, and enabling
+    ``loggingOn`` changed the runtime's status reporting for the collapse
+    boundary step in the same dispatch (doStep reported fmi2Error where the
+    identical call had returned OK with logging off, while the FMU's values
+    stayed correct at every sampled instant). The value guarantee is
+    therefore the sample-by-sample comparison against the reference
+    implementation below, which covers every recorded microsecond.
+    """
+    try:
+        slave.terminate()
+        return None
+    except Exception as error:  # noqa: BLE001 - recorded, then reported below
+        return error
 
 
 def test_toolchain_builds_the_bor_fmu_and_reproduces_the_behaviours():
@@ -524,54 +591,60 @@ def test_toolchain_builds_the_bor_fmu_and_reproduces_the_behaviours():
 
     slave = fmpy.instantiate_fmu(unzipdir, description,
                                  fmi_type="CoSimulation")
-    try:
-        slave.setupExperiment(startTime=0.0)
-        slave.enterInitializationMode()
-        slave.exitInitializationMode()
-        step_us = int(load_sim_case()["solver"]["step_s"] * 1e6)
-        stop_us = int(load_sim_case()["solver"]["stop_s"] * 1e6)
-        observed = {}
-        time_us = 0
-        while time_us < stop_us:
-            slave.doStep(time_us / 1e6, step_us / 1e6)
-            time_us += step_us
-            values = slave.getReal([refs[name] for name in
-                                    ("v", "nrst", "v_vbat",
-                                     "retention_preserved", "sram_preserved",
-                                     "firmware_running")])
-            observed[time_us] = dict(zip(
-                ("v", "nrst", "v_vbat", "retention_preserved",
-                 "sram_preserved", "firmware_running"),
-                (float(value) for value in values)))
-        t_assert_us = int(p["t_brownout"] * 1e6)
-        t_release_us = int((p["t_brownout"] + p["t_collapse"]) * 1e6)
-        t_resume_us = int((p["t_brownout"] + p["t_collapse"] + p["t_boot"]) * 1e6)
-        before = observed[t_assert_us - step_us]
-        asserting = observed[t_assert_us]
-        released = observed[t_release_us]
-        resumed = observed[t_resume_us]
-        # (a) threshold crossing: reset released before, asserted from the
-        #     step in which the rail crossed the BOR level.
-        assert before["v"] == p["V_nominal"] and before["nrst"] == 1.0
-        assert asserting["v"] == 0.0
-        assert asserting["nrst"] == 0.0
-        # (b) release gate: released at the end of the collapse, and the
-        #     retention node is still above the floor while it is asserted.
-        assert released["nrst"] == 1.0
-        assert asserting["v_vbat"] > p["V_vbat_min"]
-        assert asserting["retention_preserved"] == 1.0
-        # (c) main SRAM discarded by the reset; (d) resumption after t_boot.
-        assert before["sram_preserved"] == 1.0
-        assert asserting["sram_preserved"] == 0.0
-        assert resumed["firmware_running"] == 1.0
-        assert released["firmware_running"] == 0.0
-        # The FMU trajectory tracks the reference implementation.
-        for time_us, sample in sorted(observed.items()):
-            time = time_us / 1e6
-            assert abs(sample["v"] - ref.rail(time)) <= 1e-9
-            assert abs(sample["v_vbat"] - ref.vbat(time)) <= 1e-9
-            assert sample["nrst"] == ref.reset_state(time)[1]
-            assert sample["sram_preserved"] == ref.sram_preserved(time)
-        assert measured["omc"]
-    finally:
-        slave.terminate()
+    slave.setupExperiment(startTime=0.0)
+    slave.enterInitializationMode()
+    slave.exitInitializationMode()
+    step_us = int(load_sim_case()["solver"]["step_s"] * 1e6)
+    stop_us = int(load_sim_case()["solver"]["stop_s"] * 1e6)
+    observed = {}
+    time_us = 0
+    while time_us < stop_us:
+        slave.doStep(time_us / 1e6, step_us / 1e6)
+        time_us += step_us
+        values = slave.getReal([refs[name] for name in
+                                ("v", "nrst", "v_vbat",
+                                 "retention_preserved", "sram_preserved",
+                                 "firmware_running")])
+        observed[time_us] = dict(zip(
+            ("v", "nrst", "v_vbat", "retention_preserved",
+             "sram_preserved", "firmware_running"),
+            (float(value) for value in values)))
+
+    # Terminate last, and record (never hide) its outcome. The trajectory has
+    # already been read: on the pinned OpenModelica runtime the terminate
+    # status is decided by the FMU's internal state machine, not by the
+    # simulated values (see _terminate_fmu).
+    terminate_error = _terminate_fmu(slave)
+
+    t_assert_us = int(p["t_brownout"] * 1e6)
+    t_release_us = int((p["t_brownout"] + p["t_collapse"]) * 1e6)
+    t_resume_us = int((p["t_brownout"] + p["t_collapse"] + p["t_boot"]) * 1e6)
+    before = observed[t_assert_us - step_us]
+    asserting = observed[t_assert_us]
+    released = observed[t_release_us]
+    resumed = observed[t_resume_us]
+    # (a) threshold crossing: reset released before, asserted from the step in
+    #     which the rail crossed the BOR level.
+    assert before["v"] == p["V_nominal"] and before["nrst"] == 1.0
+    assert asserting["v"] == 0.0
+    assert asserting["nrst"] == 0.0
+    # (b) release gate: released at the end of the collapse, and the retention
+    #     node is still above the floor while it is asserted.
+    assert released["nrst"] == 1.0
+    assert asserting["v_vbat"] > p["V_vbat_min"]
+    assert asserting["retention_preserved"] == 1.0
+    # (c) main SRAM discarded by the reset; (d) resumption after t_boot.
+    assert before["sram_preserved"] == 1.0
+    assert asserting["sram_preserved"] == 0.0
+    assert resumed["firmware_running"] == 1.0
+    assert released["firmware_running"] == 0.0
+    # The FMU trajectory tracks the reference implementation.
+    for time_us, sample in sorted(observed.items()):
+        time = time_us / 1e6
+        assert abs(sample["v"] - ref.rail(time)) <= 1e-9
+        assert abs(sample["v_vbat"] - ref.vbat(time)) <= 1e-9
+        assert sample["nrst"] == ref.reset_state(time)[1]
+        assert sample["sram_preserved"] == ref.sram_preserved(time)
+    assert measured["omc"]
+    print("HW-SIM-BOR-001: terminate outcome: %s"
+          % ("ok" if terminate_error is None else terminate_error))

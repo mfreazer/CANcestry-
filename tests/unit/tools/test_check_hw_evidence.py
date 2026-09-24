@@ -637,24 +637,26 @@ def test_cli_defaults_to_the_current_directory(tmp_path, monkeypatch, capsys):
 
 
 def test_repository_manifest_registers_only_pending_placeholder_views():
-    """H-06 (#49)/H-07 (#53)/H-10 (#62): every committed view is a pending placeholder.
+    """H-06 (#49)/H-07 (#53)/H-10 (#62)/H-11 (#64): committed views are pending placeholders.
 
     Supersedes the #36 commit-3 snapshot ("the committed manifest is empty and
-    green"), the H-06 single-view snapshot and the H-07 two-view snapshot:
-    H-10 registers the pending t2_busoff_001 / t2_crc_001 placeholders next to
-    the pending pulse_5a_001 and t2_retention_001 ones. No passing plot may
-    appear, every entry must be structurally complete, and the manifest
-    hashes must match the committed bytes.
+    green"), the H-06 single-view snapshot, the H-07 two-view snapshot and the
+    H-10 four-view snapshot: H-11 registers the pending t2_brownout_001
+    placeholder next to the pending pulse_5a_001, t2_retention_001,
+    t2_busoff_001 and t2_crc_001 ones. No passing plot may appear, every entry
+    must be structurally complete, and the manifest hashes must match the
+    committed bytes.
     """
     manifest = json.loads((REPO_ROOT / MANIFEST_REL).read_text(encoding="utf-8"))
     assert manifest["schema_version"] == "0.1.0"
-    expected_plots = ["pulse_5a_001", "t2_busoff_001", "t2_crc_001",
-                      "t2_retention_001"]
+    expected_plots = ["pulse_5a_001", "t2_brownout_001", "t2_busoff_001",
+                      "t2_crc_001", "t2_retention_001"]
     assert [entry["plot_id"] for entry in manifest["entries"]] == expected_plots
     for entry in manifest["entries"]:
         assert sorted(entry) == sorted(check_hw_evidence.ENTRY_KEYS)
     requirements = {
         "pulse_5a_001": "HW-FR-004",
+        "t2_brownout_001": "HW-SF-002",
         "t2_busoff_001": "HW-FR-003",
         "t2_crc_001": "HW-FR-003",
         "t2_retention_001": "HW-SF-002",

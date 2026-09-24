@@ -146,6 +146,9 @@
 //               (1 released, 0 asserted) - STATE word, not an event slot
 //   0x60000108  sram_canary_lost    bor_reset_injector.py: 1 once the BOR
 //               reset discarded the main-SRAM marker word
+//   0x6000010C  injector_error       bor_reset_injector.py: persistent
+//               command status (0 accepted, 1 unknown command, 2 second
+//               injection rejected) - STATE word, not an event slot
 //
 // The main-SRAM marker word itself lives in the SRAM region at 0x20017000
 // (T2-declared: inside the 96 KiB RAM of cancestry_baremetal.ld, outside the

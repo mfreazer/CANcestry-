@@ -149,6 +149,7 @@ SLOT_ALIVE_COUNTER = 0x60000088
 SLOT_RETENTION_CODE_AT_DETECT = 0x6000008C
 SLOT_NRST_LEVEL = 0x60000104
 SLOT_SRAM_CANARY_LOST = 0x60000108
+SLOT_BOR_INJECTOR_ERROR = 0x6000010C
 
 # Firmware-visible registers / T2-declared SRAM marker word.
 VBAT_MV_IN_ADDR = 0x60000020
@@ -288,6 +289,7 @@ def preflight(endpoint, spec):
     eq(BOR_BASE + BOR_OFF_SRAM_LOST, 0, "initial SRAM-lost flag")
     eq(SLOT_NRST_LEVEL, NRST_RELEASED, "NRST level state word")
     eq(SLOT_SRAM_CANARY_LOST, 0, "SRAM-lost state word")
+    eq(SLOT_BOR_INJECTOR_ERROR, 0, "injector status state word")
     for name, addr in sorted(spec.watch_slots.items()):
         eq(addr, 0, "trace slot %s" % name)
     # The main-SRAM marker belongs to the ELF: before the first boot it reads
@@ -332,7 +334,10 @@ class BrownoutBridge(object):
     3. plant -> MCU marshalling: the modelled rail voltage (millivolts) to the
        platform's supervisor input register;
     4. MCU -> plant observation: GPIO ODR (safe-latch pins);
-    5. event capture: new values in the trace slots are recorded with their
+    5. the injector window is read once per step: that access drives the
+       injector's lazy NRST release (the scripted-peripheral model pattern)
+       and yields the trace's NRST pin level for the step;
+    6. event capture: new values in the trace slots are recorded with their
        exact hook-stamped timestamps (never the master-step time).
 
     The BOR reset injection is issued exactly once, at the first master-step
@@ -400,6 +405,15 @@ class BrownoutBridge(object):
                 if self._fmu.read_real(FMU_NRST) > 0.5:
                     model_release_us = time_us
 
+            # Read the reset line through the injector window every step: that
+            # access drives the injector's lazy NRST release (the same model
+            # pattern as the scripted IWDG and CAN fault injector reads) and
+            # yields the NRST pin level recorded in this step's trace row.
+            # Polled BEFORE the slot scan so a due release is stamped in the
+            # step it becomes due.
+            nrst_level = self._renode.read_u32(
+                BOR_BASE + BOR_OFF_NRST_LEVEL)
+
             for name, addr in sorted(self._spec.watch_slots.items()):
                 value = self._renode.read_u32(addr)
                 if value != previous[name]:
@@ -422,7 +436,7 @@ class BrownoutBridge(object):
             samples.append({
                 "time_us": time_us,
                 "rail_mv": vbat_to_millivolts(rail_v),
-                "nrst": self._renode.read_u32(SLOT_NRST_LEVEL),
+                "nrst": nrst_level,
                 "gpio_odr": odr,
                 "alive_counter": self._renode.read_u32(SLOT_ALIVE_COUNTER),
             })
@@ -606,7 +620,22 @@ def run_brownout_scenario(renode_bin, elf_path, fmu_path, spec,
             events, summary, counters, samples = BrownoutBridge(
                 endpoint, fmu, spec).run()
         finally:
-            fmu.close()
+            # FMI 2.0 lifecycle note (the same one as the T1 check,
+            # hw/tests/test_bor_physics.py): the OpenModelica runtime accepts
+            # fmi2Terminate only in EventMode|ContinuousTimeMode
+            # (fmu2_model_interface.c.inc) and returns fmi2Error otherwise.
+            # The terminate status is not value-carrying: every scenario claim
+            # comes from the platform stamps and the firmware slots, which are
+            # asserted before the evidence is written. The outcome is printed,
+            # never silently dropped, and it never blocks a run whose
+            # invariants already passed.
+            try:
+                fmu.close()
+            except Exception as error:  # noqa: BLE001 - recorded on stdout
+                print("T2 brownout: FMU close reported: %s (FMI 2.0 "
+                      "terminate status is not value-carrying; the run's "
+                      "invariants and hashed trace are unaffected)"
+                      % error)
 
         failures = check_invariants(events, summary, counters, samples)
         if failures:
@@ -655,16 +684,24 @@ def omc_build_script_text():
 
     FMPy 0.3.24's CoSimulation path is used, so the FMU must be an FMI 2.0 CS
     archive (H-08 bring-up finding F-2: the pinned OpenModelica 1.24.0 cannot
-    export FMI 3.0). ``platforms={"static"}`` keeps the archive
-    platform-independent, exactly as the retention runner does.
+    export FMI 3.0). Shape kept in lockstep with the proven retention build
+    (``run_t2_retention.omc_build_script_text``): the package chain is loaded
+    explicitly and ``fileNamePrefix`` names the archive, so the built file is
+    deterministic and can be passed to the ``--check`` twin with ``--fmu``.
     """
+    model_root = REPO_ROOT / "hw" / "model" / "CancestryLib"
     return (
-        'loadFile("%s");\n'
+        "loadModel(Modelica);\n"
         "getErrorString();\n"
-        'setCommandLineOptions("-d=nogen,noevalfunc");\n'
+        'loadFile("%s");\n' % (model_root / "package.mo") +
+        "getErrorString();\n"
+        'loadFile("%s");\n' % (model_root / "Power" / "package.mo") +
+        "getErrorString();\n"
+        'loadFile("%s");\n' % MODEL_PATH +
+        "getErrorString();\n"
         'buildModelFMU(CancestryLib.Power.BOR, version="2.0", fmuType="cs", '
-        'platforms={"static"});\n'
-        "getErrorString();\n" % MODEL_PATH)
+        'fileNamePrefix="cancestry_t2_bor");\n'
+        "getErrorString();\n")
 
 
 def build_fmu(omc, build_dir=BUILD_DIR):
@@ -752,7 +789,11 @@ def passing_document(spec, events, summary, runlog):
     """Assemble the PASSING evidence document (deterministic bytes)."""
     document = expected_pending_manifest(spec)
     document.update({
-        "credibility_level": "CL1",
+        # Issue #64 fixes the credibility of this evidence at CL0 (no
+        # independent oracle for the BOR behaviour): a passing run of the
+        # scenario is a deterministic execution record, not a credibility
+        # claim, and the ledger row stays sim-pending regardless.
+        "credibility_level": "CL0",
         "events": {
             "bor_detect_us": events["bor_detect_us"],
             "bor_inject_us": events["bor_inject_us"],

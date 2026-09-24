@@ -105,7 +105,8 @@ sysbus WriteDoubleWord 0x60000000 0x54324353
 # trace area (a Renode machine reset re-initializes scripted peripherals), so
 # the preflight state is established HERE, once, before the machine runs:
 #
-#   NRST released (1), SRAM marker intact (0), all event stamps 0.
+#   NRST released (1), SRAM marker intact (0), injector status accepted (0),
+#   all event stamps 0.
 #
 # The main-SRAM marker word (0x20017000) is the T2-declared SRAM location the
 # firmware publishes its canary to and the injector discards on the BOR reset.
@@ -121,6 +122,7 @@ sysbus WriteDoubleWord 0x60000088 0x00000000
 sysbus WriteDoubleWord 0x6000008C 0x00000000
 sysbus WriteDoubleWord 0x60000104 0x00000001
 sysbus WriteDoubleWord 0x60000108 0x00000000
+sysbus WriteDoubleWord 0x6000010C 0x00000000
 python "bus = monitor.Machine['sysbus']; _clog.Logger.Info('[cancestry-hw-bor] step7: t2_trace readback=0x%08x (expected 0x54324353) nrst_level=%d (expected 1 released)' % (bus.ReadDoubleWord(0x60000000), bus.ReadDoubleWord(0x60000104)))"
 
 # ---------------------------------------------------------------------
