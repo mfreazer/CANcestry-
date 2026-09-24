@@ -1,0 +1,173 @@
+:name: CANcestry T2 virtual bench - brownout (BOR) scenario
+:description: Bring-up of the STM32G474-class platform model plus the BOR reset injector for the H-11 brownout scenario (issue #64).
+
+# CANcestry T2 virtual bench - brownout bring-up script (H-11, issue #64).
+#
+# Implements: HW-SF-002 sub-events (ii) main-rail brownout to BOR level 3 and
+# (iii) main-rail removal - the reset side of the retention claim - and
+# HW-SF-004 (retention write before the rail reaches the BOR level), against
+# the REAL v1.0.0 firmware (off-tree driver firmware/bor_brownout.c).
+# Governing documents: docs/hw/virtual-bench-plan.md sections 1, 3, 6 and 8.5;
+# docs/hw/tool-qualification.md section 3 (bor_reset_injector, TCL1) and
+# section 4.6; HwAGENTS.md rules 1, 5, 6 and 13.
+#
+# WHY A THIRD .resc (issue #64 constraint 4, "extend, don't modify"): the
+# H-07/H-08 retention bring-up (cancestry-hw.resc) and the H-10 CAN fault
+# bring-up (cancestry-hw-fault.resc) are left byte-identical. This script loads
+# the SAME unmodified platform description (stm32g474-cancestry.repl) and the
+# SAME four scripted register models, and ADDS the BOR reset injector plus the
+# brownout capture hooks.
+#
+# Driven by hw/virtual-bench/scenarios/t2_brownout_001.py (via
+# hw/virtual-bench/t2_bor_common.py):
+#
+#   $elf   path of the brownout-scenario firmware ELF (mandatory; built
+#          off-tree from tag v1.0.0 by hw/virtual-bench/firmware/
+#          build_firmware.sh with CANCESTRY_T2_DRIVER=bor_brownout). Set by
+#          the runner as a QUOTED path with NO '@' marker (bring-up finding
+#          F-32); the guard below fails closed when it is missing.
+#   $t2_seed  fixed deterministic seed, unquoted (bring-up finding F-31).
+#          Must stay equal to fmi_bridge.FIXED_SEED.
+#
+# Determinism (HwAGENTS.md rule 5): the machine is left PAUSED and is advanced
+# exclusively by the orchestrator's fixed-size `emulation RunFor` quanta
+# (100 us master step, the H-07 bridge contract). No wall clock is consumed.
+
+using sysbus
+
+$t2_seed?=123456789
+
+# Fail-closed guard: T2 executes a REAL v1.0.0 ELF (HW-PLAN section 8.3); the
+# bench never falls back to a reimplementation of the firmware.
+python "assert variables['elf'] not in ('', None), 'cancestry-hw-bor.resc: no firmware ELF provided (set $elf before including this script)'"
+python "import Antmicro.Renode.Logging as _clog"
+python "_clog.Logger.Info('[cancestry-hw-bor] step0: python logger channel OK, elf=%s' % variables['elf'])"
+
+mach create "cancestry"
+python "_clog.Logger.Info('[cancestry-hw-bor] step2: machine created')"
+
+# Same platform description as the retention and fault bring-ups (unmodified).
+# $ORIGIN-absolute path: bring-up finding F-24 (the process CWD of a headless
+# Renode is the install directory, never this script's directory).
+machine LoadPlatformDescription $ORIGIN/stm32g474-cancestry.repl
+python "_clog.Logger.Info('[cancestry-hw-bor] step3: platform loaded')"
+
+# The four scripted register models of the H-07 platform ($ORIGIN-absolute
+# paths and QUOTED names: bring-up findings F-28 and F-30). All four stay
+# registered: the brownout driver arms no IWDG, but the RCC model owns the
+# reset-cause flags (RCC_CSR.BORRSTF is set by the injector through the bus,
+# exactly as the IWDG model sets IWDGRSTF), and the RTC/BKP model owns the
+# retention shadow the recovered fault code is read from.
+machine PyDevFromFile $ORIGIN/iwdg_model.py 0x40003000 0x14 true "iwdg"
+machine PyDevFromFile $ORIGIN/rtc_backup_model.py 0x40002800 0x64 false "rtc_backup"
+machine PyDevFromFile $ORIGIN/gpioa_model.py 0x48000000 0x400 true "gpioa"
+machine PyDevFromFile $ORIGIN/rcc_model.py 0x40021000 0x98 true "rcc"
+python "_clog.Logger.Info('[cancestry-hw-bor] step3c: 4 register models registered')"
+
+# ---------------------------------------------------------------------
+# H-11 EXTENSION: the BOR reset injector (issue #64 deliverable 4).
+#
+# Registered HERE rather than declared in stm32g474-cancestry.repl for the
+# F-28 reason (a `filename:` attribute in a .repl is resolved CWD-relative
+# inside the PythonPeripheral constructor, which breaks headless CI) and to
+# keep the platform description file's behaviour byte-identical: the .repl
+# receives the comment-only H-11 slot contract, zero behavioural change.
+#
+# Base 0x40001000 is the address the issue names. It is one guest page
+# (bring-up finding F-29), an address the v1.0.0 firmware never touches
+# (hal_stm32.c accesses only DWT/DEMCR, the FDCAN bases and - through
+# watchdog.c - IWDG, RTC/BKP, GPIOA and RCC), and the platform declares no
+# peripheral there, so the registration neither overlaps an existing model nor
+# changes firmware-visible behaviour.
+machine PyDevFromFile $ORIGIN/bor_reset_injector.py 0x40001000 0x400 true "bor_reset_injector"
+python "_clog.Logger.Info('[cancestry-hw-bor] step3d: bor_reset_injector registered at 0x40001000')"
+
+# Deterministic execution: fixed global quantum (the 100 us master step of the
+# H-07 bridge contract) and the fixed seed for the only Renode randomness
+# source. `emulation RunFor` advances virtual time exactly.
+emulation SetGlobalQuantum "0.0001"
+emulation SetSeed $t2_seed
+python "_clog.Logger.Info('[cancestry-hw-bor] step4: quantum and seed set')"
+
+sysbus LoadELF $elf
+# Readback: the initial SP word of the vector table (0x20018000 per
+# firmware/startup.s) proves the ELF segments reached flash.
+python "bus = sysbus if 'sysbus' in dir() else (machine['sysbus'] if 'machine' in dir() else monitor.Machine['sysbus']); v = bus.ReadDoubleWord(0x08000000); _clog.Logger.Info('[cancestry-hw-bor] step5: vector SP=0x%08x (ELF loaded)' % v)"
+
+# Trace-area magic: the H-07 contract word (the orchestrator refuses to run
+# against a machine whose capture area was not initialized by a bring-up
+# script).
+sysbus WriteDoubleWord 0x60000000 0x54324353
+
+# ---------------------------------------------------------------------
+# H-11 slot initialization (the platform contract in
+# stm32g474-cancestry.repl). The BOR injector keeps ALL of its state in the
+# trace area (a Renode machine reset re-initializes scripted peripherals), so
+# the preflight state is established HERE, once, before the machine runs:
+#
+#   NRST released (1), SRAM marker intact (0), all event stamps 0.
+#
+# The main-SRAM marker word (0x20017000) is the T2-declared SRAM location the
+# firmware publishes its canary to and the injector discards on the BOR reset.
+# ---------------------------------------------------------------------
+sysbus WriteDoubleWord 0x60000008 0x00000000
+sysbus WriteDoubleWord 0x60000070 0x00000000
+sysbus WriteDoubleWord 0x60000074 0x00000000
+sysbus WriteDoubleWord 0x60000078 0x00000000
+sysbus WriteDoubleWord 0x6000007C 0x00000000
+sysbus WriteDoubleWord 0x60000080 0x00000000
+sysbus WriteDoubleWord 0x60000084 0x00000000
+sysbus WriteDoubleWord 0x60000088 0x00000000
+sysbus WriteDoubleWord 0x6000008C 0x00000000
+sysbus WriteDoubleWord 0x60000104 0x00000001
+sysbus WriteDoubleWord 0x60000108 0x00000000
+python "bus = monitor.Machine['sysbus']; _clog.Logger.Info('[cancestry-hw-bor] step7: t2_trace readback=0x%08x (expected 0x54324353) nrst_level=%d (expected 1 released)' % (bus.ReadDoubleWord(0x60000000), bus.ReadDoubleWord(0x60000104)))"
+
+# ---------------------------------------------------------------------
+# Brownout event capture (HwAGENTS.md rule 5: deterministic, hashed trace).
+#
+# The retention-write stamp reuses the H-08 slot 0x60000008, but
+# FIRST-EVENT-ONLY: the driver publishes the retained terminal code once,
+# before the brownout, and the ordering claim is about that first write. The
+# guard makes the slot immune to any later retention-register write on the
+# post-reset path (the platform's one-writer-per-slot contract).
+#
+# The two BOR stamps are symbol hooks on the off-tree driver's post-reset
+# path (firmware/bor_brownout.c):
+#
+#   t2_bor_detect  entry of the post-BOR classification: the reset cause was
+#                  read as BORRSTF and the retained fault code is recovered
+#                  through the real v1.0.0 retention read API. Issue #64 asks
+#                  for a hook "on the reset handler"; the v1.0.0 ELF ships no
+#                  BOR classification in its reset handler (Reset_Handler in
+#                  startup.s only initialises .data/.bss), so the hook is
+#                  placed on the firmware's post-reset BOR detection entry
+#                  (documented deviation, recorded in the scenario evidence
+#                  and in tool-qualification.md section 4.6).
+#   cancestry_hardware_set_safe_state  entry of the REAL v1.0.0 safe-state
+#                  restoration function - the issue's "safe-state restoration
+#                  function" - called on the post-reset path once the fault
+#                  was detected.
+# ---------------------------------------------------------------------
+cpu AddSymbolHook "cancestry_watchdog_write_retention_register" """if machine['sysbus'].ReadDoubleWord(0x60000008) == 0:
+machine['sysbus'].WriteDoubleWord(0x60000008, int(round(machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1000000)))
+"""
+cpu AddSymbolHook "t2_bor_detect" """if machine['sysbus'].ReadDoubleWord(0x60000078) == 0:
+machine['sysbus'].WriteDoubleWord(0x60000078, int(round(machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1000000)))
+"""
+cpu AddSymbolHook "cancestry_hardware_set_safe_state" """if machine['sysbus'].ReadDoubleWord(0x6000007C) == 0:
+machine['sysbus'].WriteDoubleWord(0x6000007C, int(round(machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1000000)))
+"""
+python "_clog.Logger.Info('[cancestry-hw-bor] step6: brownout symbol hooks installed')"
+
+# Injector preflight readback (console-logged evidence that the peripheral
+# loaded and its command interface answers): magic 0x424F5231 ("BOR1"), NRST
+# released (1), no injection yet (0), no error (0), SRAM marker intact (0).
+# The orchestrator asserts the same values over the monitor and fails closed
+# on any mismatch.
+python "bus = monitor.Machine['sysbus']; _clog.Logger.Info('[cancestry-hw-bor] step8: injector window magic=0x%08x (expected 0x424F5231) nrst_level=%d (expected 1) inject_count=%d (expected 0) error=%d (expected 0) sram_lost=%d (expected 0)' % (bus.ReadDoubleWord(0x40001000), bus.ReadDoubleWord(0x40001008), bus.ReadDoubleWord(0x4000100C), bus.ReadDoubleWord(0x4000101C), bus.ReadDoubleWord(0x40001018)))"
+python "_clog.Logger.Info('[cancestry-hw-bor] step9: include complete, machine left paused')"
+
+# The machine is left PAUSED: the orchestrator alone advances emulation with
+# fixed-size `emulation RunFor` quanta. This configuration must NOT be started
+# with `start`.

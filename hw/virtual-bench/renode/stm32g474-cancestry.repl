@@ -41,6 +41,11 @@
 //     the physical layer stay not_simulated, and the fault scenarios derive
 //     no claim from them (see can_fault_injector.py header for the explicit
 //     modeled / not-modeled split);
+//   - the BOR reset LINE (H-11, issue #64) is an EXTENSION registered by
+//     renode/cancestry-hw-bor.resc at 0x40001000 (bor_reset_injector.py: NRST
+//     active-low, RCC_CSR.BORRSTF, main-SRAM marker discard, BOR machine
+//     reset), and the brownout plant is the T1 model
+//     hw/model/CancestryLib/Power/BOR.mo - see the BOR bullet below;
 //   - DWT CYCCNT (0xE0001000) and CoreDebug DEMCR (0xE000EDFC): the Cortex-M
 //     core debug block is owned by the Renode CPU model; the firmware's DWT
 //     timestamps are NOT load-bearing for the T2 retention ordering (events
@@ -52,10 +57,17 @@
 //     invokes) never touches DWT/DEMCR - the driver deliberately bypasses
 //     cancestry_watchdog_init and hal_stm32_clock_init - so NO DWT extension
 //     of this platform is required for T2;
-//   - BOR/power supervisor reset on brownout: the passive fail-safe topology
-//     is a requirement (HwAGENTS.md rule 6); modelling its reset behavior is
-//     safety-relevant and deferred to a Human-Reviewer-approved change. The
-//     brownout energy margin itself is closed at T1 by OR-001 (Holdup FMU);
+//   - BOR/power supervisor reset on brownout: H-11 (issue #64) adds the RESET
+//     LINE as a registered extension (renode/bor_reset_injector.py, registered
+//     by renode/cancestry-hw-bor.resc at 0x40001000 - not declared in this
+//     file, see the F-28 note below), while the BOR CELL physics stay outside
+//     the platform: they are the T1 plant hw/model/CancestryLib/Power/BOR.mo.
+//     This file's own behaviour is UNCHANGED by H-11 (comment-only contract
+//     update, issue #64 constraint 4). The passive fail-safe topology remains
+//     a requirement (HwAGENTS.md rule 6) and every safety-relevant change in
+//     this area stays Human-Reviewer gated: H-11 delivers a pending/CL0
+//     mechanism and promotes nothing. The brownout energy margin itself is
+//     closed at T1 by OR-001 (Holdup FMU);
 //   - all remaining STM32G4 peripherals (DMA, ADC, DAC, USART, SPI, I2C,
 //     timers, USB, etc.): untouched by platform/cortex_m at v1.0.0.
 //
@@ -104,6 +116,42 @@
 //               normally (no crash, no park)
 //   0x6000006c  alive_counter        firmware: increments every poll pass, so a
 //               hung firmware is visible as a stopped counter
+//
+// H-11 brownout/BOR-capture contract (issue #64, HW-SF-002 (ii)/(iii),
+// HW-SF-004; installed by renode/cancestry-hw-bor.resc only - the retention
+// and CAN fault scenarios never touch these slots, and their writers are
+// declared here so the one-writer-per-slot rule is reviewable). All values
+// are integer microseconds of emulation virtual time; 0 means "did not
+// occur". This is a COMMENT-ONLY contract: no peripheral or memory map is
+// changed by H-11 in this file.
+//
+//   0x60000008  retention_write_us  .resc symbol hook, FIRST-EVENT-ONLY
+//               (cancestry_watchdog_write_retention_register): the retained
+//               terminal code published BEFORE the brownout
+//   0x60000070  bor_inject_us       bor_reset_injector.py: NRST asserted
+//               (active-low) at the modelled BOR assertion instant
+//   0x60000074  nrst_release_us     bor_reset_injector.py: NRST released
+//               exactly 100 us later (the issue's brownout pulse)
+//   0x60000078  bor_detect_us       .resc symbol hook: t2_bor_detect, the
+//               post-BOR classification entry (reset cause + retained code)
+//   0x6000007C  bor_recover_us      .resc symbol hook on the REAL v1.0.0
+//               safe-state restoration fn cancestry_hardware_set_safe_state
+//   0x60000080  sram_magic_at_boot  firmware: main-SRAM marker word read at
+//               the post-BOR boot (0 = the reset discarded main SRAM)
+//   0x60000084  bor_run_complete    firmware: 1 once the recovery completed
+//   0x60000088  bor_alive_counter   firmware: advances every service pass
+//   0x6000008C  retention_code_at_detect  firmware: the retained code
+//               recovered through the real v1.0.0 retention read API
+//   0x60000104  nrst_level          bor_reset_injector.py: NRST pin level
+//               (1 released, 0 asserted) - STATE word, not an event slot
+//   0x60000108  sram_canary_lost    bor_reset_injector.py: 1 once the BOR
+//               reset discarded the main-SRAM marker word
+//
+// The main-SRAM marker word itself lives in the SRAM region at 0x20017000
+// (T2-declared: inside the 96 KiB RAM of cancestry_baremetal.ld, outside the
+// ELF's .data/.bss, > 4 KiB below the initial stack pointer 0x20018000). The
+// injector discards it with the BOR reset, so the post-reset firmware can
+// report main-SRAM loss while the retention shadow (below) survives.
 //
 // Determinism (HwAGENTS.md rule 5): this platform is deterministic by
 // construction. The FMI bridge drives emulation with fixed-size
