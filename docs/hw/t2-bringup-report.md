@@ -237,7 +237,7 @@ will be replaced by the success-path variant (issue #55 deliverables
 3–4) if a re-budgeted run lands live evidence, or superseded by a
 second stop-report if the re-budget exhausts.
 
-## Re-budget log — dispatches 21–26 (cycles 1–6 of 21–30); F-33 … F-37
+## Re-budget log — dispatches 21–27 (cycles 1–7 of 21–30); F-33 … F-37 — **FULLY GREEN AT 27**
 
 **Dispatch 21** — `hw-nightly` #26, run `35893814425`, manual
 dispatch, 2026-09-23 17:10, head `2306a36` (F-32), job exit 2 after
@@ -572,6 +572,38 @@ Gates after F-37: 5/5 checkers PASS; **348 passed, 1 deselected**
 `hw/tests` 43 passed + 9 pre-existing omc errors; ledger row exact;
 evidence `pending` (unchanged — nothing pinned moved); workflow YAML
 valid.
+
+**Dispatch 27 — FULL GREEN (run `35937190878`, head `51bd4c3`,
+created 2026-09-24T00:10:30Z). The first `hw-nightly` run in the
+entire bring-up to conclude `success`.** Both jobs green: the T2
+live-co-simulation job (00:10:34 → 00:11:22, 48 s) and the renderer
+`--rerender --strict` determinism job. Because the T2 job's step is a
+`set -e` chain, job success is GitHub's own attestation that, in
+order: RUN 1 executed the full scenario with every in-run assertion
+and wrote the passing evidence; RUN 2 `--check` reproduced it
+byte-identical; **and the in-container suite passed 46/46** — which
+now includes the e2e test running as a *third* determinism probe
+(F-36 restored its `CANCESTRY_T2_ELF`) and the form-independent
+rejection fixture (F-36) validating against the passing on-disk form.
+Artifacts all landed: `t2-virtual-bench-51bd4c3…` **2,111,481 B**
+(grown by the e2e re-run outputs), `t2-ci-logs-51bd4c3…` 8109 B,
+renderer `hw-nightly-51bd4c3…` 5994 B. The F-37 `bash -n` guards ran
+green in the PR battery at this same head (7/7 checks).
+
+Success criterion (memo §4): **met at dispatch 25, re-proven whole
+and fully green at dispatch 27.** Proven cumulative: live co-sim with
+`retention_write < safe_latch < iwdg_fire` vs OR-001 (24, re-proven
+25/27), two-run byte-identical evidence (25, re-proven 27), persisted
+passing artifact in CI storage (25/27), the passing artifact's schema/
+regeneration/invariant validation in-container (25/27), e2e third
+probe (27), and workflow bash-parseability as a standing gate (F-37).
+Remaining out-of-scope: T4/CL3 (bench correlation, human-gated).
+
+Cycle accounting: **25 used (18 at stop + re-budget 21–27); remaining
+28–30 = 3; hard stop 30.** Per memo §4 the second success path is
+complete — whether to exercise the remaining cycles or call the stop
+is the Lead SE's decision; PR #59 stands MERGEABLE with 7/7 checks at
+`51bd4c3` awaiting the Release Manager.
 
 ## Appendix A — Workspace-reset recovery (provenance note for auditors)
 
