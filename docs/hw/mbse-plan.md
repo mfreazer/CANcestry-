@@ -3,11 +3,11 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry MBSE Plan |
-| **Version** | 0.4.1 |
-| **Status** | Draft — H-04, pending Human Reviewer / QA approval |
+| **Version** | 0.5.0 |
+| **Status** | Draft — H-11, pending Human Reviewer / QA approval |
 | **Owner** | System Engineer |
 | **Approver** | QA Lead, Release Manager |
-| **Last Review** | 2026-09-20 |
+| **Last Review** | 2026-09-24 |
 | **Repository location** | `docs/hw/mbse-plan.md` |
 | **Governing documents** | `docs/hw/HW-PLAN.md` v1.0.0, `docs/qa/hw-validation-matrix.md` v0.1.0 |
 
@@ -17,7 +17,7 @@ Arcadia four levels per HW-PLAN §6.1:
 
 - **OA** — vehicle/bench/diagnostic actors, operational modes.
 - **SA** — system functions, CAN/power/safety interfaces.
-- **LA** — power supervisor, CAN PHY, safety monitor, fail-safe latch, external watchdog as logical components.
+- **LA** — power supervisor, CAN PHY, safety monitor, fail-safe latch, external watchdog as logical components. H-11 (issue #64) adds the environment-side `SupplyStimulus` component: the vehicle/bench supply transient source (ISO 7637-2 / ISO 16750-2 pulse generator) that drives the item is modelled as an explicit, unallocated LA component so the supply-transient plant stays exactly-once mapped while `PowerSupervisor` carries the BOR supervisor physics.
 - **PA** — STM32G474-class MCU, CAN transceivers, regulator, retention domain, external watchdog IC, connector.
 
 ## 2. Source-of-truth discipline
@@ -66,9 +66,16 @@ silently omitted. Comments, strings and package declarations are not models.
 `not_simulated` has a null target and one of `not-yet-modeled`,
 `out-of-scope-for-h02`, `emulated-by-other-means`, `not-simulatable`.
 A simulated row has rationale `n/a`. Every row retains a QA-readable
-`coverage_note`; mapping a stimulus does not claim that the supervisor's
-threshold/reset physics are simulated. Implements HW-SF-001..005,
-HW-FR-002, HW-FR-004, HW-FR-008 and HW-FR-009.
+`coverage_note`. H-11 (issue #64) splits the two power sides that
+H-04 mapped together: `PowerSupervisor` now maps to
+`CancestryLib.Power.BOR` (threshold, hysteresis release gate,
+active-low NRST, retention-domain hold-up, main-SRAM loss, recovery
+time) and the supply-transient stimulus maps to the environment-side
+`SupplyStimulus` component (`CancestryLib.Power.PulseISO7637_2`). No
+requirement is allocated to the stimulus source, and the BOR plant is
+a CL0 engineering fixture: no oracle witnesses its threshold
+behaviour. Implements HW-SF-001..005, HW-FR-002, HW-FR-004, HW-FR-008
+and HW-FR-009.
 
 ## 5. Model control
 
@@ -86,6 +93,7 @@ None outstanding as of v0.3.0. The `hwrs_id` property name is confirmed (QA ruli
 |---|---|---|
 | 0.1.0 | 2026-09-19 | Initial draft |
 | 0.2.0 | 2026-09-19 | QA review applied: concurrent edit policy for safety-relevant diagrams added (MBSE-F1); `hwrs_id` property name confirmed and CI check list expanded (MBSE-Q); external watchdog added to LA and PA level descriptions; Git LFS threshold quantified; FMEDA oracle gate referenced. |
+| 0.5.0 | 2026-09-24 | H-11 #64: environment-side `SupplyStimulus` LA component added to the Capella seed; bridge takes `PowerSupervisor → CancestryLib.Power.BOR` (the supervisor's threshold/reset physics move from 'not modelled' to modelled) and `SupplyStimulus → CancestryLib.Power.PulseISO7637_2`. Safety-relevant model change (power supervisor path, HW-PLAN §11.1 / HwAGENTS.md rule 6): pending Human Reviewer sign-off; no requirement is allocated to the stimulus source and no ledger status changes. |
 | 0.4.1 | 2026-09-20 | N1: remove the unqualified stereotype-string fallback; retain explicit/typed Boolean markers and real downstream trace checks. |
 | 0.4.0 | 2026-09-19 | H-04 #38: JSON bridge and structured trades; generated views, live 1:1 validation, safety-mechanism reachability, authority constraint and firmware-aligned SA modes. |
 | 0.3.0 | 2026-09-19 | Capella seed & structural gate baseline (issue #35): recorded Trades T-01..T-04 in Appendix A; documented Capella model seed structure under `hw/model/capella/` and bridge specification `hw/model/bridge.json`. |

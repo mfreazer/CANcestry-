@@ -3,12 +3,12 @@
 | Field | Value |
 |---|---|
 | **Document** | CANcestry Virtual Bench Plan |
-| **Version** | 0.6.0 |
-| **Status** | Draft — H-07/H-10, pending QA approval |
+| **Version** | 0.7.1 |
+| **Status** | Draft — H-11, pending QA approval |
 | **Owner** | System Engineer |
 | **Co-author** | QA Lead (oracle rule, credibility scheme) |
 | **Approver** | Release Manager |
-| **Last Review** | 2026-09-22 |
+| **Last Review** | 2026-09-24 |
 | **Repository location** | `docs/hw/virtual-bench-plan.md` |
 | **Governing documents** | `docs/hw/HW-PLAN.md` v1.0.0, `docs/qa/hw-validation-matrix.md` v0.1.0 |
 
@@ -170,6 +170,39 @@ out of scope: it is H-11, gated on HS-01/HS-02, because it touches the
 `not_simulated` BOR physics. Scope is exactly Bus-Off + CRC: no thermal,
 no multi-channel, no CRC storm, no frame delivery.
 
+### 8.5 T2 brownout / BOR reset scenario (H-11, issue #64)
+
+H-11 extends the T2 virtual bench to the brownout fault scenario — the last
+Phase-12 fault the platform had left `not_simulated` (the reset/supervisor
+path, HwAGENTS.md rule 6). It extends, not modifies: `cancestry-hw.resc` and
+`cancestry-hw-fault.resc` stay byte-identical, the four scripted register
+models stay unchanged, and `stm32g474-cancestry.repl` receives a comment-only
+slot contract (no address map or behavior change).
+
+| Artifact | Content |
+|---|---|
+| `hw/model/CancestryLib/Power/BOR.mo` + `hw/tests/cases/bor_brownout_001.simcase.json` | The T1/T2 BOR plant fixture: nominal 3.3 V rail collapsing to 0 V at 10 ms for 100 µs (issue #64), BOR level 3 falling threshold 2.8 V (HwRS HW-SF-002 (ii) / HW-SF-004, OR-008) with a hysteresis release gate, active-low NRST, the OR-001 retention-domain closed form across the collapse, main-SRAM loss and the reset-deassertion → resumption recovery time. Algebraic by construction (no states); hysteresis and resumption latency are declared engineering fixtures. |
+| `renode/bor_reset_injector.py` | BOR reset injector (`Python.PythonPeripheral`, TCL1): models the ACTIVE-LOW NRST line with the issue's 100 µs pulse, discards the T2 main-SRAM marker word, sets RCC_CSR.BORRSTF and requests the BOR machine reset so the REAL firmware re-enters its reset handler. Monitor command interface `sysbus bor_reset_injector ControlWrite 0x42` (InjectBrownout) plus a read-only window at the issue-pinned 0x40001000. All state lives in the trace area, so the pending NRST release survives the machine reset; a second injection is rejected fail-closed. |
+| `renode/cancestry-hw-bor.resc` | Third bring-up script for the same (unmodified) platform: registers the injector, initializes the H-11 slots, installs the first-event-guarded retention-write hook and the two post-reset hooks (`t2_bor_detect`, `cancestry_hardware_set_safe_state`). |
+| `firmware/bor_brownout.c` + `build_firmware.sh` (`CANCESTRY_T2_DRIVER=bor_brownout`) | Off-tree driver through the REAL v1.0.0 API: cold boot publishes the canonical retained terminal code (`cancestry_watchdog_write_retention_register`) and the SRAM marker; the post-BOR boot observes the discarded main SRAM, recovers the retained code (`cancestry_watchdog_read_retention_register`) and restores the safe state (`cancestry_hardware_set_safe_state`). No IWDG arming, no `cancestry_watchdog_init`, no retention drain (documented). |
+| `t2_bor_common.py` + `scenarios/t2_brownout_001.py` | Fail-closed orchestration: preflight, the H-07 100 µs master / 1 µs plant sub-step contract — the BOR plant is a zero-state source, so `MePlantSlave` advances it through the guarded FMI 2.0 **ModelExchange** evaluator (explicit `setTime` from integer microseconds + bounded event iteration per sub-step), never through CoSimulation `doStep`, which the pinned OpenModelica 1.24 runtime cannot drive for a zero-state model (`docs/hw/tool-qualification.md` §3.1 finding) — the MODELLED BOR assertion triggering the injector command at the master-step boundary, in-run invariants (retention write < BOR detection < recovery, NRST pulse exactly 100 µs, modelled assertion == injection stamp, retained code preserved, main SRAM lost, BOR reset cause, liveness), `--check` determinism gate, `--emit-pending` pending manifest. Hash chain FMU + ELF + bridge + injector + trace. |
+| `schemas/hw/hw-t2-brownout-evidence-0.1.0.schema.json` | Sibling of the retention and CAN fault evidence schemas with the recorded deviations: `oracle_id: "none"`, CL0 as the disposition of an executed run, the FMU chain back in place, both TCL2 producer gaps inherited. |
+| `hw/tests/evidence/t2_brownout_001.json` (+ pending placeholder view) | Pending manifest (pass=false, CL0), rendered view under the same R13/R14 rules. |
+
+Honest status (HwAGENTS.md rule 4): **no executed T2 brownout run exists
+yet.** The committed artifact is a pending manifest; the ledger row
+`(HW-SF-002, virtual_bench)` — which already covers the retention sub-events
+and cannot be duplicated (one row per (requirement, method) pair, the H-10
+precedent) — stays `sim-pending` / CL0 with empty evidence fields. The
+hw-nightly `t2-virtual-bench` job builds the brownout ELF, runs the scenario
+and its `--check` twin; a green pair still promotes nothing: promotion is
+gated on a registered oracle (none exists for the BOR behaviour, issue #64),
+on HS-01/HS-02 and on a human safety reviewer, because the change touches the
+supervisor/reset path (HwAGENTS.md rule 6). The BOR FMU output is NOT inside
+the bounded FMPy TD1 argument (`docs/hw/tool-qualification.md` §3.1, H-11
+disposition). Scope is exactly brownout: no thermal coupling, no
+multi-channel, no other fault scenarios.
+
 ## 9. Open questions for QA
 
 None outstanding as of v0.3.0.
@@ -178,6 +211,8 @@ None outstanding as of v0.3.0.
 
 | Version | Date | Change |
 |---|---|---|
+| 0.7.1 | 2026-09-24 | H-11 (#64) execution-path correction: §8.5 records that the zero-state BOR plant is advanced by `t2_bor_common.MePlantSlave` through the guarded FMI 2.0 ModelExchange evaluator (explicit `setTime` per 1 µs sub-step, bounded event iteration) instead of CoSimulation `doStep` — the pinned OpenModelica 1.24 CS runtime cannot step a zero-state source (`docs/hw/tool-qualification.md` §3.1 finding, hw-fast dispatches 36035296703 / 36036288651 / 36036948275). The H-07 100 µs master / 1 µs plant sub-step contract, the invariants and the hash chain are unchanged; no executed run exists and nothing is promoted. |
+| 0.7.0 | 2026-09-24 | H-11 (#64): §8.5 T2 brownout/BOR scenario recorded (BOR plant fixture + case, bor_reset_injector TCL1 peripheral, third bring-up script, off-tree brownout driver, plant-driven injection orchestration with in-run invariants, hw-t2-brownout-evidence schema, pending manifest + view). Extends the platform; the .repl change is comment-only and the existing bring-up scripts and peripherals are unchanged. No executed run exists; the (HW-SF-002, virtual_bench) row stays sim-pending / CL0; promotion gated on HS-01/HS-02 + human safety reviewer. |
 | 0.6.0 | 2026-09-24 | H-10 (#62): §8.4 T2 CAN fault scenarios recorded (can_fault_injector TCL1 peripheral, second bring-up script, off-tree CAN fault driver, scenario orchestration with in-run invariants, hw-t2-fault-evidence schema, pending manifests + views, sim-pending (HW-FR-003, virtual_bench) ledger rows). Extends the platform; no existing artifact modified by behavior. Both scenarios stay sim-pending / CL0; no executed run exists; brownout deferred to H-11 (HS-01/HS-02). |
 | 0.1.0 | 2026-09-19 | Initial draft |
 | 0.2.0 | 2026-09-19 | QA review applied: rebuild and retention policy added (VB-F1); sub-step discrete event injection clarified for HW-SF-004 (VB-Q1); OR-005b class (c) golden-measurement upgrade path added (VB-Q2); oracle registry expanded with OR-007, OR-008, OR-009 to serve HW-SF-003, HW-SF-004, HW-FR-010. |

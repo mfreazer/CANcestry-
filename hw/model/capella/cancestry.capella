@@ -164,6 +164,7 @@
           <ownedLogicalComponents xsi:type="org.polarsys.capella.core.data.la:LogicalComponent" id="la-comp-powersupervisor" name="PowerSupervisor">
             <ownedPropertyValues xsi:type="org.polarsys.capella.core.data.capellacore:BooleanPropertyValue" id="safety-powersupervisor" name="safety_mechanism" value="true"/>
           </ownedLogicalComponents>
+          <ownedLogicalComponents xsi:type="org.polarsys.capella.core.data.la:LogicalComponent" id="la-comp-supplystimulus" name="SupplyStimulus" description="H-11 (issue #64): the vehicle/bench supply transient source (ISO 7637-2 pulses 1, 2a, 2b, 3a, 3b, 4; ISO 16750-2:2012 load-dump pulses 5a/5b) that drives the item. It is ENVIRONMENT-side stimulus, not an item function: the bridge maps it so the supply-transient plant (CancestryLib.Power.PulseISO7637_2) stays exactly-once mapped while PowerSupervisor carries the BOR supervisor physics (CancestryLib.Power.BOR). No requirement is allocated to it."/>
           <ownedLogicalComponents xsi:type="org.polarsys.capella.core.data.la:LogicalComponent" id="la-comp-canphy1" name="CanPhy1"/>
           <ownedLogicalComponents xsi:type="org.polarsys.capella.core.data.la:LogicalComponent" id="la-comp-canphy2" name="CanPhy2"/>
           <ownedLogicalComponents xsi:type="org.polarsys.capella.core.data.la:LogicalComponent" id="la-comp-canphy3" name="CanPhy3"/>

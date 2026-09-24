@@ -1,0 +1,446 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cancestry.dev/schemas/hw/hw-t2-brownout-evidence-0.1.0.schema.json",
+  "title": "CANcestry T2 Virtual Bench Brownout (BOR) Evidence (v0.1.0)",
+  "description": "Schema for the H-11 (issue #64) T2 brownout evidence artifact hw/tests/evidence/t2_brownout_001.json, produced by hw/virtual-bench/t2_bor_common.py and hw/virtual-bench/scenarios/t2_brownout_001.py. Sibling of hw-t2-evidence-0.1.0 (retention, H-07) and hw-t2-fault-evidence-0.1.0 (CAN faults, H-10) with the DELIBERATE differences recorded here: (1) the plant IS an FMU again (CancestryLib.Power.BOR compiled headless by the pinned OpenModelica, per the case hw/tests/cases/bor_brownout_001.simcase.json) and the modelled BOR assertion DRIVES the reset injection, so the hash chain is FMU + ELF + bridge + injector + trace and BOTH the openmodelica and renode TCL2 gaps are inherited; (2) oracle_id is the literal 'none' - issue #64 assigns no OR-XXX to the BOR threshold behaviour, the hysteresis release gate or the reset timing, and HwAGENTS.md rule 3's oracle rule is satisfied by the honest disposition: the traceability ledger row stays sim-pending / CL0 and this artifact alone cannot promote it (only the ledger checker permits passing rows, and only with a registered oracle); (3) the ordering claim is issue #64's chain retention write < BOR detection < recovery, with the BOR assertion itself pinned to the modelled threshold crossing at 10 ms and the NRST pulse to the issue's 100 us; (4) the pending disposition fixes a fixed 50 ms window with a 100 us master step. Kept in lockstep with the retention and fault schemas' pending/pairing discipline.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "case_id",
+    "requirement_id",
+    "oracle_id",
+    "status",
+    "pass",
+    "provisional",
+    "credibility_level",
+    "evidence_of",
+    "not_covered",
+    "scenario",
+    "sim_case",
+    "firmware",
+    "source_hashes",
+    "tool_pins",
+    "inherited_validation_gap",
+    "trace"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0"
+    },
+    "case_id": {
+      "const": "t2_brownout_001",
+      "description": "The H-11 brownout/BOR scenario (issue #64)."
+    },
+    "requirement_id": {
+      "const": "HW-SF-002",
+      "description": "Retention domain across (ii) main-rail brownout to BOR level 3 and (iii) main-rail removal from BOR to 0 V; the ordering derives from HW-SF-004 (QA-EV-01) and the BOR threshold from HW-SF-004 / OR-008."
+    },
+    "oracle_id": {
+      "const": "none",
+      "description": "Documented H-11 deviation: no registered oracle covers the BOR threshold behaviour, the hysteresis or the reset timing (issue #64: 'Oracle: none (no OR-XXX for BOR yet)'). The ledger row stays sim-pending / CL0 regardless of an executed run; this artifact never promotes a requirement. OR-001 witnesses only the retention-domain closed form of the T1 plant (hw/tests/test_bor_physics.py), never the reset behaviour asserted here."
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "passing"
+      ],
+      "description": "pending: no executed T2 run backs this artifact yet (the H-07/H-10 foundation pattern). passing: a deterministic executed run backs every claim. 'failing' does not exist: a failed run aborts before evidence is written (fail-closed, t2_bor_common.py)."
+    },
+    "pass": {
+      "type": "boolean"
+    },
+    "provisional": {
+      "type": "boolean",
+      "description": "True: the claim is never final without T4 bench correlation, and per issue #64 the row stays sim-pending / CL0 for H-Phase 2 regardless of an executed run."
+    },
+    "credibility_level": {
+      "enum": [
+        "CL0",
+        "CL1"
+      ],
+      "description": "Pending artifacts are CL0. An executed run of a scenario with no registered oracle for the BOR behaviour cannot exceed CL1 (CL2 requires an oracle, CL3 is bench-only per HwAGENTS.md rule 4)."
+    },
+    "evidence_of": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "not_covered": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "pending_reason": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "duration_us",
+        "inject_at_us",
+        "master_step_us",
+        "fmu_step_us",
+        "nrst_pulse_us",
+        "method",
+        "seed"
+      ],
+      "properties": {
+        "duration_us": {
+          "const": 50000
+        },
+        "inject_at_us": {
+          "const": 10000,
+          "description": "Issue #64 fixes the brownout at t = 10 ms; the scenario asserts that the modelled BOR assertion and the injector stamp both land on that master-step boundary."
+        },
+        "master_step_us": {
+          "const": 100
+        },
+        "fmu_step_us": {
+          "const": 1
+        },
+        "nrst_pulse_us": {
+          "const": 100,
+          "description": "Issue #64 fixes the brownout pulse at 100 us of asserted NRST."
+        },
+        "method": {
+          "const": "virtual_bench"
+        },
+        "seed": {
+          "const": "123456789"
+        }
+      }
+    },
+    "sim_case": {
+      "const": "hw/tests/cases/bor_brownout_001.simcase.json"
+    },
+    "firmware": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elf",
+        "modification"
+      ],
+      "properties": {
+        "elf": {
+          "type": "string",
+          "minLength": 1
+        },
+        "modification": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "source_hashes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^sha256:[0-9a-f]{64}$"
+      }
+    },
+    "tool_pins": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "inherited_validation_gap": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S",
+      "description": "Both TCL2 producer gaps are ALWAYS inherited: openmodelica (the BOR FMU is a producer of this scenario) and renode (the platform model and its scripted peripherals). bor_reset_injector and fmi_bridge are TCL1 and carry no gap."
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact",
+        "columns",
+        "hashing"
+      ],
+      "properties": {
+        "artifact": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "columns": {
+          "const": "time_us,rail_mv,nrst,gpio_odr,alive_counter"
+        },
+        "hashing": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      }
+    },
+    "events": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "retention_write_us",
+        "bor_inject_us",
+        "nrst_release_us",
+        "bor_detect_us",
+        "bor_recover_us"
+      ],
+      "properties": {
+        "retention_write_us": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "First-event-guarded symbol-hook stamp of cancestry_watchdog_write_retention_register: the retained terminal code published BEFORE the brownout."
+        },
+        "bor_inject_us": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Injector stamp of the accepted brownout injection (NRST asserted) - the master-step boundary the modelled BOR assertion lands on."
+        },
+        "nrst_release_us": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Injector stamp of the NRST release, exactly nrst_pulse_us after the assertion."
+        },
+        "bor_detect_us": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Symbol-hook stamp of t2_bor_detect: the post-BOR boot classified the reset cause (RCC_CSR.BORRSTF) and recovered the retained code through the real v1.0.0 retention read API."
+        },
+        "bor_recover_us": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Symbol-hook stamp of the REAL v1.0.0 safe-state restoration function cancestry_hardware_set_safe_state on the post-reset path."
+        },
+        "model_assert_us": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Plant-side stamp: the first 1 us FMU sub-step at which the BOR model's reset signal reads asserted. A passing run requires it to equal bor_inject_us."
+        },
+        "model_release_us": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Plant-side stamp: the first 1 us FMU sub-step at which the model's release gate reads satisfied. A passing run requires it to equal nrst_release_us."
+        }
+      }
+    },
+    "invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "retention_before_brownout",
+        "brownout_before_detection",
+        "detection_before_recovery",
+        "nrst_pulse_us",
+        "model_assert_matches_injection",
+        "retention_code_preserved",
+        "main_sram_lost",
+        "reset_cause_is_bor",
+        "firmware_alive_after_recovery"
+      ],
+      "properties": {
+        "retention_before_brownout": {
+          "const": true,
+          "description": "Issue #64 ordering: the firmware committed the retained code before the brownout (retention_write_us < bor_inject_us)."
+        },
+        "brownout_before_detection": {
+          "const": true,
+          "description": "bor_inject_us < bor_detect_us: the reset restarted the firmware, which then classified the BOR cause."
+        },
+        "detection_before_recovery": {
+          "const": true,
+          "description": "bor_detect_us < bor_recover_us: safe state was restored only after the fault was detected and recovered."
+        },
+        "nrst_pulse_us": {
+          "const": 100
+        },
+        "model_assert_matches_injection": {
+          "const": true,
+          "description": "The plant's modelled BOR assertion and the emulator-side injection stamp are the same instant (the injection is driven by the model, not by a scenario constant)."
+        },
+        "retention_code_preserved": {
+          "const": true,
+          "description": "The retained code read back through the real v1.0.0 API after the reset equals CANCESTRY_FAULT_CODE_QUEUE_SATURATION (0x45565101) and is still readable at the end of the window."
+        },
+        "main_sram_lost": {
+          "const": true,
+          "description": "The post-reset boot observed an empty main-SRAM marker word (the BOR reset discarded main SRAM)."
+        },
+        "reset_cause_is_bor": {
+          "const": true,
+          "description": "RCC_CSR.BORRSTF (bit 27) is set at the end of the window and IWDGRSTF (bit 29) is clear."
+        },
+        "firmware_alive_after_recovery": {
+          "const": true,
+          "description": "The alive counter advanced past its value at the injection and the recovery completed: no crash, no park."
+        }
+      }
+    },
+    "hashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elf",
+        "fmu",
+        "bridge",
+        "injector",
+        "trace"
+      ],
+      "properties": {
+        "elf": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "fmu": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "bridge": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "injector": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "trace": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "description": "Evidence hash chain (issue #64 deliverable 10): FMU hash + ELF hash + bridge hash + trace hash, plus the BOR reset injector (the platform extension that carries the reset line)."
+    },
+    "toolchain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pins",
+        "measured"
+      ],
+      "properties": {
+        "pins": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          }
+        },
+        "measured": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "passing"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "pass": {
+            "const": true
+          },
+          "provisional": {
+            "const": true
+          },
+          "credibility_level": {
+            "enum": [
+              "CL0",
+              "CL1"
+            ],
+            "description": "An executed run without a registered oracle cannot record more than CL1 in H-11; the traceability row stays sim-pending / CL0 regardless (issue #64: no ledger promotion)."
+          }
+        },
+        "required": [
+          "events",
+          "hashes",
+          "invariants",
+          "toolchain"
+        ],
+        "not": {
+          "required": [
+            "pending_reason"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "pending"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "pass": {
+            "const": false
+          },
+          "provisional": {
+            "const": true
+          },
+          "credibility_level": {
+            "const": "CL0"
+          }
+        },
+        "required": [
+          "pending_reason"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "events"
+              ]
+            },
+            {
+              "required": [
+                "hashes"
+              ]
+            },
+            {
+              "required": [
+                "toolchain"
+              ]
+            },
+            {
+              "required": [
+                "invariants"
+              ]
+            }
+          ]
+        },
+        "properties": {
+          "pending_reason": {
+            "pattern": "issues/64",
+            "description": "The deferral must name the H-11 issue (first executing run of this scenario)."
+          }
+        }
+      }
+    }
+  ]
+}

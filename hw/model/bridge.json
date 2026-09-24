@@ -10,10 +10,17 @@
     },
     {
       "la_component": "PowerSupervisor",
+      "modelica_block": "CancestryLib.Power.BOR",
+      "status": "simulated",
+      "rationale": "n/a",
+      "coverage_note": "H-11 (issue #64): the supervisor threshold and reset behaviour are now simulated by CancestryLib.Power.BOR (BOR level 3 falling threshold, hysteresis release gate, active-low NRST, retention-domain hold-up across the collapse, main-SRAM loss, reset-deassertion to firmware-resumption recovery time). Reduced algebraic fixture, CL0: no oracle witnesses the BOR cell behaviour yet (issue #64: oracle none) and the hysteresis/resumption values are declared engineering fixtures. The supply stimulus itself moved to the SupplyStimulus row below."
+    },
+    {
+      "la_component": "SupplyStimulus",
       "modelica_block": "CancestryLib.Power.PulseISO7637_2",
       "status": "simulated",
       "rationale": "n/a",
-      "coverage_note": "Supply stimulus only via PulseISO7637_2; supervisor threshold and reset behavior are NOT simulated."
+      "coverage_note": "H-11 (issue #64): supply-transient stimulus source (environment-side, not an item function) simulated by CancestryLib.Power.PulseISO7637_2 - ISO 7637-2 pulses 1..4 and ISO 16750-2:2012 load-dump pulses 5a/5b, OR-002 regression only, qualification pending (#41)."
     },
     {
       "la_component": "SafetyMonitor",

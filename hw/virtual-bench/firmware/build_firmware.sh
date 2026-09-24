@@ -23,11 +23,14 @@
 #   ./build_firmware.sh
 #
 # CANCESTRY_T2_DRIVER selects the off-tree driver linked with the unchanged
-# v1.0.0 firmware sources (H-10, issue #62):
+# v1.0.0 firmware sources (H-10, issue #62; H-11, issue #64):
 #   retention (default) - the QA-EV-01 retention escalation recipe (main.c)
 #   can_fault           - the CAN Bus-Off / CRC fault driver (can_fault.c),
 #                         executed by scenarios/t2_busoff_001.py and
 #                         scenarios/t2_crc_001.py against the fault injector
+#   bor_brownout        - the brownout/BOR recovery driver (bor_brownout.c),
+#                         executed by scenarios/t2_brownout_001.py against the
+#                         BOR reset injector
 # Anything else fails closed before any compile.
 #
 # The linker script comes from the tag v1.0.0 platform
@@ -94,10 +97,10 @@ mkdir -p "$(dirname "$ELF_OUT")"
         "$FW_TAG_DIR/platform/cortex_m/startup.c"
         "$FW_TAG_DIR/platform/cortex_m/alloc_stubs.c"
     )
-    # Off-tree driver selection (H-10, issue #62). The driver choice changes
-    # the ELF contents, so it is recorded in the determinism header and a
-    # misspelled selection stops the build instead of producing the wrong
-    # image silently.
+    # Off-tree driver selection (H-10, issue #62; bor_brownout added by
+    # H-11, issue #64). The driver choice changes the ELF contents, so it is
+    # recorded in the determinism header and a misspelled selection stops the
+    # build instead of producing the wrong image silently.
     DRIVER="${CANCESTRY_T2_DRIVER:-retention}"
     case "$DRIVER" in
         retention)
@@ -112,8 +115,14 @@ mkdir -p "$(dirname "$ELF_OUT")"
                 "$DRIVER_DIR/can_fault.c"
             )
             ;;
+        bor_brownout)
+            DRIVER_SOURCES=(
+                "$DRIVER_DIR/startup.s"
+                "$DRIVER_DIR/bor_brownout.c"
+            )
+            ;;
         *)
-            echo "unknown CANCESTRY_T2_DRIVER '$DRIVER' (expected: retention|can_fault)" >&2
+            echo "unknown CANCESTRY_T2_DRIVER '$DRIVER' (expected: retention|can_fault|bor_brownout)" >&2
             exit 1
             ;;
     esac

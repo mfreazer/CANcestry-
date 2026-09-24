@@ -39,6 +39,16 @@ def element(tree, uuid):
     return tree.xpath('//*[@id=$uuid]', uuid=uuid)[0]
 
 
+def first_not_simulated(rows):
+    """The first not_simulated bridge row, independent of row order.
+
+    H-11 (#64) inserted a simulated row into the seed, so an index-based
+    negative target would silently retarget a different row (and pass for the
+    wrong reason). The negative cases below select by property instead.
+    """
+    return next(row for row in rows if row['status'] == 'not_simulated')
+
+
 def bridge_change(repo, change):
     path = repo / 'hw/model/bridge.json'
     document = json.loads(path.read_text())
@@ -67,9 +77,12 @@ def test_repository_seed_passes(capsys):
     (lambda rows: rows[0].update(status='not_simulated', modelica_block=None,
                                rationale='not-yet-modeled'), 'Holdup'),
     (lambda rows: rows[0].update(modelica_block=None), "not of type 'string'"),
-    (lambda rows: rows[2].update(modelica_block='CancestryLib.Power.Holdup'), "not of type 'null'"),
-    (lambda rows: rows[2].update(rationale='anything goes'), 'rationale'),
-    (lambda rows: rows[2].update(rationale='n/a'), 'rationale'),
+    (lambda rows: first_not_simulated(rows).update(
+        modelica_block='CancestryLib.Power.Holdup'), "not of type 'null'"),
+    (lambda rows: first_not_simulated(rows).update(rationale='anything goes'),
+     'rationale'),
+    (lambda rows: first_not_simulated(rows).update(rationale='n/a'),
+     'rationale'),
     (lambda rows: rows[0].update(rationale='not-simulatable'), 'rationale'),
     (lambda rows: rows[0].update(status='unknown'), 'status'),
     (lambda rows: rows[0].pop('rationale'), 'rationale'),

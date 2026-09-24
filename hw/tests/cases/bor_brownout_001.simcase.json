@@ -1,0 +1,39 @@
+{
+  "schema_version": "0.1.0",
+  "case_id": "bor_brownout_001",
+  "requirement_id": "HW-SF-002",
+  "scenario": "BOR brownout fixture (H-11, issue #64): the 3V3 rail is nominal 3.3 V, collapses to 0 V at t = 10 ms for 100 us and returns to nominal. Acceptance of THIS case: (a) the BOR asserts the active-low NRST reset signal when the rail falls below the BOR level 3 threshold (2.8 V falling, HwRS HW-SF-002 (ii) / HW-SF-004, OR-008) and releases it only once the rail is above threshold + hysteresis AND the collapse interval has elapsed; (b) the retention-domain (VBAT) node stays above the 1.65 V retention floor with the OR-001 closed form (v = V0 - I*ESR - I*t/C over the collapse interval, I = I_mcu + I_leak) - the RTC backup domain therefore keeps the retained fault code; (c) main SRAM content is NOT preserved across the reset; (d) firmware execution resumes t_boot after the reset is released. Sub-event (i) (IWDG reset) and the 150 ms holdup_001 event belong to CancestryLib.Power.Holdup (H-01/OR-001) and are not re-modelled here.",
+  "not_covered": [
+    "BOR cell behaviour (threshold spread, hysteresis, reset filter/delay, retention-domain switching over the full temperature and voltage range): NO registered oracle exists for the BOR threshold behaviour (issue #64: 'no OR-XXX for BOR yet'). OR-001 witnesses only the retention-domain discharge closed form declared in this case, never the threshold comparator, the release gate or the reset timing. Credibility stays CL0 / sim-pending; no ledger promotion.",
+    "The hysteresis value V_bor_hyst and the post-reset resumption latency t_boot are ENGINEERING FIXTURES (DS12787 publishes no BOR hysteresis; the v1.0.0 post-reset startup latency is not characterised). They are regression constants, not silicon claims; bench correlation is pending (HwRS section 5).",
+    "The finite fall time of the collapsing rail, the charge-path recharge transient (R_path * C = 0.5 us, below the 1 us plant step), brownout shapes other than the modelled step collapse, and the multiple-BOR / repeated-collapse case are not modelled.",
+    "The MCU's own post-reset behaviour (reset-cause latching, option-byte configuration of BOR level 3) is firmware/RM0440 behaviour, exercised at T2 (hw/virtual-bench/scenarios/t2_brownout_001.py), not by this T1 fixture.",
+    "T4 physical correlation of the brownout window (golden bench capture): bench-pending per HwRS section 5 seed list."
+  ],
+  "model": "CancestryLib.Power.BOR",
+  "parameters": {
+    "V_nominal": 3.3,
+    "t_brownout": 0.01,
+    "t_collapse": 0.0001,
+    "V_bor": 2.8,
+    "V_bor_hyst": 0.2,
+    "t_boot": 0.0001,
+    "C_vbat": 1e-05,
+    "ESR_vbat": 0.02,
+    "V0_vbat": 3.3,
+    "I_mcu": 1.2e-05,
+    "I_leak": 5e-06,
+    "V_vbat_min": 1.65,
+    "R_path": 0.05
+  },
+  "tolerances": {
+    "vbat_max_abs_delta_v": 1e-09,
+    "v_bor_abs_tol_v": 1e-12
+  },
+  "oracle_id": "OR-001",
+  "seeds": [],
+  "solver": {
+    "step_s": 1e-06,
+    "stop_s": 0.02
+  }
+}
