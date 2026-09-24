@@ -1,9 +1,9 @@
 # T2 Virtual Bench Bring-Up — Handover (H-08, issue #55)
 
-**Status: RE-BUDGETED 21–30 — dispatches 21–25 executed; **SUCCESS
+**Status: RE-BUDGETED 21–30 — dispatches 21–26 executed; **SUCCESS
 CRITERION MET at dispatch 25** (live co-sim + OR-001 invariant +
 byte-identical two-run hashes + persisted passing evidence);
-F-33…F-36 applied; ready for dispatch 26 (full-green confirmation).**
+F-33…F-37 applied; ready for dispatch 27 (full-green confirmation).**
 Dispatch 21 (run `35893814425` @ `2306a36`) delivered the
 **first complete include** — step0…step8 green, F-32 runtime-verified
 — then hit the bare monitor EOF. Dispatch 22 (run `35924809178`)
@@ -57,8 +57,21 @@ pending-rejection fixture assumed a pending on-disk form. **F-36**
 fixes exactly those (workflow env + explicit `pending_reason`
 injection in the fixture); runner untouched; `test_t2_retention.py`
 is pinned → evidence re-issued (JSON `0e27899a…`, PLOT `cc66ef4b…`,
-SVG `d5f82c86…`, status `pending`); gates green. Stop criteria carry
-forward verbatim.
+SVG `d5f82c86…`, status `pending`); gates green. **Dispatch 26 (run
+`35935628647` @ `699bf31`, 23:51:14Z) = zero-execution stop:** the
+step script failed to PARSE (`syntax error near unexpected token '('`
+at line 55, exit 2) before any command ran — the F-36 comment I added
+inside the single-quoted `bash -lc '…'` payload contained an
+apostrophe (`suite's`) that truncated the string; bash then swallowed
+the host section up to the F-25 comment and choked on its `(`. No
+container, no builds, no tests; zero new information (self-inflicted;
+cycle disclosed as consumed, like dispatch 22). **F-37** rewrites the
+comment apostrophe-free and adds
+`tests/unit/tools/test_check_hw_workflow_bash_syntax.py` (21 tests:
+`bash -n` over every workflow `run:` block — proven to catch the
+dispatch-26 block — plus a raw-apostrophe-in-payload guard that
+accepts the valid `'"'"'` idiom `hw-fast.yml` uses). No pinned source
+moved → no evidence re-issue. Stop criteria carry forward verbatim.
 
 **GitHub outage note (resolved):** `GH_TOKEN` went invalid mid-session
 (401s on every `gh api`); after reconnecting GitHub in Arena the
@@ -68,20 +81,21 @@ connection works again. During the outage, reads still worked via
 remains 403 — dispatches stay human-triggered from the UI (§5.1).
 
 **Next action:** trigger `hw-nightly` from the UI **on
-`arena/01a0cbe2-cancestry`** for **dispatch 26** (cycle 6 of the
-re-budget) — origin tip carries F-36 (verify the run page shows that
+`arena/01a0cbe2-cancestry`** for **dispatch 27** (cycle 7 of the
+re-budget) — origin tip carries F-37 (verify the run page shows that
 SHA before waiting on results; dispatch 22 taught us the race).
 Expectation: **full-green job** — RUN 1 + RUN 2 byte-identical
 (repeat of the proven success path), then the in-container suite
-46/46 (F-36 restores the e2e env and makes the rejection fixture
+46/46 (F-36 restored the e2e env and made the rejection fixture
 form-independent; the e2e re-runs `--check` as a third determinism
-probe), all three artifacts land. Any two-run hash mismatch remains a
-**STOP-and-flag** event per memo §4 (no test doubles, no gate
-weakening). If anything points at firmware/FMU internals, **stop and
-surface to the Lead SE** (memo §3/§4); remaining cycles 26–30, hard
-stop 30. The success criterion itself is already MET (dispatch 25) —
-dispatch 26 confirms the whole job green for the record; the Lead SE
-may call the stop early or continue the budget (their call).
+probe), all three artifacts land; the F-37 guards run in the PR
+battery. Any two-run hash mismatch remains a **STOP-and-flag** event
+per memo §4 (no test doubles, no gate weakening). If anything points
+at firmware/FMU internals, **stop and surface to the Lead SE**
+(memo §3/§4); remaining cycles 27–30, hard stop 30. The success
+criterion itself is already MET (dispatch 25) — dispatch 27 confirms
+the whole job green for the record; the Lead SE may call the stop
+early or continue the budget (their call).
 
 This document is internal continuity documentation for the bring-up. It is
 not a safety claim and promotes nothing (HwAGENTS.md rules 13/14).
@@ -276,6 +290,7 @@ footnote below the table; flagged for Lead SE whether it is chargeable.
 | 23 | 35928186369 | fc3fc93 (F-33) | **ROOT CAUSE DETERMINED** — first RunFor killed by `'PythonPeripheral' object has no attribute 'Machine'` (Fatal error on the CPU bus path; `self.Machine` in the scripted models); `err=` named the in-flight `emulation RunFor`; `proc=alive-at-failure`; full 151-line transcript captured (preflight magic ✓, slot reads ✓). **F-34** applied: 10× `self.Machine`→`monitor.Machine` + named test. Cycle 3 of the re-budget (remaining: 24–30). |
 | 24 | 35932082726 | a91ff75 (F-34) | **LIVE CO-SIM + OR-001 INVARIANT HELD** — `run_scenario` returned (all hooks fired, `iwdgrstf` observed, `ordering_violation` None, retention preserved in-run, plant ±1 mV) ⇒ first complete scenario execution; then never-executed pass path: `KeyError: 'bridge_sha256'` at `passing_document` (`main` discarded the `runlog` return). RUN 1 wrote no evidence; RUN 2 never ran. `t2-ci-logs-a91ff75…` landed (8044 B, F-33 split works); `build/hw` zip still failed (root-owned → F-35 chmod). **F-35 applied**: `scenario_passing_body` merge + 2 named tests + workflow chmod/artifact paths. Cycle 4 of the re-budget (remaining: 25–30). |
 | 25 | 35934538207 | a314803 (F-35) | **SUCCESS CRITERION MET** — `T2 evidence written: /work/hw/tests/evidence/t2_retention_001.json` + `T2 CHECK PASSED: byte-identical evidence reproduced` (live co-sim re-proven with all in-run assertions; RUN-2 determinism proven; persisted passing evidence). All three artifacts landed first time (`t2-virtual-bench-a314803…` **1,920,932 B** — F-35 chmod ended the zip failures; ci-logs 9253 B; renderer 5979 B). In-container suite 44/46: passing form validated (schema + regeneration + invariants), 2 never-run fixtures red — e2e missing `CANCESTRY_T2_ELF` on the pytest line + rejection fixture assumed pending on-disk form → **F-36 applied** (workflow env + explicit `pending_reason` injection; runner untouched; test file pinned → evidence re-issued). Job conclusion `failure` (pytest step only). Cycle 5 of the re-budget (remaining: 26–30). |
+| 26 | 35935628647 | 699bf31 (F-36) | **ZERO-EXECUTION STOP** — step script died parsing: `syntax error near unexpected token '('` at line 55, exit 2; no container/builds/tests ran. Root cause (self-inflicted): F-36 comment apostrophe (`suite's`) inside the single-quoted `bash -lc '…'` payload truncated the string; collateral landed on the F-25 comment's `runner's`. YAML validation passes such faults (bash-level). Zero new information; cycle consumed and disclosed. **F-37 applied**: apostrophe-free comment + `test_check_hw_workflow_bash_syntax.py` (bash -n over every run block — proven to catch this block — + raw-apostrophe guard honoring the `\'"\'"'` idiom). No pinned source moved → no evidence re-issue. Cycle 6 of the re-budget (remaining: 27–30). |
 
 Note on dispatch 18's pydev row: the `✅ construct (F-28)` entries in
 section 2 were **source-verified, not runtime-proven** — the E39 aborted
@@ -338,7 +353,7 @@ venv3/bin/python ci/check_hw_traceability.py .
 venv3/bin/python ci/check_hw_evidence.py --root .
 venv3/bin/python -m pytest tests/unit/tools/test_check_hw_*.py \
     tests/unit/tools/test_check_capella_model.py \
-    hw/virtual-bench/test_t2_retention.py -q      # ~327 passed
+    hw/virtual-bench/test_t2_retention.py -q      # ~348 passed
 venv3/bin/python -m pytest hw/tests -q             # omc-dependent tests error
                                                     # (no OpenModelica in sandbox;
                                                     # pre-existing, identical on
@@ -437,7 +452,10 @@ invariants). Success criterion MET (memo §4).**
 
 **Unproven (the actual bring-up):** a fully green in-container job
 (dispatch 25 was red on 2 never-run fixtures — F-36 fixes both;
-dispatch 26 confirms); T4/CL3 and anything beyond OR-001. The
+dispatch 26 never executed due to the F-37-fixed script syntax fault;
+dispatch 27 confirms); T4/CL3 and anything beyond OR-001. Also now
+proven at the process level: workflow bash-parseability is enforced
+by the F-37 tests in the PR battery. The
 invariant and two-run determinism are proven (dispatches 24/25) but
 must re-prove on every subsequent green run. Note: hooks, magic, and
 slot reads remain **platform bring-up proofs**; from dispatch 24 the

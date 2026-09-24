@@ -237,7 +237,7 @@ will be replaced by the success-path variant (issue #55 deliverables
 3–4) if a re-budgeted run lands live evidence, or superseded by a
 second stop-report if the re-budget exhausts.
 
-## Re-budget log — dispatches 21–25 (cycles 1–5 of 21–30); F-33 … F-36
+## Re-budget log — dispatches 21–26 (cycles 1–6 of 21–30); F-33 … F-37
 
 **Dispatch 21** — `hw-nightly` #26, run `35893814425`, manual
 dispatch, 2026-09-23 17:10, head `2306a36` (F-32), job exit 2 after
@@ -512,6 +512,67 @@ Gates after F-36: 5/5 checkers PASS; 327 passed, 1 deselected
 (handover §5.3 battery); `hw/tests` 43 passed + 9 pre-existing omc
 errors; ledger row exact; evidence `pending`; workflow YAML valid.
 
+**Dispatch 26** — run `35935628647`, head `699bf31` (F-36), manual
+dispatch from the GitHub UI, created 2026-09-23 23:51:14 UTC.
+**Zero-execution stop: the step script failed to PARSE, before any
+command ran.** The job output is the whole story:
+
+```
+…/86fd9aed….sh: line 55: syntax error near unexpected token `('
+…/86fd9aed….sh: line 55: `  # F-25 (issue #55): the runner's T2-DIAG line (the failure'
+Error: Process completed with exit code 2.
+```
+
+Root cause (self-inflicted, source-pinned before any edit): the F-36
+comment added inside the T2 step's **single-quoted** `bash -lc '…'`
+payload contained an apostrophe (`suite's`, line 198 of the
+workflow). Bash terminated the single-quoted string there; the stray
+closing quote on the `' 2>&1` line then *re-opened* a string that
+swallowed the host section up to the F-25 comment, whose own
+`runner's` apostrophe closed it — leaving `s T2-DIAG line (the
+failure` to be parsed as a command, i.e. a raw `(` at script line 55.
+Because bash parses the whole docker pipeline before executing
+anything, **no container ran, no builds ran, no tests ran** — the
+cycle produced zero new information (same class of waste as the
+dispatch-22 stale race, this time self-inflicted) and is disclosed as
+such. The YAML validator passed the file throughout: this is a
+bash-level fault invisible to `yaml.safe_load`, which exposed the gap
+in the local gate battery.
+
+**F-37 applied** (condition check per memo §3 — workflow + new test
+only). Touch set: `hw-nightly.yml` (the F-36 comment rewritten
+apostrophe-free, plus an F-37 warning line) and a **new** test file
+`tests/unit/tools/test_check_hw_workflow_bash_syntax.py` with two
+named guards: (1) `test_workflow_run_block_is_bash_parseable` runs
+`bash -n` over every `run:` block of every workflow (GH `${{ }}`
+expressions stubbed first) — proven to FAIL on the dispatch-26 block
+before the comment fix and to pass after; a reconstruction of the
+broken block reproduces the exact `syntax error near unexpected token
+'('` reported by CI; (2)
+`test_single_quoted_bash_lc_payloads_have_no_raw_apostrophes` flags
+raw apostrophes inside `bash -lc '…'` payloads after stripping the
+valid `'"'"'` embedding idiom (the form `hw-fast.yml` legitimately
+uses). Verified untouched: **all of `PINNED_SOURCES`** (empty diff —
+runner, tests for retention, bridge, models, `.resc`/`.repl`,
+firmware, FMU, schemas, oracles, Dockerfiles) → **no evidence
+re-issue required**. → **class check PASSED (workflow + tool test →
+runner class, in-lane) → applied.**
+
+Environment note (reset occurrence 6, Appendix A): between turns the
+workspace rewound the local branch to `8857bfa` again and partially
+wiped `venv3` (native `rpds`, `coverage/`, and
+`pip/_internal/operations/build` deleted — the same corruption
+signature seen earlier). Recovered per the Appendix recipe
+(`reset --hard 699bf31` with the new untracked test file surviving,
+venv rebuilt from the exact pins).
+
+Gates after F-37: 5/5 checkers PASS; **348 passed, 1 deselected**
+(handover §5.3 battery — 327 + the 21 new workflow-syntax tests);
+606 passed across all of `tests/unit/tools` + the retention file;
+`hw/tests` 43 passed + 9 pre-existing omc errors; ledger row exact;
+evidence `pending` (unchanged — nothing pinned moved); workflow YAML
+valid.
+
 ## Appendix A — Workspace-reset recovery (provenance note for auditors)
 
 Three (four counting the post-commit re-clone below) times during this
@@ -535,8 +596,14 @@ copied aside, `git reset --hard` restored `a91ff75` (= `FETCH_HEAD` =
 origin), and the copies were restored byte-for-byte — after which a
 hash comparison exposed that one file's patch (the renders manifest)
 had silently matched no entry on the first attempt and was re-run
-against the correct `plot_id` key. Recovery was mechanical, not
-editorial, every time:
+against the correct `plot_id` key. A sixth occurrence, during the
+F-37 turn after dispatch 26, again rewound the pointer to `8857bfa`
+**and** partially wiped `venv3` (native `rpds`, `coverage/` and
+`pip/_internal/operations/build` deleted — the same corruption
+signature as the first venv breakage); the one in-flight untracked
+file (the new workflow-syntax test) survived `reset --hard 699bf31`
+and the venv was rebuilt from the exact CI pins. Recovery was
+mechanical, not editorial, every time:
 
 1. `origin` is the source of truth: fetched
    `refs/heads/arena/01a0cbe2-cancestry` (first `6662659`, then
