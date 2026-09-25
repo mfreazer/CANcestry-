@@ -1,0 +1,88 @@
+#!/bin/bash
+# CANcestry sandbox: build OpenModelica 1.24.0 (headless omc) from source.
+#
+# WHY: the CI-pinned openmodelica/openmodelica:v1.24.0-minimal image is not
+# pullable from this sandbox (Docker Hub blocked). This script rebuilds the
+# same toolchain from the pinned v1.24.0 commit using only reachable hosts
+# (codeload.github.com, github.com git, registry.npmjs.org, pypi.org).
+#
+# This is LOCAL-DIAGNOSIS tooling only — it must never be used for evidence
+# (HwAGENTS.md rule 5: the pinned Docker image is the evidence toolchain).
+#
+# Re-run after any /tmp wipe; every stage is idempotent. ~40-60 min at -j2.
+set -e
+S=/tmp
+cd $S
+
+# ---------------------------------------------------------------- sources ---
+[ -d OpenModelica-1.24.0 ] || {
+  echo "== download OM v1.24.0 (904c4c78 = tag v1.24.0)"
+  curl -sL "https://codeload.github.com/openmodelica/OpenModelica/tar.gz/904c4c783a5fa6eb9e99e4a98bdb0cca1d619303" -o om-src.tgz
+  tar xzf om-src.tgz
+  mv OpenModelica-904c4c783a5fa6eb9e99e4a98bdb0cca1d619303 OpenModelica-1.24.0
+}
+# OMCompiler/3rdParty submodule (FMIL, expat 2.1.0, sundials, gc, antlr 3.2...)
+[ -d OpenModelica-1.24.0/OMCompiler/3rdParty/FMIL ] || {
+  echo "== download OMCompiler-3rdParty (82e892e)"
+  curl -sL "https://codeload.github.com/openmodelica/OMCompiler-3rdParty/tar.gz/82e892ece107787e9ff17780bf5ac8c3f6bc39ba" -o 3rdparty.tgz
+  tar xzf 3rdparty.tgz
+  mv OMCompiler-3rdParty-82e892ece107787e9ff17780bf5ac8c3f6bc39ba OpenModelica-1.24.0/OMCompiler/3rdParty
+}
+
+# ------------------------------------------------------------------- JRE ----
+# ANTLR 3.2 (parser codegen) needs a JVM. Zulu 8.15.0.2 committed in a public
+# repo (codeloadable). Runs fine for ANTLR 3.2.
+[ -x zjre/bin/java ] || {
+  echo "== download Zulu JRE 8 (docker-zulu repo)"
+  curl -sL "https://codeload.github.com/delitescere/docker-zulu/tar.gz/refs/heads/master" -o docker-zulu.tgz
+  tar xzf docker-zulu.tgz
+  mkdir -p zjre
+  tar xzf docker-zulu-master/zre8.15.0.2-cp3-jre8.0.92-linux_x64.tar.gz -C zjre --strip-components=1
+}
+zjre/bin/java -version
+
+# ------------------------------------------------------------------ venv ----
+[ -x venv-om/bin/cmake ] || {
+  echo "== python venv (cmake 3.28.3 + ninja)"
+  python3 -m venv venv-om
+  venv-om/bin/pip install -q "pip>=23" cmake==3.28.3 ninja
+}
+
+# ---------------------------------------------------------- header shims ----
+# No dev headers for curl/uuid on the sandbox; minimal API shims are enough
+# (om_curl.c uses a standard subset; runtime links the system shared libs).
+mkdir -p fakeinc/curl fakeinc/uuid
+if [ ! -f fakeinc/curl/curl.h ]; then python3 "$(dirname "$0")/make_header_shims.py"; fi
+
+# ------------------------------------------------------------- source patch
+python3 "$(dirname "$0")/patch_sources.py"
+
+# ------------------------------------------------------------ configure ----
+EXPAT_INC="-I$S/OpenModelica-1.24.0/OMCompiler/3rdParty/FMIL/ThirdParty/Expat/expat-2.1.0/lib"
+rm -rf om-build
+venv-om/bin/cmake -G Ninja \
+  -DCMAKE_MAKE_PROGRAM=$S/venv-om/bin/ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DOM_ENABLE_GUI_CLIENTS=OFF \
+  -DOM_OMC_ENABLE_CPP_RUNTIME=OFF \
+  -DOM_OMC_ENABLE_FORTRAN=OFF \
+  -DOM_OMC_ENABLE_IPOPT=OFF \
+  -DOM_OMC_USE_LAPACK=OFF \
+  -DOM_USE_CCACHE=OFF \
+  -DSUNDIALS_LAPACK_ENABLE=OFF \
+  -DJava_JAVA_EXECUTABLE=$S/zjre/bin/java \
+  -DCURL_INCLUDE_DIR=$S/fakeinc \
+  -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so.4 \
+  -DUUID_LIB=/usr/lib/x86_64-linux-gnu/libuuid.so.1 \
+  -DCMAKE_C_FLAGS="-DOMC_BOOTSTRAPPING -I$S/fakeinc $EXPAT_INC" \
+  -DCMAKE_CXX_FLAGS="-DOMC_BOOTSTRAPPING -I$S/fakeinc $EXPAT_INC" \
+  -S $S/OpenModelica-1.24.0 -B $S/om-build
+
+# ----------------------------------------------------------------- build ----
+cd $S/om-build
+$S/venv-om/bin/ninja -j2
+echo "== BUILD OK"
+ls -la omc 2>/dev/null || true
+echo "== omc smoke test"
+LD_LIBRARY_PATH=$S/om-build/OMCompiler/3rdParty/FMIL/Config.cmake/Minizip:$LD_LIBRARY_PATH \
+  $PWD/omc --version || true
