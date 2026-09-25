@@ -25,8 +25,8 @@ cd $S
 [ -d OpenModelica-1.24.0/OMCompiler/3rdParty/FMIL ] || {
   echo "== download OMCompiler-3rdParty (82e892e)"
   curl -sL "https://codeload.github.com/openmodelica/OMCompiler-3rdParty/tar.gz/82e892ece107787e9ff17780bf5ac8c3f6bc39ba" -o 3rdparty.tgz
-  tar xzf 3rdparty.tgz
-  mv OMCompiler-3rdParty-82e892ece107787e9ff17780bf5ac8c3f6bc39ba OpenModelica-1.24.0/OMCompiler/3rdParty
+  mkdir -p OpenModelica-1.24.0/OMCompiler/3rdParty
+  tar xzf 3rdparty.tgz -C OpenModelica-1.24.0/OMCompiler/3rdParty --strip-components=1
 }
 
 # ------------------------------------------------------------------- JRE ----
