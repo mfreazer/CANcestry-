@@ -83,6 +83,32 @@ cd $S/om-build
 $S/venv-om/bin/ninja -j2
 echo "== BUILD OK"
 ls -la omc 2>/dev/null || true
+
+# --------------------------------------------------------------- install ----
+# Install under a sandbox-local prefix (no root needed). omc finds its
+# library dir from OPENMODELICAHOME/getInstallationDirectoryPath.
+$S/venv-om/bin/cmake --install . --prefix $S/om-local
+mkdir -p $S/om-local/share/omlibrary/libraries
+
+# Modelica Standard Library 4.0.0 (same major as the CI docker image's
+# installPackage(Modelica,"4.0.0")). The OM source tarball has no MSL
+# submodule; the package server is unreachable, so take the 4.0.x
+# maintenance branch from GitHub. Pre-generated .mo files: no make needed.
+MSL_SHA=d2dcb39e055ceb88fef5328a26255cdd094389bd   # MA/maint/4.0.x
+if [ ! -d "$S/msl-$MSL_SHA/Modelica" ]; then
+  echo "== download ModelicaStandardLibrary (MA/maint/4.0.x)"
+  curl -sL "https://codeload.github.com/OpenModelica/OpenModelica-ModelicaStandardLibrary/tar.gz/$MSL_SHA" -o msl.tgz
+  tar xzf msl.tgz
+  mv "OpenModelica-ModelicaStandardLibrary-$MSL_SHA" "$S/msl-$MSL_SHA"
+fi
+# Canonical installPackage layout: <libraries>/Modelica 4.0.0/package.mo
+mkdir -p "$HOME/.openmodelica/libraries"
+rm -rf "$HOME/.openmodelica/libraries/Modelica 4.0.0"
+cp -r "$S/msl-$MSL_SHA/Modelica" "$HOME/.openmodelica/libraries/Modelica 4.0.0"
+ln -sfn "Modelica 4.0.0" "$HOME/.openmodelica/libraries/Modelica"
+echo "== MSL installed to ~/.openmodelica/libraries"
+
 echo "== omc smoke test"
-LD_LIBRARY_PATH=$S/om-build/OMCompiler/3rdParty/FMIL/Config.cmake/Minizip:$LD_LIBRARY_PATH \
-  $PWD/omc --version || true
+$S/om-local/bin/omc --version || true
+printf 'loadModel(Modelica); getErrorString();' > /tmp/om-smoke.mos
+$S/om-local/bin/omc /tmp/om-smoke.mos || true
