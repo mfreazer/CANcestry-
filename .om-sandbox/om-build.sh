@@ -61,6 +61,10 @@ python3 "$(dirname "$0")/patch_sources.py"
 # ------------------------------------------------------------ configure ----
 EXPAT_INC="-I$S/OpenModelica-1.24.0/OMCompiler/3rdParty/FMIL/ThirdParty/Expat/expat-2.1.0/lib"
 rm -rf om-build
+# NOTE: no -DOMC_BOOTSTRAPPING (OM's cmake build never defines it; the two
+# header choices it toggles are identical files in this tree). The box
+# layout corruption seen earlier came from a STALE boot/bomc staging, not
+# from this flag - see patch_sources.py section 6.
 venv-om/bin/cmake -G Ninja \
   -DCMAKE_MAKE_PROGRAM=$S/venv-om/bin/ninja \
   -DCMAKE_BUILD_TYPE=Release \
@@ -75,10 +79,6 @@ venv-om/bin/cmake -G Ninja \
   -DCURL_INCLUDE_DIR=$S/fakeinc \
   -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so.4 \
   -DUUID_LIB=/usr/lib/x86_64-linux-gnu/libuuid.so.1 \
-  # NOTE: no -DOMC_BOOTSTRAPPING (OM's cmake build never defines it; the two
-  # header choices it toggles are identical files in this tree). The box
-  # layout corruption seen earlier came from a STALE boot/bomc staging, not
-  # from this flag - see patch_sources.py section 6.
   -DCMAKE_C_FLAGS="-I$S/fakeinc $EXPAT_INC" \
   -DCMAKE_CXX_FLAGS="-I$S/fakeinc $EXPAT_INC" \
   -S $S/OpenModelica-1.24.0 -B $S/om-build
