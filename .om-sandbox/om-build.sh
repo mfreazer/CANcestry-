@@ -15,8 +15,9 @@ S=/tmp
 cd $S
 
 # ---------------------------------------------------------------- sources ---
-[ -d OpenModelica-1.24.0 ] || {
+[ -f OpenModelica-1.24.0/OMCompiler/Compiler/FrontEnd/Absyn.mo ] || {
   echo "== download OM v1.24.0 (904c4c78 = tag v1.24.0)"
+  rm -rf OpenModelica-1.24.0
   curl -sL "https://codeload.github.com/openmodelica/OpenModelica/tar.gz/904c4c783a5fa6eb9e99e4a98bdb0cca1d619303" -o om-src.tgz
   tar xzf om-src.tgz
   mv OpenModelica-904c4c783a5fa6eb9e99e4a98bdb0cca1d619303 OpenModelica-1.24.0
@@ -74,8 +75,12 @@ venv-om/bin/cmake -G Ninja \
   -DCURL_INCLUDE_DIR=$S/fakeinc \
   -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so.4 \
   -DUUID_LIB=/usr/lib/x86_64-linux-gnu/libuuid.so.1 \
-  -DCMAKE_C_FLAGS="-DOMC_BOOTSTRAPPING -I$S/fakeinc $EXPAT_INC" \
-  -DCMAKE_CXX_FLAGS="-DOMC_BOOTSTRAPPING -I$S/fakeinc $EXPAT_INC" \
+  # NOTE: no -DOMC_BOOTSTRAPPING (OM's cmake build never defines it; the two
+  # header choices it toggles are identical files in this tree). The box
+  # layout corruption seen earlier came from a STALE boot/bomc staging, not
+  # from this flag - see patch_sources.py section 6.
+  -DCMAKE_C_FLAGS="-I$S/fakeinc $EXPAT_INC" \
+  -DCMAKE_CXX_FLAGS="-I$S/fakeinc $EXPAT_INC" \
   -S $S/OpenModelica-1.24.0 -B $S/om-build
 
 # ----------------------------------------------------------------- build ----
@@ -106,9 +111,30 @@ mkdir -p "$HOME/.openmodelica/libraries"
 rm -rf "$HOME/.openmodelica/libraries/Modelica 4.0.0"
 cp -r "$S/msl-$MSL_SHA/Modelica" "$HOME/.openmodelica/libraries/Modelica 4.0.0"
 ln -sfn "Modelica 4.0.0" "$HOME/.openmodelica/libraries/Modelica"
+# The package resolver consults this index BEFORE falling back to the
+# (unreachable) package server; without it, loadModel(Modelica) tries
+# curl and segfaults inside om_curl_multi_download.
+cat > "$HOME/.openmodelica/libraries/index.json" <<'JSON'
+{
+  "libs": {
+    "Modelica": {
+      "versions": {
+        "4.0.0": {
+          "provides": ["Modelica 4.0.0"],
+          "support": "fullSupport"
+        }
+      }
+    }
+  }
+}
+JSON
 echo "== MSL installed to ~/.openmodelica/libraries"
 
 echo "== omc smoke test"
 $S/om-local/bin/omc --version || true
+mkdir -p /tmp/om-smoke/T
+printf 'within ;\npackage T "smoke"\n  model A\n    Real x;\n  end A;\nend T;\n' > /tmp/om-smoke/T/package.mo
+printf 'loadFile("/tmp/om-smoke/T/package.mo"); getErrorString();' > /tmp/om-smoke/t1.mos
+$S/om-local/bin/omc /tmp/om-smoke/t1.mos || true
 printf 'loadModel(Modelica); getErrorString();' > /tmp/om-smoke.mos
 $S/om-local/bin/omc /tmp/om-smoke.mos || true
