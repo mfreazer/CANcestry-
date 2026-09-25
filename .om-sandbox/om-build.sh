@@ -107,10 +107,18 @@ if [ ! -d "$S/msl-$MSL_SHA/Modelica" ]; then
   mv "OpenModelica-ModelicaStandardLibrary-$MSL_SHA" "$S/msl-$MSL_SHA"
 fi
 # Canonical installPackage layout: <libraries>/Modelica 4.0.0/package.mo
+# ModelicaServices is a TOP-LEVEL sibling package (not inside Modelica/);
+# MSL's uses-annotation requires it. Missing it makes omc "skip" the load
+# and leaves dangling references (Modelica.Constants.pi unresolvable,
+# buildModelFMU crashes in codegen on heap corruption from the broken
+# program tree).
 mkdir -p "$HOME/.openmodelica/libraries"
-rm -rf "$HOME/.openmodelica/libraries/Modelica 4.0.0"
+rm -rf "$HOME/.openmodelica/libraries/Modelica 4.0.0" \
+       "$HOME/.openmodelica/libraries/ModelicaServices 4.0.0"
 cp -r "$S/msl-$MSL_SHA/Modelica" "$HOME/.openmodelica/libraries/Modelica 4.0.0"
 ln -sfn "Modelica 4.0.0" "$HOME/.openmodelica/libraries/Modelica"
+cp -r "$S/msl-$MSL_SHA/ModelicaServices" "$HOME/.openmodelica/libraries/ModelicaServices 4.0.0"
+ln -sfn "ModelicaServices 4.0.0" "$HOME/.openmodelica/libraries/ModelicaServices"
 # The package resolver consults this index BEFORE falling back to the
 # (unreachable) package server; without it, loadModel(Modelica) tries
 # curl and segfaults inside om_curl_multi_download.
@@ -121,6 +129,14 @@ cat > "$HOME/.openmodelica/libraries/index.json" <<'JSON'
       "versions": {
         "4.0.0": {
           "provides": ["Modelica 4.0.0"],
+          "support": "fullSupport"
+        }
+      }
+    },
+    "ModelicaServices": {
+      "versions": {
+        "4.0.0": {
+          "provides": ["ModelicaServices 4.0.0"],
           "support": "fullSupport"
         }
       }
@@ -138,3 +154,25 @@ printf 'loadFile("/tmp/om-smoke/T/package.mo"); getErrorString();' > /tmp/om-smo
 $S/om-local/bin/omc /tmp/om-smoke/t1.mos || true
 printf 'loadModel(Modelica); getErrorString();' > /tmp/om-smoke.mos
 $S/om-local/bin/omc /tmp/om-smoke.mos || true
+# The decisive check: buildModelFMU used to segfault inside libuuid on
+# EVERY build (sandbox gcc miscompiles the 16-byte struct-by-value call
+# uuid_generate(uuid_t) - see patch_sources.py section 7). This mirrors
+# the pinned test's build script exactly.
+CAN_DIR=/home/user/CANcestry-/hw/model/CancestryLib
+{
+  echo 'loadModel(Modelica); getErrorString();'
+  echo "loadFile(\"$CAN_DIR/package.mo\"); getErrorString();"
+  echo "loadFile(\"$CAN_DIR/Power/package.mo\"); getErrorString();"
+  echo "loadFile(\"$CAN_DIR/Power/BOR.mo\"); getErrorString();"
+  echo 'buildModelFMU(CancestryLib.Power.BOR, version="2.0", fmuType="me", fileNamePrefix="om_smoke_bor"); getErrorString();'
+} > /tmp/om-smoke/bor.mos
+( cd /tmp/om-smoke && $S/om-local/bin/omc --showErrorMessages /tmp/om-smoke/bor.mos ) > /tmp/om-smoke/bor.log 2>&1
+SMOKE_RC=$?
+if [ $SMOKE_RC -ne 0 ]; then
+  echo "SMOKE FAILED (rc=$SMOKE_RC):"
+  tail -20 /tmp/om-smoke/bor.log
+  exit 1
+fi
+grep -q "om_smoke_bor.fmu" /tmp/om-smoke/bor.log || { echo "SMOKE FAILED: no FMU name in output"; tail -20 /tmp/om-smoke/bor.log; exit 1; }
+[ -f /tmp/om-smoke/om_smoke_bor.fmu ] || { echo "SMOKE FAILED: FMU file missing"; exit 1; }
+echo "== BOR FMU built: /tmp/om-smoke/om_smoke_bor.fmu (buildModelFMU OK)"

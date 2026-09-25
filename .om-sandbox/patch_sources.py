@@ -143,4 +143,56 @@ if need_stage:
 else:
     print("ok      boot/bomc staged (pinned header present)")
 
+# 7. Sandbox toolchain defect: the local gcc 12.2 MISCOMPILES calls that
+#    pass a 16-byte alignment-1 struct BY VALUE. The SysV x86-64 ABI says
+#    such a value is MEMORY class and must be passed as a hidden POINTER in
+#    RDI; this gcc instead passes the bytes as two QWORD values in
+#    RDI/RSI (and for 32-byte values copies to a stack slot without setting
+#    RDI at all). Every call into an EXTERNALLY compiled library that takes
+#    such a struct by value therefore corrupts/crashes:
+#      - SystemImpl__getUUIDStr calls uuid_generate(uuid_t) and
+#        uuid_unparse_lower(const uuid_t, ...) (uuid_t = 16 x unsigned
+#        char, alignment 1). The real libuuid.so.1 (correctly compiled)
+#        treats RDI as the pointer -> writes 16 zero bytes through a
+#        garbage/NULL pointer -> SIGSEGV inside __uuid_generate_random.
+#      - Repro without omc: a 10-line program calling uuid_generate()
+#        segfaults 100% of the time; the same call through a self-compiled
+#        libuuid.so.1 (built with the same broken gcc) works.
+#    buildModel/buildModelFMU ALWAYS call getUUIDStr (callTargetTemplates),
+#    so every FMU build crashed in libuuid.
+#    Fix: keep WITH_LIBUUID (CMake still links libuuid) but generate the
+#    random data with getrandom(2) directly - no 16-byte struct crosses a
+#    call boundary. Reproducible, no behaviour change (the UUID only names
+#    generated-code instances).
+OLD_BODY = (
+    "#elif defined(WITH_LIBUUID)\n"
+    "  uuid_t uu;\n"
+    "  uuid_generate(uu);\n"
+    "  uuid_unparse_lower(uu, uuidStr);\n"
+)
+NEW_BODY = (
+    "#elif defined(WITH_LIBUUID)\n"
+    "  /* Sandbox toolchain: the local gcc miscompiles 16-byte alignment-1\n"
+    "     struct-by-value passing (bytes in RDI/RSI instead of the ABI\n"
+    "     pointer), so the libuuid API (uuid_t passed by value) crashes.\n"
+    "     Generate the random bytes with getrandom(2) instead. */\n"
+    "  {\n"
+    "    unsigned char b[16];\n"
+    "    if (getrandom(b, 16, 0) == 16) {\n"
+    "      b[6] = (unsigned char)((b[6] & 0x0f) | 0x40);\n"
+    "      b[8] = (unsigned char)((b[8] & 0x3f) | 0x80);\n"
+    "      sprintf(uuidStr,\n"
+    "        \"%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x\",\n"
+    "        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9],\n"
+    "        b[10], b[11], b[12], b[13], b[14], b[15]);\n"
+    "    }\n"
+    "  }\n"
+)
+patch("OMCompiler/Compiler/runtime/systemimpl.c", [
+    ("#if defined(WITH_LIBUUID)\n#include <uuid/uuid.h>\n#endif\n",
+     "#if defined(WITH_LIBUUID)\n#include <uuid/uuid.h>\n#endif\n"
+     "#include <sys/random.h>\n#include <stdio.h>\n"),
+    (OLD_BODY, NEW_BODY),
+])
+
 print("all patches done")
