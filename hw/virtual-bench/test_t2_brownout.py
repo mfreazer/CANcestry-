@@ -644,11 +644,12 @@ def test_plant_slave_advances_time_in_contiguous_integer_sub_steps(monkeypatch):
     for current_us in (0, 100, 200):
         slave.do_step_us(current_us, 100)
     assert slave.time_us == 300
-    # Per sub-step: setTime -> event mode -> bounded event iteration ->
-    # continuous-time mode -> completedIntegratorStep.
+    # Per sub-step: setTime -> completedIntegratorStep (the sub-step's
+    # zero-crossings are registered before any readout) -> event mode ->
+    # bounded event iteration -> continuous-time mode.
     per_step = plant.names()[plant.names().index("setTime"):]
-    assert per_step == ["setTime", "enterEventMode", "newDiscreteStates",
-                        "enterContinuousTimeMode", "completedIntegratorStep"] * 3
+    assert per_step == ["setTime", "completedIntegratorStep", "enterEventMode",
+                        "newDiscreteStates", "enterContinuousTimeMode"] * 3
     set_times = [call[1] for call in plant.calls if call[0] == "setTime"]
     assert set_times == [100 / 1e6, 200 / 1e6, 300 / 1e6]
     # A skipping, repeating or over-horizon orchestrator fails closed.

@@ -681,6 +681,17 @@ def execute_bor(fmu, times_us, parameters=None):
         slave.enterContinuousTimeMode()
         for time_us in times_us:
             slave.setTime(float(time_us) / 1e6)
+            # The step's zero-crossings are registered by completedIntegratorStep
+            # and must be settled BEFORE the sample at this instant: in the
+            # pinned OpenModelica 1.24 ModelExchange runtime the event
+            # indicator of a boundary at exactly t_n is only evaluated by
+            # completedIntegratorStep, so sampling first would leave the
+            # pre-event relation active at t_n (the brownout at 10000 us
+            # would be read one sample late).
+            _, terminate = slave.completedIntegratorStep()
+            assert not terminate, (
+                "the BOR FMU requested premature termination at %d us"
+                % time_us)
             slave.enterEventMode()
             finish_event_iteration(slave)
             slave.enterContinuousTimeMode()
@@ -688,10 +699,6 @@ def execute_bor(fmu, times_us, parameters=None):
                                     for name in BOR_SAMPLED_OUTPUTS])
             samples[time_us] = dict(zip(
                 BOR_SAMPLED_OUTPUTS, (float(value) for value in values)))
-            _, terminate = slave.completedIntegratorStep()
-            assert not terminate, (
-                "the BOR FMU requested premature termination at %d us"
-                % time_us)
         # Terminate LAST and record its outcome (never hide it). In the
         # ModelExchange path the FMU is in continuous-time mode here, which
         # is one of the two states the pinned runtime accepts terminate in;
@@ -975,14 +982,15 @@ def test_execute_bor_advances_time_and_re_evaluates_events_per_sample(monkeypatc
     init_index = names.index("exitInitializationMode")
     assert names[init_index + 1:init_index + 3] == ["newDiscreteStates",
                                                     "enterContinuousTimeMode"]
-    # Per sample: setTime -> event mode -> bounded event iteration ->
-    # continuous-time mode -> getReal -> completedIntegratorStep.
+    # Per sample: setTime -> completedIntegratorStep (the step's
+    # zero-crossings are registered before the sample) -> event mode ->
+    # bounded event iteration -> continuous-time mode -> getReal.
     per_sample = names[names.index("setTime"):]
     expected = []
     for _ in times_us:
-        expected.extend(["setTime", "enterEventMode", "newDiscreteStates",
-                         "enterContinuousTimeMode", "getReal",
-                         "completedIntegratorStep"])
+        expected.extend(["setTime", "completedIntegratorStep", "enterEventMode",
+                         "newDiscreteStates", "enterContinuousTimeMode",
+                         "getReal"])
     assert per_sample[:len(expected)] == expected
     # The plant time is set from integer microseconds (determinism, rule 5).
     set_times = [call[1] for call in slave.calls if call[0] == "setTime"]
