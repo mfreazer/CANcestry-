@@ -40,7 +40,7 @@
     "hw/virtual-bench/firmware/startup.s": "sha256:8182c84a3c7028723006271fa0678f8c54bd0040d0476fc3ee2d93ca1e9e5606",
     "hw/virtual-bench/fmi_bridge.py": "sha256:d1ddfeea57ab68df5ec1f0e4fcfc75faa3f9ef4a5bac5e9b93ae9bf138d0b13d",
     "hw/virtual-bench/renode/can_fault_injector.py": "sha256:c7fa605720a52f696878a27ce8a7a660c8ca0146cd0374c37069ec74978090d2",
-    "hw/virtual-bench/renode/cancestry-hw-fault.resc": "sha256:812a8bbc37332ed90d7fb320cc17d863ce34c828038087b85529bca56631f2be",
+    "hw/virtual-bench/renode/cancestry-hw-fault.resc": "sha256:f0d2403dcc7707740ebbd700c28374948b96865ad2d6282631ba7ad5def7d8c6",
     "hw/virtual-bench/renode/stm32g474-cancestry.repl": "sha256:88b5b87af9da8d468c9b75f94f6827271ea82e73f20915e9ed23a05bcd2b7bf0",
     "hw/virtual-bench/scenarios/t2_crc_001.py": "sha256:629e976265c8a2b648a248cc3b38ac5ac8456781fbbccb49f2f6f12931beda08",
     "hw/virtual-bench/t2_fault_common.py": "sha256:8f6e11604632dfb95fc69a151bff4744d255f52accf845a1129c38276bcb27c4",

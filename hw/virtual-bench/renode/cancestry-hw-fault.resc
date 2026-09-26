@@ -162,12 +162,23 @@ python "_clog.Logger.Info('[cancestry-hw-fault] step6: fault symbol hooks instal
 # Both hooks are first-event-only (guarded on the slot still reading 0) and
 # touch only the plain t2_trace memory, so no hook ever re-enters a scripted
 # peripheral.
+#
+# The hooked peripheral is passed by its BARE machine-element name.
+# Monitor command arguments resolve to machine elements through
+# MonitorCommands.ConvertValue -> TryFindPeripheralByName (name lookup);
+# the Python index expression machine['fdcan1_scratch'] is NOT a valid
+# argument form - it fails the parameter conversion, aborts the include
+# after the magic write, and its error text (which contains the hook
+# script, incl. "ReadDoubleWord") contaminates the monitor stream the
+# orchestrator's preflight reads (hw-nightly 36115589349, 2026-09-25,
+# main @ 5294c6a: first live run of this script, preflight saw a
+# misparsed 0x18 at the magic slot and fail-closed).
 # ---------------------------------------------------------------------
-sysbus SetHookBeforePeripheralWrite machine['fdcan1_scratch'] """
+sysbus SetHookBeforePeripheralWrite fdcan1_scratch """
 if offset == 0x18 and (machine['sysbus'].ReadDoubleWord(0x60000048) == 0) and ((machine['sysbus'].ReadDoubleWord(0x40006418) & 1) == 1) and ((value & 1) == 0):
     machine['sysbus'].WriteDoubleWord(0x60000048, int(round(machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1000000)))
 """
-sysbus SetHookBeforePeripheralWrite machine['fdcan1_scratch'] """
+sysbus SetHookBeforePeripheralWrite fdcan1_scratch """
 if offset == 0x50 and (machine['sysbus'].ReadDoubleWord(0x60000054) == 0) and ((machine['sysbus'].ReadDoubleWord(0x40006450) & 0x10000) != 0) and ((value & 0x10000) == 0):
     machine['sysbus'].WriteDoubleWord(0x60000054, int(round(machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1000000)))
 """
