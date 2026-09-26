@@ -48,6 +48,12 @@ zjre/bin/java -version
   python3 -m venv venv-om
   venv-om/bin/pip install -q "pip>=23" cmake==3.28.3 ninja
 }
+# The built omc resolves cmake AT RUNTIME as the bare string "cmake" on PATH
+# (Autoconf.mo.in hardcodes `constant String cmake = "cmake"`; buildModelFMU
+# calls SimCodeUtil.getCMakeVersion -> `cmake --version`). The sandbox has no
+# system cmake, so expose the venv one: without this, buildModelFMU fails
+# with "Failed to get version from cmake" and `omc --version` prints garbage.
+ln -sf "$S/venv-om/bin/cmake" /usr/local/bin/cmake
 
 # ---------------------------------------------------------- header shims ----
 # No dev headers for curl/uuid on the sandbox; minimal API shims are enough

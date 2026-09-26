@@ -2,11 +2,21 @@
 """Local-diagnosis replay of the BOR ModelExchange sweep.
 
 Builds the BOR FMU with the sandbox-built omc (same buildModelFMU script
-text as hw/tests/test_bor_physics.py), replays the EXACT per-microsecond
-ModelExchange sequence of execute_bor() over 0..20000 us, and reports the
-sampled values at the brownout window instants. Also dumps the generated
-C from the FMU for code inspection (the inline-ternary vs relations-latch
-question).
+text as hw/tests/test_bor_physics.py), replays the per-microsecond
+ModelExchange sequence over 0..20000 us in BOTH candidate call orders,
+and reports the sampled values at the brownout window instants against
+the exact reference:
+
+  * "cis_first" - the ea86315 order:
+      setTime -> completedIntegratorStep -> enterEventMode
+      -> newDiscreteStates* -> enterContinuousTimeMode -> sample
+  * "pulse"     - the order the green pulse evaluator uses:
+      setTime -> enterEventMode -> newDiscreteStates*
+      -> enterContinuousTimeMode -> sample -> completedIntegratorStep
+
+Also dumps the generated C from the FMU for code inspection (which
+function computes `v`, and whether the branch is an inline ternary or a
+latched relation).
 
 NOT evidence tooling (HwAGENTS.md rule 5). Run from the repo root:
     /tmp/venv-fmpy/bin/python .om-sandbox/replay_bor.py
@@ -69,16 +79,33 @@ def dump_generated_c(fmu):
     print("generated sources ->", outdir)
     for p in sorted(outdir.rglob("*.c")):
         text = p.read_text(errors="replace")
-        if "fmi2GetReal" in text or re.search(r"\bv\b.*v_nominal|t_brownout", text):
-            print("---- candidate generated file:", p)
-        # the model C: find the equation for 'v'
-        m = re.search(r"(.{0,200}t_brownout.{0,300})", text)
-        if m:
-            print(m.group(1))
+        if re.search(r"\bt_brownout\b", text):
+            print("---- t_brownout appears in:", p)
+    model_c = BUILD / "fmu-src" / "sources" / "model.c"
+    if model_c.is_file():
+        text = model_c.read_text(errors="replace")
+        for m in re.finditer(r"v_nominal", text):
+            s = max(0, m.start() - 260)
+            print("---- context:\n" + text[s:m.end() + 260].strip() + "\n")
             break
 
 
-def replay(fmu):
+def ref_outputs(ref, time_s):
+    """Reference values for every sampled output at `time_s` seconds."""
+    p = ref.p
+    rail = ref.rail(time_s)
+    asserted, nrst = ref.reset_state(time_s, rail)
+    return {
+        "v": rail,
+        "nrst": nrst,
+        "v_vbat": ref.vbat(time_s),
+        "retention_preserved": ref.retention_preserved(time_s),
+        "sram_preserved": ref.sram_preserved(time_s),
+        "firmware_running": ref.firmware_running(time_s),
+    }
+
+
+def make_slave(fmu, instance):
     import fmpy
     from fmpy.fmi2 import FMU2Model
 
@@ -88,11 +115,10 @@ def replay(fmu):
     assert description.numberOfContinuousStates == 0
     variables = {v.name: v.valueReference for v in description.modelVariables}
     params = dict(load_sim_case()["parameters"])
-
     directory = fmpy.extract(str(fmu))
     slave = FMU2Model(guid=description.guid, unzipDirectory=directory,
                       modelIdentifier=description.modelExchange.modelIdentifier,
-                      instanceName="bor_diag")
+                      instanceName=instance)
     slave.instantiate()
     stop_us = 20000
     slave.setupExperiment(startTime=0.0, stopTime=float(stop_us) / 1e6)
@@ -106,57 +132,95 @@ def replay(fmu):
         if not needed:
             break
     slave.enterContinuousTimeMode()
+    return slave, variables, stop_us
 
-    window_us = [int(round(t * 1e6)) for t in brownout_window_times()]
+
+def replay(fmu, order):
+    slave, variables, stop_us = make_slave(fmu, "bor_%s" % order)
     samples = {}
-    for time_us in range(0, stop_us + 1):
-        slave.setTime(float(time_us) / 1e6)
-        _, terminate = slave.completedIntegratorStep()
-        assert not terminate, "terminate at %d us" % time_us
-        slave.enterEventMode()
-        for _ in range(30):
-            needed, terminate, *_ = slave.newDiscreteStates()
-            assert not terminate
-            if not needed:
-                break
-        slave.enterContinuousTimeMode()
-        values = slave.getReal([variables[n] for n in BOR_SAMPLED_OUTPUTS])
-        samples[time_us] = dict(zip(BOR_SAMPLED_OUTPUTS,
-                                    (float(x) for x in values)))
-        if time_us % 2000 == 0:
-            print("  ...%d us  v=%r" % (time_us, samples[time_us]["v"]),
-                  flush=True)
     try:
-        slave.terminate()
-        print("terminate: OK")
-    except Exception as e:  # noqa: BLE001
-        print("terminate: %r" % e)
-    slave.freeModelInstance()
-    return samples, window_us
+        for time_us in range(0, stop_us + 1):
+            slave.setTime(float(time_us) / 1e6)
+            if order == "cis_first":
+                _, terminate = slave.completedIntegratorStep()
+                assert not terminate, "terminate at %d us" % time_us
+                slave.enterEventMode()
+                for _ in range(30):
+                    needed, terminate, *_ = slave.newDiscreteStates()
+                    assert not terminate
+                    if not needed:
+                        break
+                slave.enterContinuousTimeMode()
+                values = slave.getReal(
+                    [variables[n] for n in BOR_SAMPLED_OUTPUTS])
+            elif order == "pulse":
+                slave.enterEventMode()
+                for _ in range(30):
+                    needed, terminate, *_ = slave.newDiscreteStates()
+                    assert not terminate
+                    if not needed:
+                        break
+                slave.enterContinuousTimeMode()
+                values = slave.getReal(
+                    [variables[n] for n in BOR_SAMPLED_OUTPUTS])
+                _, terminate = slave.completedIntegratorStep()
+                assert not terminate, "terminate at %d us" % time_us
+            else:
+                raise ValueError(order)
+            samples[time_us] = dict(zip(BOR_SAMPLED_OUTPUTS,
+                                        (float(x) for x in values)))
+        try:
+            slave.terminate()
+            print("  [%s] terminate: OK" % order)
+        except Exception as e:  # noqa: BLE001
+            print("  [%s] terminate: %r" % (order, e))
+    finally:
+        try:
+            slave.freeModelInstance()
+        except Exception:  # noqa: BLE001
+            pass
+    return samples
+
+
+def report(order, samples):
+    ref = BorReference()
+    window_us = [int(round(t * 1e6)) for t in brownout_window_times()]
+    print("\n== [%s] window instants ==" % order)
+    for t in window_us:
+        got = samples[t]
+        want = ref_outputs(ref, t / 1e6)
+        marks = []
+        for name in BOR_SAMPLED_OUTPUTS:
+            ok = got[name] == want[name]
+            marks.append("%s%s" % (name, "" if ok else " MISMATCH(%r!=%r)"
+                                   % (got[name], want[name])))
+        print("  t=%6d us  %s" % (t, "  ".join(marks)))
+    bad = 0
+    for name in BOR_SAMPLED_OUTPUTS:
+        mism = [(t, samples[t][name]) for t in samples
+                if samples[t][name] != ref_outputs(ref, t / 1e6)[name]]
+        bad += len(mism)
+        if mism:
+            print("  [%s] %s mismatches: %d of %d"
+                  % (order, name, len(mism), len(samples)))
+            for t, v in mism[:6]:
+                print("     t=%d us got=%r want=%r"
+                      % (t, v, ref_outputs(ref, t / 1e6)[name]))
+    print("  [%s] TOTAL mismatched samples: %d" % (order, bad))
+    return bad
 
 
 def main():
     fmu = build_fmu()
     dump_generated_c(fmu)
-    samples, window_us = replay(fmu)
-    ref = BorReference()
-    print("\n== window instants (us) ==")
-    print("reference window:", window_us)
-    worst = 0.0
-    for t in window_us:
-        got = samples[t]
-        want = ref.rail(t / 1e6)
-        mark = "OK " if got["v"] == want else "MISMATCH"
-        worst = max(worst, abs(got["v"] - want))
-        print("%s t=%6d us  v=%-8r (want %r)  nrst=%r v_vbat=%r"
-              % (mark, t, got["v"], want, got["nrst"], got["v_vbat"]))
-    print("worst |v - rail| at window instants:", worst)
-    # full-sweep mismatches of v against the reference rail
-    mism = [(t, samples[t]["v"]) for t in samples
-            if samples[t]["v"] != ref.rail(t / 1e6)]
-    print("full-sweep v mismatches: %d of %d" % (len(mism), len(samples)))
-    for t, v in mism[:12]:
-        print("   t=%d us v=%r want=%r" % (t, v, ref.rail(t / 1e6)))
+    totals = {}
+    for order in ("pulse", "cis_first"):
+        print("\n##### replay order: %s" % order)
+        samples = replay(fmu, order)
+        totals[order] = report(order, samples)
+    print("\n== summary ==")
+    for order, bad in totals.items():
+        print("  %s: %d mismatched samples" % (order, bad))
 
 
 if __name__ == "__main__":

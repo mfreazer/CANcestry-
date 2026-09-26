@@ -195,4 +195,39 @@ patch("OMCompiler/Compiler/runtime/systemimpl.c", [
     (OLD_BODY, NEW_BODY),
 ])
 
+# 8. Version string: the recipe builds from the v1.24.0 codeload TARBALL,
+#    which has no .git directory, so cmake/omc_git_revision.cmake's
+#    `git describe --match "v*.*" --always` fails (empty output) and the
+#    baked-in CONFIG_REVISION becomes the useless string "-cmake" - which
+#    `omc --version` then prints and the hardware evidence tooling records
+#    as the OpenModelica version. Pin the revision to the tag the tarball
+#    was cut from (the file's own "-cmake" suffix convention is kept).
+patch("cmake/omc_git_revision.cmake", [
+    ("if(Git_FOUND)\n"
+     "  execute_process(COMMAND\n"
+     "    ${GIT_EXECUTABLE} describe --match \"v*.*\" --always\n"
+     "    WORKING_DIRECTORY \"${CMAKE_SOURCE_DIR}\"\n"
+     "    OUTPUT_VARIABLE SOURCE_REVISION\n"
+     "    ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE\n"
+     "  )\n"
+     "  set(SOURCE_REVISION \"${SOURCE_REVISION}-cmake\")\n"
+     "else()\n"
+     "  set(SOURCE_REVISION \"unknown-cmake\")\n"
+     "endif()\n",
+     "if(Git_FOUND AND EXISTS \"${CMAKE_SOURCE_DIR}/.git\")\n"
+     "  execute_process(COMMAND\n"
+     "    ${GIT_EXECUTABLE} describe --match \"v*.*\" --always\n"
+     "    WORKING_DIRECTORY \"${CMAKE_SOURCE_DIR}\"\n"
+     "    OUTPUT_VARIABLE SOURCE_REVISION\n"
+     "    ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE\n"
+     "  )\n"
+     "  if(NOT SOURCE_REVISION)\n"
+     "    set(SOURCE_REVISION \"v1.24.0\")\n"
+     "  endif()\n"
+     "  set(SOURCE_REVISION \"${SOURCE_REVISION}-cmake\")\n"
+     "else()\n"
+     "  set(SOURCE_REVISION \"v1.24.0-cmake\")\n"
+     "endif()\n"),
+])
+
 print("all patches done")
