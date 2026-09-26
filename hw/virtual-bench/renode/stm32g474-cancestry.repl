@@ -116,6 +116,11 @@
 //               normally (no crash, no park)
 //   0x6000006c  alive_counter        firmware: increments every poll pass, so a
 //               hung firmware is visible as a stopped counter
+//   0x60000070  hook_liveness        cancestry-hw-fault.resc write-hook
+//               self-test ONLY (dispatch 19): the self-test marker write
+//               makes the hook set 0x48484848, the include clears it to 0
+//               before the machine is left paused; never read by firmware
+//               or injector, must read 0 at scenario preflight
 //
 // H-11 brownout/BOR-capture contract (issue #64, HW-SF-002 (ii)/(iii),
 // HW-SF-004; installed by renode/cancestry-hw-bor.resc only - the retention

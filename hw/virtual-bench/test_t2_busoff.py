@@ -145,10 +145,20 @@ def test_contract_constants_match_all_sources():
         assert getattr(t2fc, name) == addr
         assert "0x%08x" % addr in platform, (
             "platform contract comment lost the slot 0x%08x" % addr)
-    # .resc hooks stamp 0x48 (CCCR) and 0x54 (CRC ack) with the matching
-    # register guards.
+    # .resc write hook stamps 0x48 (CCCR) and 0x54 (CRC ack) with the
+    # matching register guards. Dispatch 19: ONE registration carries both
+    # branches (plus the self-test marker) - a second
+    # SetHookBeforePeripheralWrite call on the same peripheral UNWRAPS AND
+    # REPLACES the first (SystemBusGenerated, v1.16.1), which silently
+    # killed the CCCR branch in every run before dispatch 19.
+    assert len([l for l in resc.splitlines()
+                if l.startswith("sysbus SetHookBeforePeripheralWrite")]) == 1
     assert "0x60000048" in resc and "offset == 0x18" in resc
     assert "0x60000054" in resc and "offset == 0x50" in resc
+    # The self-test marker branch and its fail-closed include-time check.
+    assert "offset == 0x3F0 and value == 0x4C4C4C4C" in resc
+    assert "0x60000070" in resc and "0x48484848" in resc
+    assert t2fc.SLOT_HOOK_LIVENESS == 0x60000070
     # Symbol hooks: names and slot addresses agree with the driver.
     for symbol, addr in (("t2_can_busoff_detect", 0x60000058),
                          ("t2_can_busoff_recover", 0x6000005C),

@@ -140,7 +140,7 @@ machine['sysbus'].WriteDoubleWord(0x60000060, int(round(machine.ElapsedVirtualTi
 python "_clog.Logger.Info('[cancestry-hw-fault] step6: fault symbol hooks installed')"
 
 # ---------------------------------------------------------------------
-# Bus write hooks on the UNCHANGED fdcan1_scratch memory: they carry the
+# Bus write hook on the UNCHANGED fdcan1_scratch memory: it carries the
 # firmware's own register writes into the medium without the injector ever
 # having to guess them, and without modifying the existing peripheral
 # (issue #62 constraint 4).
@@ -152,37 +152,56 @@ python "_clog.Logger.Info('[cancestry-hw-fault] step6: fault symbol hooks instal
 #     nominal 2 Mbit/s).
 #   IR (0x40006450, offset 0x050): the error-logging acknowledge. The hook
 #     stamps the first write that clears IR.ELO into 0x60000054 (crc_ack_us).
+#   0x400067F0 (offset 0x3F0, not an FDCAN register): self-test marker. A
+#     write of 0x4C4C4C4C makes the hook set 0x60000070 (hook_liveness) to
+#     0x48484848; the self-test below proves the hook is live before any
+#     scenario can rely on it, then clears the word.
+#
+# ONE registration carries ALL branches (dispatch 19, run 3618xxxxx: the
+# CCCR branch had silently stopped working because SystemBusGenerated.
+# SetHookBeforePeripheralWrite UNWRAPS AND REPLACES the previous hook of the
+# same width - a second call on the same peripheral removes the first, so
+# the two-branch history of this script left only the IR branch live and
+# 0x60000048 was never stamped in any run). Every future condition must be
+# added inside this single script, never as a second registration.
 #
 # Hook scope (src/Emulator/Extensions/Hooks/
 # BusPeripheralsHooksPythonEngine.cs, v1.16.1): `self` (the hooked
-# peripheral), `sysbus`, `machine`, `value`, `offset`. A before-write hook
-# returns the script's final `value`, so these scripts leave it untouched -
-# they observe, they never alter what the firmware wrote.
+# peripheral), `sysbus`, `machine`, `value`, `offset`. The hook returns the
+# script's `value` variable, so these scripts leave it untouched - they
+# observe, they never alter what the firmware wrote.
 #
-# Both hooks are first-event-only (guarded on the slot still reading 0) and
-# touch only the plain t2_trace memory, so no hook ever re-enters a scripted
-# peripheral.
+# The CCCR/IR branches are first-event-only (guarded on the slot still
+# reading 0) and touch only the plain t2_trace memory, so no hook ever
+# re-enters a scripted peripheral.
 #
 # The hooked peripheral is passed by its BARE machine-element name.
 # Monitor command arguments resolve to machine elements through
-# MonitorCommands.ConvertValue -> TryFindPeripheralByName (name lookup);
-# the Python index expression machine['fdcan1_scratch'] is NOT a valid
-# argument form - it fails the parameter conversion, aborts the include
-# after the magic write, and its error text (which contains the hook
-# script, incl. "ReadDoubleWord") contaminates the monitor stream the
-# orchestrator's preflight reads (hw-nightly 36115589349, 2026-09-25,
-# main @ 5294c6a: first live run of this script, preflight saw a
-# misparsed 0x18 at the magic slot and fail-closed).
+# MonitorCommands.ConvertValue -> TryFindPeripheralByName, which applies the
+# `using sysbus` prefix active in this script (line above); the Python
+# index expression machine['fdcan1_scratch'] is NOT a valid argument form -
+# it fails the parameter conversion, aborts the include after the magic
+# write, and its error text (which contains the hook script, incl.
+# "ReadDoubleWord") contaminates the monitor stream the orchestrator's
+# preflight reads (hw-nightly 36115589349, 2026-09-25, main @ 5294c6a:
+# first live run of this script, preflight saw a misparsed 0x18 at the
+# magic slot and fail-closed).
 # ---------------------------------------------------------------------
 sysbus SetHookBeforePeripheralWrite fdcan1_scratch """
 if offset == 0x18 and (machine['sysbus'].ReadDoubleWord(0x60000048) == 0) and ((machine['sysbus'].ReadDoubleWord(0x40006418) & 1) == 1) and ((value & 1) == 0):
     machine['sysbus'].WriteDoubleWord(0x60000048, int(round(machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1000000)))
-"""
-sysbus SetHookBeforePeripheralWrite fdcan1_scratch """
-if offset == 0x50 and (machine['sysbus'].ReadDoubleWord(0x60000054) == 0) and ((machine['sysbus'].ReadDoubleWord(0x40006450) & 0x10000) != 0) and ((value & 0x10000) == 0):
+elif offset == 0x50 and (machine['sysbus'].ReadDoubleWord(0x60000054) == 0) and ((machine['sysbus'].ReadDoubleWord(0x40006450) & 0x10000) != 0) and ((value & 0x10000) == 0):
     machine['sysbus'].WriteDoubleWord(0x60000054, int(round(machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds * 1000000)))
+elif offset == 0x3F0 and value == 0x4C4C4C4C:
+    machine['sysbus'].WriteDoubleWord(0x60000070, 0x48484848)
 """
-python "_clog.Logger.Info('[cancestry-hw-fault] step6b: FDCAN1 CCCR/IR write hooks installed')"
+# Write-hook self-test (fail-closed): prove the registration above is live
+# before any scenario can rely on it. Dispatch 19: the CCCR branch died
+# silently under a second registration and three dispatches were lost
+# before the replacement semantics were found. The marker write below must
+# make the hook set the liveness word; anything else aborts the include.
+python "bus = monitor.Machine['sysbus']; bus.WriteDoubleWord(0x60000070, 0); bus.WriteDoubleWord(0x400067F0, 0x4C4C4C4C); assert bus.ReadDoubleWord(0x60000070) == 0x48484848, 'cancestry-hw-fault.resc: write-hook self-test failed - the fdcan1_scratch before-write hook is not live (dispatch 19)'; bus.WriteDoubleWord(0x400067F0, 0); bus.WriteDoubleWord(0x60000070, 0)"
+python "_clog.Logger.Info('[cancestry-hw-fault] step6b: FDCAN1 CCCR/IR write hook installed and self-tested (liveness word 0x60000070)')"
 
 # Injector preflight readback (console-logged evidence that the peripheral
 # loaded and its command interface answers): magic 0x43464931 ("CFI1"), bus

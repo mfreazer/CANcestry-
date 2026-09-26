@@ -299,15 +299,25 @@ class RenodeMonitorEndpoint(RenodeEndpoint):
         # we want carries our command's echo; keep reading prompts until
         # it does (bounded - a silent monitor still fails closed via
         # _read_prompt's timeout).
+        #
+        # F-25 revision (dispatch 19): ACCUMULATE every chunk of the
+        # response window instead of replacing the buffer each iteration.
+        # A command that fails while queued startup input is draining
+        # prints the monitor's error marker (Monitor.PrintException) in
+        # a chunk that may carry no command echo; a replaced buffer would
+        # drop it and report the failed command as a clean no-op. The
+        # accumulation is safe for parse_u32, which takes the LAST numeric
+        # token (the real response still ends the window, right before
+        # the prompt).
         for _ in range(5):
             if echo_fragment in decoded:
                 self._check_monitor_error(text, decoded)
                 return decoded
-            decoded = self._read_prompt().decode("utf-8", "replace")
+            decoded += self._read_prompt().decode("utf-8", "replace")
         raise BridgeError(
             "Renode monitor response to %r never carried its command echo "
             "within 5 prompts (startup input may still be draining): %r"
-            % (text, decoded[:200]))
+            % (text, decoded[-200:]))
 
     # F-25 (dispatch 17): Renode prints this canonical marker
     # (Monitor.PrintException) when a command fails - bad device path,

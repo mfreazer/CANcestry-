@@ -104,6 +104,11 @@
 #   0x6000006C  alive_counter         firmware: increments every poll pass, so
 #                                     a hung firmware is visible as a stopped
 #                                     counter (negative crash evidence)
+#   0x60000070  hook_liveness         cancestry-hw-fault.resc write-hook
+#                                     self-test only (dispatch 19); the
+#                                     include clears it to 0 before the
+#                                     machine is left paused. This
+#                                     peripheral never writes it.
 #
 # Determinism (HwAGENTS.md rule 5): every transition is a function of the
 # emulation virtual time and of the fixed command sequence the orchestrator
