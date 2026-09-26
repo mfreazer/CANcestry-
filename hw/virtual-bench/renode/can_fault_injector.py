@@ -52,9 +52,15 @@
 #     command, ulong value) (src/Emulator/Main/Peripherals/Python/
 #     PythonPeripheral.cs, v1.16.1) and the monitor reaches them as
 #
-#         sysbus can_fault_injector ControlWrite 0x42 0x1   # InjectBusOff
-#         sysbus can_fault_injector ControlWrite 0x43 0x1   # InjectCRCError
-#         sysbus can_fault_injector ControlRead  0x53 0x0   # bus state
+#         sysbus.can_fault_injector ControlWrite 0x42 0x1   # InjectBusOff
+#         sysbus.can_fault_injector ControlWrite 0x43 0x1   # InjectCRCError
+#         sysbus.can_fault_injector ControlRead  0x53 0x0   # bus state
+#
+#     The device path is ONE dotted token: a bare 'sysbus' resolves to the
+#     SystemBus object, so the two-token form 'sysbus can_fault_injector
+#     ...' fails with a recoverable error and this module never sees the
+#     command (dispatch 17: every watch slot read 0). fmi_bridge.command()
+#     fails closed on the monitor's error marker.
 #
 #     Command codes are ASCII so the monitor transcript stays readable:
 #         'B' 0x42 InjectBusOff        'C' 0x43 InjectCRCError

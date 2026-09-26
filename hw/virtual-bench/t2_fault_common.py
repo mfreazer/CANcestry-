@@ -259,13 +259,21 @@ def inject_command(endpoint, command):
     """Issue one fault command through the injector's command interface.
 
     Primary path (issue #62 deliverable 1): monitor method call on the
-    peripheral - ``sysbus can_fault_injector ControlWrite <ascii> 0x1``,
+    peripheral - ``sysbus.can_fault_injector ControlWrite <ascii> 0x1``,
     wrapped by PythonPeripheral.ControlWrite -> USER request. The injector's
     own error register and the injection trace slot are then read back;
     anything but a clean acceptance aborts the run (fail-closed).
+
+    The device path must be ONE dotted token (``sysbus.<name>``): Renode
+    resolves ``sysbus`` alone to the SystemBus object, so the two-token form
+    ``sysbus can_fault_injector ...`` looks for a member of that type and
+    fails with a recoverable error (dispatch 17: the command never reached
+    the injector, every watch slot read 0, and the error register - which
+    only an executed command can raise - read back clean). fmi_bridge
+    command() now fails closed on the monitor's error marker.
     """
     endpoint.command(
-        "sysbus can_fault_injector ControlWrite 0x%02X 0x1" % command,
+        "sysbus.can_fault_injector ControlWrite 0x%02X 0x1" % command,
         echo_fragment="ControlWrite")
     error = _read_u32(endpoint, INJ_BASE + INJ_OFF_ERROR)
     if error != 0:

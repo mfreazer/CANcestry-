@@ -320,15 +320,33 @@ class _FakeEndpoint(object):
 
 
 def test_inject_command_uses_the_monitor_command_interface():
-    """HW-T2-BUSOFF-007: ControlWrite <ascii> + readback, fail-closed."""
+    """HW-T2-BUSOFF-007: ControlWrite <ascii> + readback, fail-closed.
+
+    The device path is the single dotted token 'sysbus.<name>': a bare
+    'sysbus' resolves to the SystemBus object, so the two-token form
+    'sysbus can_fault_injector ...' fails in the monitor and the command
+    never reaches the injector (dispatch 17: all watch slots read 0).
+    """
     endpoint = _FakeEndpoint()
     t2fc.inject_command(endpoint, t2fc.CMD_INJECT_BUSOFF)
     assert endpoint.commands == [
-        "sysbus can_fault_injector ControlWrite 0x42 0x1"]
+        "sysbus.can_fault_injector ControlWrite 0x42 0x1"]
     # A nonzero injector error register aborts the run.
     bad = _FakeEndpoint({t2fc.INJ_BASE + t2fc.INJ_OFF_ERROR: 1})
     with pytest.raises(t2fc.T2FaultError, match="rejected"):
         t2fc.inject_command(bad, t2fc.CMD_INJECT_CRC)
+
+
+def test_inject_command_rejects_the_two_token_device_path():
+    """Dispatch 17 regression: the command must stay one dotted token."""
+    endpoint = _FakeEndpoint()
+    t2fc.inject_command(endpoint, t2fc.CMD_INJECT_BUSOFF)
+    command = endpoint.commands[0]
+    # 'sysbus can_fault_injector ...' would look for a can_fault_injector
+    # member of the SystemBus type and fail before the injector runs.
+    assert " sysbus " not in command and command.startswith(
+        "sysbus.can_fault_injector ")
+    assert "can_fault_injector ControlWrite" in command
 
 
 # ---------------------------------------------------------------------------

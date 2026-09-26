@@ -53,10 +53,16 @@
 # (a) Command interface for the orchestrator (issue #64 deliverable 4). The
 #     monitor reaches PythonPeripheral.ControlWrite / ControlRead as
 #
-#         sysbus bor_reset_injector ControlWrite 0x42 0x1  # InjectBrownout
-#         sysbus bor_reset_injector ControlRead  0x4C 0x0  # NRST level
-#         sysbus bor_reset_injector ControlRead  0x4E 0x0  # counters
-#         sysbus bor_reset_injector ControlRead  0x54 0x0  # emulation time
+#         sysbus.bor_reset_injector ControlWrite 0x42 0x1  # InjectBrownout
+#         sysbus.bor_reset_injector ControlRead  0x4C 0x0  # NRST level
+#         sysbus.bor_reset_injector ControlRead  0x4E 0x0  # counters
+#         sysbus.bor_reset_injector ControlRead  0x54 0x0  # emulation time
+#
+#     The device path is ONE dotted token: a bare 'sysbus' resolves to the
+#     SystemBus object, so the two-token form 'sysbus bor_reset_injector
+#     ...' fails with a recoverable error and this module never sees the
+#     command (dispatch 17; fmi_bridge.command() fails closed on the
+#     monitor's error marker).
 #
 #     Command codes are ASCII so the monitor transcript stays readable:
 #         'B' 0x42 InjectBrownout (assert NRST, take the BOR reset)

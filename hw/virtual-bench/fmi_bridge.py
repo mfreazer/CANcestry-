@@ -287,6 +287,7 @@ class RenodeMonitorEndpoint(RenodeEndpoint):
         self._record("TX", payload)
         decoded = self._read_prompt().decode("utf-8", "replace")
         if echo_fragment is None:
+            self._check_monitor_error(text, decoded)
             return decoded
         # F-24 (issue #55): the startup include is injected as queued
         # shell input (-e). While it is still draining, the prompt we
@@ -300,12 +301,33 @@ class RenodeMonitorEndpoint(RenodeEndpoint):
         # _read_prompt's timeout).
         for _ in range(5):
             if echo_fragment in decoded:
+                self._check_monitor_error(text, decoded)
                 return decoded
             decoded = self._read_prompt().decode("utf-8", "replace")
         raise BridgeError(
             "Renode monitor response to %r never carried its command echo "
             "within 5 prompts (startup input may still be draining): %r"
             % (text, decoded[:200]))
+
+    # F-25 (dispatch 17): Renode prints this canonical marker
+    # (Monitor.PrintException) when a command fails - bad device path,
+    # parameter mismatch, unknown command - and then keeps running. The
+    # command ECHO alone cannot tell success from failure (the terminal
+    # echoes the input line either way, which is what F-24's matching
+    # relies on), so a bad two-token device path such as
+    # 'sysbus can_fault_injector ControlWrite ...' sailed through with
+    # the injector never touched and every watch slot reading 0. Every
+    # response is therefore checked against the marker before the
+    # endpoint reports success (fail-closed).
+    _MONITOR_ERROR_MARKER = "There was an error executing command"
+
+    def _check_monitor_error(self, text, decoded):
+        if self._MONITOR_ERROR_MARKER not in decoded:
+            return
+        detail = " ".join(decoded.split(self._MONITOR_ERROR_MARKER, 1)[1].split())
+        raise BridgeError(
+            "Renode monitor rejected %r (fail-closed): %s"
+            % (text, detail[:200]))
 
     # -- endpoint interface -------------------------------------------------
     def run_for_us(self, us):

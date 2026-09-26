@@ -253,6 +253,50 @@ def test_monitor_endpoint_protocol():
     ]
 
 
+def test_monitor_command_error_marker_fails_closed():
+    """F-25 (dispatch 17): a monitor-reported command error is fatal.
+
+    The terminal echoes the input line either way, so the F-24 echo match
+    alone cannot tell a failed command from a successful one. Renode's
+    canonical failure marker (Monitor.PrintException) must abort the
+    endpoint: this is exactly what let the two-token device path
+    'sysbus can_fault_injector ControlWrite ...' sail through with the
+    injector never touched and every watch slot reading 0.
+    """
+    failed_command = "sysbus can_fault_injector ControlWrite 0x42 0x1"
+    server = FakeMonitorServer({
+        failed_command:
+            "There was an error executing command '%s'\n"
+            "sysbus does not provide a field, method or property "
+            "can_fault_injector." % failed_command,
+    })
+    server.start()
+    try:
+        endpoint = RenodeMonitorEndpoint("127.0.0.1", server.port,
+                                         timeout=5.0)
+        with pytest.raises(BridgeError, match="monitor rejected"):
+            endpoint.command(failed_command, echo_fragment="ControlWrite")
+    finally:
+        server.stop()
+        server.join(timeout=5.0)
+
+
+def test_monitor_command_success_has_no_error_marker():
+    """F-25 negative control: a clean response must not trip the check."""
+    server = FakeMonitorServer({
+        "sysbus ReadDoubleWord 0x60000000": "0x54324353",
+    })
+    server.start()
+    try:
+        endpoint = RenodeMonitorEndpoint("127.0.0.1", server.port,
+                                         timeout=5.0)
+        assert endpoint.read_u32(T2_TRACE_MAGIC_ADDR) == T2_TRACE_MAGIC
+        endpoint.close()
+    finally:
+        server.stop()
+        server.join(timeout=5.0)
+
+
 def _run_eof_scenario(close_after_banner, command_text=None):
     """Accept one client, optionally serve the banner, then close hard."""
     ready = threading.Event()
