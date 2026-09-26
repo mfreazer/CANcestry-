@@ -6,13 +6,13 @@
 cancestry-provenance
 plot_id=t2_busoff_001
 plot_version=0.1.0
-plot_data_hash=sha256:d1c1cc1deeca5a1a0ce0f61aaa63ce4717f237bfea13f400b81465484c12c8af
+plot_data_hash=sha256:ad0e1330b1731ecf18b2dc20832710d15c698b1b34d5bb1ee57763640539c9a9
 status=pending
 method=virtual_bench
 credibility_level=CL0
 provisional=true
 source_evidence_path=hw/tests/evidence/t2_busoff_001.json
-source_evidence_hash=sha256:6d82c6f0b88105aa2867fa02343b21966db8899094a3553d77060952998c5da0
+source_evidence_hash=sha256:3cc971b3e443b8e53ab83f3aae3e66870061c4d93ebe70fe25ff9fcb603f53f2
 oracle_id=none
 renderer_tool=cancestry-render-modelica
 renderer_tool_version=0.1.0
@@ -77,9 +77,9 @@ generated_at=2026-09-24T00:00:00Z
 </g>
 <text x="24" y="521" font-family="DejaVu Sans Mono, monospace" font-size="11">EVIDENCE  t2_busoff_001@0.1.0</text>
 <text x="24" y="536" font-family="DejaVu Sans Mono, monospace" font-size="11">STATUS  pending(virtual_bench,CL0,provisional)</text>
-<text x="24" y="551" font-family="DejaVu Sans Mono, monospace" font-size="11">PLOT-DATA  sha256:d1c1cc1deeca5a1a0ce0f61aaa63ce4717f237bfea13f400b81465484c12c8af</text>
+<text x="24" y="551" font-family="DejaVu Sans Mono, monospace" font-size="11">PLOT-DATA  sha256:ad0e1330b1731ecf18b2dc20832710d15c698b1b34d5bb1ee57763640539c9a9</text>
 <text x="24" y="566" font-family="DejaVu Sans Mono, monospace" font-size="11">ORACLE  none</text>
 <text x="24" y="581" font-family="DejaVu Sans Mono, monospace" font-size="11">RENDERER  cancestry-render-modelica 0.1.0</text>
-<text x="24" y="596" font-family="DejaVu Sans Mono, monospace" font-size="11">SOURCE  hw/tests/evidence/t2_busoff_001.json sha256:6d82c6f0b88105aa2867fa02343b21966db8899094a3553d77060952998c5da0</text>
+<text x="24" y="596" font-family="DejaVu Sans Mono, monospace" font-size="11">SOURCE  hw/tests/evidence/t2_busoff_001.json sha256:3cc971b3e443b8e53ab83f3aae3e66870061c4d93ebe70fe25ff9fcb603f53f2</text>
 <text x="24" y="611" font-family="DejaVu Sans Mono, monospace" font-size="11">GENERATED  2026-09-24T00:00:00Z</text>
 </svg>
