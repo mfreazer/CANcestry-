@@ -681,13 +681,22 @@ def execute_bor(fmu, times_us, parameters=None):
         slave.enterContinuousTimeMode()
         for time_us in times_us:
             slave.setTime(float(time_us) / 1e6)
-            # The step's zero-crossings are registered by completedIntegratorStep
-            # and must be settled BEFORE the sample at this instant: in the
-            # pinned OpenModelica 1.24 ModelExchange runtime the event
-            # indicator of a boundary at exactly t_n is only evaluated by
-            # completedIntegratorStep, so sampling first would leave the
-            # pre-event relation active at t_n (the brownout at 10000 us
-            # would be read one sample late).
+            # Per-sample FMI 2.0 ModelExchange master order (the FMI spec's
+            # ME step: the integrator completes, events settle, then the
+            # master reads). In the pinned OpenModelica 1.24 runtime,
+            # completedIntegratorStep re-evaluates the algebraic system at
+            # the set time against the relations latched so far and stores
+            # pre-values; the bounded fmi2NewDiscreteStates iteration then
+            # settles the zero-crossing relations (and the derived chain,
+            # which converges inside the iteration); the final getReal
+            # re-evaluates from that settled state (the runtime's
+            # need-update flag is still set). The model keeps every
+            # boundary off the 1 us grid (BOR.mo: SUB-GRID BOUNDARY
+            # PLACEMENT) because this runtime's zero-crossing hysteresis
+            # holds the pre-crossing side at the exact crossing instant, so
+            # no sample here is ever ambiguous; both CIS placements
+            # (before or after the event block) were measured equivalent
+            # on this stateless fixture.
             _, terminate = slave.completedIntegratorStep()
             assert not terminate, (
                 "the BOR FMU requested premature termination at %d us"
@@ -731,9 +740,13 @@ def test_toolchain_builds_the_bor_fmu_and_reproduces_the_behaviours():
     observed, terminate_error = execute_bor(fmu, times_us)
     assert sorted(observed) == times_us
 
-    t_assert_us = int(p["t_brownout"] * 1e6)
-    t_release_us = int((p["t_brownout"] + p["t_collapse"]) * 1e6)
-    t_resume_us = int((p["t_brownout"] + p["t_collapse"] + p["t_boot"]) * 1e6)
+    # round(): 0.01 + 0.0001 + 0.0001 is 0.010199999999999999 in binary64,
+    # so a bare int(... * 1e6) would index the PREVIOUS sample (10199 us
+    # instead of the resume instant 10200 us) and read the pre-resumption
+    # value. The grid below is unchanged; this only names the correct sample.
+    t_assert_us = int(round(p["t_brownout"] * 1e6))
+    t_release_us = int(round((p["t_brownout"] + p["t_collapse"]) * 1e6))
+    t_resume_us = int(round((p["t_brownout"] + p["t_collapse"] + p["t_boot"]) * 1e6))
     before = observed[t_assert_us - step_us]
     asserting = observed[t_assert_us]
     released = observed[t_release_us]
