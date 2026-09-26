@@ -253,6 +253,50 @@ def test_monitor_endpoint_protocol():
     ]
 
 
+def test_monitor_command_error_marker_fails_closed():
+    """F-25 (dispatch 17): a monitor-reported command error is fatal.
+
+    The terminal echoes the input line either way, so the F-24 echo match
+    alone cannot tell a failed command from a successful one. Renode's
+    canonical failure marker (Monitor.PrintException) must abort the
+    endpoint: this is exactly what let the two-token device path
+    'sysbus can_fault_injector ControlWrite ...' sail through with the
+    injector never touched and every watch slot reading 0.
+    """
+    failed_command = "sysbus can_fault_injector ControlWrite 0x42 0x1"
+    server = FakeMonitorServer({
+        failed_command:
+            "There was an error executing command '%s'\n"
+            "sysbus does not provide a field, method or property "
+            "can_fault_injector." % failed_command,
+    })
+    server.start()
+    try:
+        endpoint = RenodeMonitorEndpoint("127.0.0.1", server.port,
+                                         timeout=5.0)
+        with pytest.raises(BridgeError, match="monitor rejected"):
+            endpoint.command(failed_command, echo_fragment="ControlWrite")
+    finally:
+        server.stop()
+        server.join(timeout=5.0)
+
+
+def test_monitor_command_success_has_no_error_marker():
+    """F-25 negative control: a clean response must not trip the check."""
+    server = FakeMonitorServer({
+        "sysbus ReadDoubleWord 0x60000000": "0x54324353",
+    })
+    server.start()
+    try:
+        endpoint = RenodeMonitorEndpoint("127.0.0.1", server.port,
+                                         timeout=5.0)
+        assert endpoint.read_u32(T2_TRACE_MAGIC_ADDR) == T2_TRACE_MAGIC
+        endpoint.close()
+    finally:
+        server.stop()
+        server.join(timeout=5.0)
+
+
 def _run_eof_scenario(close_after_banner, command_text=None):
     """Accept one client, optionally serve the banner, then close hard."""
     ready = threading.Event()
@@ -765,22 +809,16 @@ def test_monitor_accepts_ansi_colored_machine_prompt():
         server.close()
     assert parse_u32(tail) == 0x000000
 
-def test_command_skips_queued_startup_output_until_its_echo():
-    """HW-T2-BRIDGE-024: queued startup input does not masquerade as the
-    command response (F-24).
-
-    Dispatch 14 (run 35773043927): the preflight was queued behind the
-    injected '-e' startup line; the prompt the endpoint matched first
-    belonged to the startup line's output (its echo, the
-    LoadPlatformDescription error and the command help), so
-    parse_u32 failed with 'no numeric value' while the real response
-    sat behind the next prompt. The response is now accepted only when
-    it carries the command's own echo.
-    """
+def _serve_startup_drain(marker_in_drain):
+    """One-shot server: banner prompt, client command, then a draining
+    startup -e chunk (error marker only when marker_in_drain), then the
+    client command's real echo + value + prompt."""
     server = socket.socket()
     server.bind(("127.0.0.1", 0))
     server.listen(1)
     port = server.getsockname()[1]
+    ready = threading.Event()
+    ready.set()
 
     def _serve_once():
         conn, _ = server.accept()
@@ -793,12 +831,14 @@ def test_command_skips_queued_startup_output_until_its_echo():
             conn.recv(1024)
         except socket.timeout:
             pass
-        # startup -e line still draining: echo + error + prompt 2 (no echo
-        # of the client command anywhere in this chunk)
-        conn.sendall(b"(monitor) $elf=\"@x\"; include @y.resc\r\n"
-                     b"There was an error executing command "
-                     b"'machine LoadPlatformDescription y.repl'\r\n"
-                     b"The following methods ...\r\n(monitor)> ")
+        # startup -e line still draining: echo (+ error) + prompt 2 (no
+        # echo of the client command anywhere in this chunk)
+        chunk2 = b"(monitor) $elf=\"@x\"; include @y.resc\r\n"
+        if marker_in_drain:
+            chunk2 += (b"There was an error executing command "
+                       b"'machine LoadPlatformDescription y.repl'\r\n"
+                       b"The following methods ...\r\n")
+        conn.sendall(chunk2 + b"(monitor)> ")
         # now the client command really runs: echo + value + prompt 3
         conn.sendall(b"sysbus ReadDoubleWord 0x60000000\r\n"
                      b"0x54324353\r\n(monitor)> ")
@@ -807,6 +847,22 @@ def test_command_skips_queued_startup_output_until_its_echo():
 
     holder = threading.Thread(target=_serve_once, daemon=True)
     holder.start()
+    return port, holder, server
+
+
+def test_command_skips_queued_startup_output_until_its_echo():
+    """HW-T2-BRIDGE-024: a BENIGN queued startup drain does not
+    masquerade as the command response (F-24) - the response is the
+    chunk carrying the command's own echo.
+
+    Dispatch 14 (run 35773043927): the preflight was queued behind the
+    injected '-e' startup line; the prompt the endpoint matched first
+    belonged to the startup line's output, so parse_u32 failed with
+    'no numeric value' while the real response sat behind the next
+    prompt. The response is accepted only when it carries the command's
+    own echo.
+    """
+    port, holder, server = _serve_startup_drain(marker_in_drain=False)
     endpoint = None
     try:
         endpoint = RenodeMonitorEndpoint("127.0.0.1", port, timeout=5.0)
@@ -818,3 +874,30 @@ def test_command_skips_queued_startup_output_until_its_echo():
         holder.join(timeout=5.0)
         server.close()
     assert parse_u32(tail) == 0x54324353
+
+
+def test_command_fails_closed_on_startup_drain_error_marker():
+    """F-25 revision (dispatch 19): an error marker anywhere in the
+    response window - including the draining startup -e output - aborts
+    the command.
+
+    The dispatch-19 failure mode: a bring-up command that failed during
+    the -e drain (its hook registration died silently) left a broken
+    platform that sailed through the preflight while the buffer
+    replacement dropped the marker, and the scenario no-op'd with every
+    hook-written slot at 0. A failed bring-up line means the platform
+    is not what the preflight assumes, so the run fails closed at the
+    first command instead of degrading into a silent no-op.
+    """
+    port, holder, server = _serve_startup_drain(marker_in_drain=True)
+    endpoint = None
+    try:
+        endpoint = RenodeMonitorEndpoint("127.0.0.1", port, timeout=5.0)
+        with pytest.raises(BridgeError, match="monitor rejected"):
+            endpoint.command("sysbus ReadDoubleWord 0x60000000",
+                             echo_fragment="ReadDoubleWord")
+    finally:
+        if endpoint is not None:
+            endpoint._socket.close()
+        holder.join(timeout=5.0)
+        server.close()

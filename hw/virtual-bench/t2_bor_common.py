@@ -309,13 +309,20 @@ def inject_brownout(endpoint):
     """Issue the brownout injection through the injector command interface.
 
     Primary path: monitor method call on the peripheral -
-    ``sysbus bor_reset_injector ControlWrite 0x42 0x1``, wrapped by
+    ``sysbus.bor_reset_injector ControlWrite 0x42 0x1``, wrapped by
     PythonPeripheral.ControlWrite -> USER request. The injector's error
     register and the stamp slot are then read back; anything but a clean
     acceptance aborts the run (fail-closed).
+
+    The device path must be ONE dotted token (``sysbus.<name>``): Renode
+    resolves a bare ``sysbus`` token to the SystemBus object, so the two-
+    token form looks for a member of that type and fails with a recoverable
+    error before the command ever reaches the injector (same dispatch-17
+    class as the CAN bus-off/crc path; fmi_bridge command() now fails
+    closed on the monitor's error marker).
     """
     endpoint.command(
-        "sysbus bor_reset_injector ControlWrite 0x%02X 0x1"
+        "sysbus.bor_reset_injector ControlWrite 0x%02X 0x1"
         % BOR_CMD_INJECT_BROWNOUT,
         echo_fragment="ControlWrite")
     error = endpoint.read_u32(BOR_BASE + BOR_OFF_ERROR)
@@ -498,15 +505,23 @@ class MePlantSlave(object):
                 "%d us (setupExperiment stopTime)" % (target_us,
                                                       self._stop_us))
         self._slave.setTime(target_us / 1e6)
-        self._slave.enterEventMode()
-        self._finish_event_iteration()
-        self._slave.enterContinuousTimeMode()
         self._time_us = target_us
+        # The sub-step's zero-crossings are registered by
+        # completedIntegratorStep and must be settled BEFORE any readout at
+        # this instant (same contract as the T1 evaluator,
+        # hw/tests/test_bor_physics.py execute_bor): in the pinned OpenModelica
+        # 1.24 ModelExchange runtime the event indicator of a boundary at
+        # exactly t_n is only evaluated by completedIntegratorStep, so the
+        # modelled assertion at 10000 us would otherwise be read one
+        # sub-step (1 us) late and miss its master-step boundary alignment.
         _, terminate = self._slave.completedIntegratorStep()
         if terminate:
             raise T2BrownoutError(
                 "the BOR plant requested premature termination at %d us"
                 % target_us)
+        self._slave.enterEventMode()
+        self._finish_event_iteration()
+        self._slave.enterContinuousTimeMode()
 
     @property
     def time_us(self):

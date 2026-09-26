@@ -28,10 +28,30 @@ model BOR
    qualified BOR cell model. It is algebraic by construction (every output is
    a function of `time` and of extract-cited parameters), exactly like
    PulseISO7637_2, so it has no states to integrate and the 1 us plant step
-   of the T2 bridge resolves it exactly. The retention-domain branch is the
-   OR-001 closed form (v = V0 - I*ESR - I*t/C) evaluated over the collapse
-   interval; the OR-001 plant trajectory itself (leakage nonlinearity, ESR
-   temperature dependence, the whole 150 ms holdup_001 event) remains
+   of the T2 bridge resolves it exactly.
+
+   SUB-GRID BOUNDARY PLACEMENT (pinned-runtime zero-crossing hysteresis):
+   the pinned OpenModelica 1.24 runtime compiles every if-condition on
+   `time` as a zero-crossing relation (SimCode `relationhysteresis`) that
+   HOLDS the pre-crossing side at the exact crossing instant (LessZC and
+   friends compare against the stored relation with a hysteresis band). A
+   boundary placed exactly on the 1 us grid would therefore be read
+   pre-crossing at that grid sample. The T2 bridge samples this fixture on
+   the 1 us plant step (sim-case `solver.step_s`), so every time comparison
+   below is placed `grid_half_step` (half a plant step) BEFORE the physical
+   instant: no integer-microsecond sample is ever within the ZC hysteresis
+   band of a boundary, the executed FMU reproduces the strict-semantics
+   reference (hw/tests/test_bor_physics.py BorReference) exactly at every
+   sample, and the values AT the physical instants are the post-crossing
+   ones, per the Modelica semantics of the strict comparisons. The closed
+   forms keep the physical instants as their origins, so no sampled value
+   moves; only the unobserved sub-grid placement of the branch points
+   shifts by half a plant step (an explicit fixture idealization, like the
+   unresolved R_path * C recharge transient). The retention-domain branch
+   is the OR-001 closed form (v = V0 - I*ESR - I*t/C) evaluated over the
+   collapse interval; the OR-001 plant trajectory itself (leakage
+   nonlinearity, ESR temperature dependence, the whole 150 ms holdup_001
+   event) remains
    Holdup.mo's job and is not re-modelled here. The charge-path recharge
    transient is NOT resolved: R_path * C = 0.5 us is below the 1 us plant
    step, so the node is returned to its charged value when the rail recovers.
@@ -101,6 +121,12 @@ model BOR
     "Charge-path impedance budget (PRT-002 / H-02 WCCA) - the recharge transient is not resolved by the 1 us plant step";
 
   // ---------------------------------------------------------------------
+  // Sub-grid boundary placement (docstring: SUB-GRID BOUNDARY PLACEMENT)
+  // ---------------------------------------------------------------------
+  constant Real grid_half_step(unit = "s") = 5.0e-7
+    "Half of the sim-case 1 us plant step (solver.step_s); shifts every time comparison off the integer-microsecond grid samples (see docstring: SUB-GRID BOUNDARY PLACEMENT)";
+
+  // ---------------------------------------------------------------------
   // Outputs (the plant -> MCU / evidence surface)
   // ---------------------------------------------------------------------
   Real v(unit = "V")
@@ -136,8 +162,8 @@ equation
   // --- supply stimulus -------------------------------------------------
   // Idealized collapse (issue #64): the finite fall time of the real rail is
   // not modelled (the threshold crossing is the load-bearing instant).
-  v = if time < t_brownout then V_nominal
-      else if time < t_brownout + t_collapse then 0.0
+  v = if time < t_brownout - grid_half_step then V_nominal
+      else if time < t_brownout + t_collapse - grid_half_step then 0.0
       else V_nominal;
 
   // --- BOR comparators -------------------------------------------------
@@ -152,8 +178,8 @@ equation
   // the band [V_bor, V_bor + V_bor_hyst] would keep the MCU in reset.
   t_bor_assert = t_brownout;
   t_bor_release = t_brownout + t_collapse;
-  reset_asserted = if (time >= t_bor_assert) and not
-    (time >= t_bor_release and bor_release_condition > 0.5) then 1.0 else 0.0;
+  reset_asserted = if (time >= t_bor_assert - grid_half_step) and not
+    (time >= t_bor_release - grid_half_step and bor_release_condition > 0.5) then 1.0 else 0.0;
   nrst = if reset_asserted > 0.5 then 0.0 else 1.0;
 
   // --- retention domain ------------------------------------------------
@@ -164,8 +190,8 @@ equation
   // The battery-backed backup domain (RTC_BKP) is supplied from this node,
   // so its content is preserved while the node stays above V_vbat_min.
   i_vbat_load = I_mcu + I_leak;
-  v_vbat = if time < t_bor_assert then V0_vbat - ESR_vbat * i_vbat_load
-           else if time < t_bor_release then
+  v_vbat = if time < t_bor_assert - grid_half_step then V0_vbat - ESR_vbat * i_vbat_load
+           else if time < t_bor_release - grid_half_step then
              V0_vbat - ESR_vbat * i_vbat_load
              - i_vbat_load * (time - t_bor_assert) / C_vbat
            else V0_vbat - ESR_vbat * i_vbat_load;
@@ -174,15 +200,15 @@ equation
   // --- main SRAM -------------------------------------------------------
   // A BOR reset discards main SRAM content; the firmware re-derives its
   // state from the retention domain instead (no state is restored here).
-  sram_preserved = if time < t_bor_assert then 1.0 else 0.0;
+  sram_preserved = if time < t_bor_assert - grid_half_step then 1.0 else 0.0;
 
   // --- recovery time ---------------------------------------------------
   // Firmware execution is suspended from the reset assertion until the reset
   // is released (NRST high) plus the modelled resumption latency.
   t_recovery = t_boot;
   firmware_running = if reset_asserted > 0.5 then 0.0
-                     else if (time >= t_bor_assert)
-                             and (time < t_bor_release + t_recovery) then 0.0
+                     else if (time >= t_bor_assert - grid_half_step)
+                             and (time < t_bor_release + t_recovery - grid_half_step) then 0.0
                      else 1.0;
 
 annotation (

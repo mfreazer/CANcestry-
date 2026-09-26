@@ -111,6 +111,10 @@ SLOT_CRC_DETECT_US = 0x60000060
 SLOT_CRC_ERROR_COUNT = 0x60000064
 SLOT_RUN_COMPLETE = 0x60000068
 SLOT_ALIVE_COUNTER = 0x6000006C
+# Write-hook self-test word (dispatch 19): cancestry-hw-fault.resc proves
+# the fdcan1_scratch before-write hook is live at include time, then clears
+# it; a nonzero value here means the self-test never ran to completion.
+SLOT_HOOK_LIVENESS = 0x60000070
 
 # FDCAN1 register surface (RM0440 43.4; st CMSIS stm32g474xx.h offsets).
 FDCAN1_BASE = 0x40006400
@@ -247,6 +251,10 @@ def preflight(endpoint, spec):
     eq(INJ_BASE + INJ_OFF_CRC_COUNT, 0, "CRC injection counter")
     for name, addr in sorted(spec.watch_slots.items()):
         eq(addr, 0, "trace slot %s" % name)
+    # Dispatch 19: the include's write-hook self-test must have run and
+    # cleared its liveness word; nonzero means the bring-up never verified
+    # the hook that owns recovery_request_us / crc_ack_us.
+    eq(SLOT_HOOK_LIVENESS, 0, "write-hook liveness word (self-test residue)")
     # The initial projection must match an idle medium: no Bus-Off, LEC 0.
     psr = _read_u32(endpoint, FDCAN1_BASE + FDCAN_OFF_PSR)
     if psr & (FDCAN_PSR_BO | FDCAN_PSR_LEC_MASK):
@@ -259,13 +267,21 @@ def inject_command(endpoint, command):
     """Issue one fault command through the injector's command interface.
 
     Primary path (issue #62 deliverable 1): monitor method call on the
-    peripheral - ``sysbus can_fault_injector ControlWrite <ascii> 0x1``,
+    peripheral - ``sysbus.can_fault_injector ControlWrite <ascii> 0x1``,
     wrapped by PythonPeripheral.ControlWrite -> USER request. The injector's
     own error register and the injection trace slot are then read back;
     anything but a clean acceptance aborts the run (fail-closed).
+
+    The device path must be ONE dotted token (``sysbus.<name>``): Renode
+    resolves ``sysbus`` alone to the SystemBus object, so the two-token form
+    ``sysbus can_fault_injector ...`` looks for a member of that type and
+    fails with a recoverable error (dispatch 17: the command never reached
+    the injector, every watch slot read 0, and the error register - which
+    only an executed command can raise - read back clean). fmi_bridge
+    command() now fails closed on the monitor's error marker.
     """
     endpoint.command(
-        "sysbus can_fault_injector ControlWrite 0x%02X 0x1" % command,
+        "sysbus.can_fault_injector ControlWrite 0x%02X 0x1" % command,
         echo_fragment="ControlWrite")
     error = _read_u32(endpoint, INJ_BASE + INJ_OFF_ERROR)
     if error != 0:

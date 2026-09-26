@@ -340,16 +340,35 @@ class _FakeEndpoint(object):
 
 
 def test_inject_command_uses_the_monitor_command_interface():
-    """HW-T2-BROWNOUT-006: ControlWrite 0x42 + readback, fail-closed."""
+    """HW-T2-BROWNOUT-006: ControlWrite 0x42 + readback, fail-closed.
+
+    The device path is the single dotted token 'sysbus.<name>': a bare
+    'sysbus' resolves to the SystemBus object, so the two-token form
+    'sysbus bor_reset_injector ...' fails in the monitor and the command
+    never reaches the injector (dispatch 17; fmi_bridge fails closed on
+    the monitor's error marker).
+    """
     endpoint = _FakeEndpoint()
     t2bc.inject_brownout(endpoint)
     assert endpoint.commands == [
-        "sysbus bor_reset_injector ControlWrite 0x42 0x1"]
+        "sysbus.bor_reset_injector ControlWrite 0x42 0x1"]
     # A rejected injection (already-injected error code) aborts the run.
     bad = _FakeEndpoint({t2bc.BOR_BASE + t2bc.BOR_OFF_ERROR:
                          t2bc.BOR_ERR_ALREADY_INJECTED})
     with pytest.raises(t2bc.T2BrownoutError, match="rejected"):
         t2bc.inject_brownout(bad)
+
+
+def test_inject_command_rejects_the_two_token_device_path():
+    """Dispatch 17 regression: the command must stay one dotted token."""
+    endpoint = _FakeEndpoint()
+    t2bc.inject_brownout(endpoint)
+    command = endpoint.commands[0]
+    # 'sysbus bor_reset_injector ...' would look for a bor_reset_injector
+    # member of the SystemBus type and fail before the injector runs.
+    assert " sysbus " not in command and command.startswith(
+        "sysbus.bor_reset_injector ")
+    assert "bor_reset_injector ControlWrite" in command
 
 
 def test_preflight_reads_the_contracted_initial_state():
@@ -644,11 +663,12 @@ def test_plant_slave_advances_time_in_contiguous_integer_sub_steps(monkeypatch):
     for current_us in (0, 100, 200):
         slave.do_step_us(current_us, 100)
     assert slave.time_us == 300
-    # Per sub-step: setTime -> event mode -> bounded event iteration ->
-    # continuous-time mode -> completedIntegratorStep.
+    # Per sub-step: setTime -> completedIntegratorStep (the sub-step's
+    # zero-crossings are registered before any readout) -> event mode ->
+    # bounded event iteration -> continuous-time mode.
     per_step = plant.names()[plant.names().index("setTime"):]
-    assert per_step == ["setTime", "enterEventMode", "newDiscreteStates",
-                        "enterContinuousTimeMode", "completedIntegratorStep"] * 3
+    assert per_step == ["setTime", "completedIntegratorStep", "enterEventMode",
+                        "newDiscreteStates", "enterContinuousTimeMode"] * 3
     set_times = [call[1] for call in plant.calls if call[0] == "setTime"]
     assert set_times == [100 / 1e6, 200 / 1e6, 300 / 1e6]
     # A skipping, repeating or over-horizon orchestrator fails closed.
